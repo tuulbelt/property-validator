@@ -9,19 +9,7 @@ LANGUAGE="typescript"
 demo_setup() {
   mkdir -p "$TOOL_DIR/demo-files"
 
-  # Create sample schema
-  cat > "$TOOL_DIR/demo-files/user-schema.json" <<'EOF'
-{
-  "type": "object",
-  "properties": {
-    "name": { "type": "string" },
-    "age": { "type": "number" },
-    "email": { "type": "string" }
-  }
-}
-EOF
-
-  # Create valid data
+  # Create valid user data
   cat > "$TOOL_DIR/demo-files/valid-user.json" <<'EOF'
 {
   "name": "Alice",
@@ -30,7 +18,7 @@ EOF
 }
 EOF
 
-  # Create invalid data
+  # Create invalid user data (age is string, should be number)
   cat > "$TOOL_DIR/demo-files/invalid-user.json" <<'EOF'
 {
   "name": "Bob",
@@ -49,39 +37,45 @@ demo_commands() {
   sleep 1
 
   echo ""
-  echo "# 1. Validate valid user data"
+  echo "# 1. Install globally for easy access"
   sleep 0.5
-  echo "$ propval --schema demo-files/user-schema.json --data demo-files/valid-user.json"
+  echo "$ npm link"
+  sleep 1
+
+  echo ""
+  echo "# 2. Validate valid user data"
   sleep 0.5
-  propval --schema demo-files/user-schema.json --data demo-files/valid-user.json
+  echo "$ cat demo-files/valid-user.json"
+  cat demo-files/valid-user.json
+  sleep 1
+  echo ""
+  echo "$ propval < demo-files/valid-user.json"
+  sleep 0.5
+  propval < demo-files/valid-user.json
   sleep 2
 
   echo ""
-  echo "# 2. Validate invalid data (shows clear error message)"
+  echo "# 3. Validate invalid data (clear error message)"
   sleep 0.5
-  echo "$ propval --schema demo-files/user-schema.json --data demo-files/invalid-user.json"
+  echo "$ cat demo-files/invalid-user.json"
+  cat demo-files/invalid-user.json
+  sleep 1
+  echo ""
+  echo "$ propval < demo-files/invalid-user.json"
   sleep 0.5
-  propval --schema demo-files/user-schema.json --data demo-files/invalid-user.json || true
+  propval < demo-files/invalid-user.json || true
   sleep 2
 
   echo ""
-  echo "# 3. Verbose mode (detailed error information)"
+  echo "# 4. Validate API response data"
   sleep 0.5
-  echo "$ propval --schema demo-files/user-schema.json --data demo-files/invalid-user.json --verbose"
+  echo '$ echo '"'"'{"name":"Charlie","age":25,"email":"charlie@example.com"}'"'"' | propval'
   sleep 0.5
-  propval --schema demo-files/user-schema.json --data demo-files/invalid-user.json --verbose || true
+  echo '{"name":"Charlie","age":25,"email":"charlie@example.com"}' | propval
   sleep 2
 
   echo ""
-  echo "# 4. JSON output mode"
-  sleep 0.5
-  echo "$ propval --schema demo-files/user-schema.json --data demo-files/valid-user.json --json"
-  sleep 0.5
-  propval --schema demo-files/user-schema.json --data demo-files/valid-user.json --json
-  sleep 2
-
-  echo ""
-  echo "# Done! Validate runtime data with the propval command."
+  echo "# Runtime type validation for JavaScript/TypeScript"
   sleep 1
 }
 

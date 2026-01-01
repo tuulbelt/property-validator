@@ -1,10 +1,9 @@
-# Property Validator / `propval`
+# Property Validator
 
 [![Tests](https://github.com/tuulbelt/property-validator/actions/workflows/test.yml/badge.svg)](https://github.com/tuulbelt/property-validator/actions/workflows/test.yml)
 ![Version](https://img.shields.io/badge/version-0.1.0-blue)
 ![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)
-![Dogfooded](https://img.shields.io/badge/dogfooded-🐕-purple)
-![Tests](https://img.shields.io/badge/tests-101%2B%20passing-success)
+![Zero Dependencies](https://img.shields.io/badge/dependencies-0-success)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Runtime type validation with TypeScript inference.
@@ -221,16 +220,22 @@ Planned improvements for future versions:
 - **oneOf()**: Union/enum validation for multiple type options
 - **TypeScript inference utility**: `TypeOf<typeof schema>` for extracting inferred types
 
-### Medium Priority (v0.3.0+)
+### Medium Priority (v0.3.0)
 - Schema generation from existing TypeScript types
 - Custom error message templates
 - Async validators for database/API checks
-- Integration with popular form libraries (React Hook Form, Formik)
 
-### Performance (As Needed)
+### Performance (v0.4.0)
 - Optimizations for large datasets
 - Streaming validation for large files
 - Cached validator compilation
+
+### As Needed
+- Plugin API for custom type handlers
+- Schema versioning and migration utilities
+- Benchmarking suite against other validators
+- JSON Schema standard compatibility layer
+- Binary serialization format for schemas
 
 ## Demo
 
