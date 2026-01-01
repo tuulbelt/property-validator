@@ -1,4 +1,4 @@
-# Dogfooding Strategy: {{tool-name}}
+# Dogfooding Strategy: property-validator
 
 This document outlines how this tool uses other Tuulbelt tools as devDependencies for validation.
 
@@ -179,4 +179,78 @@ This catches flaky tests before they reach production.
 
 ---
 
-**Status:** Template - answer questions and customize for your tool
+## Property Validator Answers
+
+### Q1: Does your tool have tests?
+**YES** → Add test-flakiness-detector (default)
+
+Property-validator has 32 tests covering basic validators, optional/nullable modifiers, nested objects, and arrays.
+
+### Q2: Does your tool produce deterministic output?
+**YES** → Add output-diffing-utility
+
+Validation is purely deterministic:
+- Same input schema + same data → always same result
+- `validate({name: "Alice", age: 30}, UserSchema)` always returns `{ok: true, value: {...}}`
+- `validate({name: 123, age: 30}, UserSchema)` always returns `{ok: false, error: {...}}`
+
+We will add output-diffing-utility to validate output consistency across runs.
+
+### Q3: Does your tool use file-based locking or semaphores?
+**NO**
+
+Property-validator is purely in-memory validation. No file locking needed.
+
+### Q4: Does your tool process file paths?
+**NO**
+
+Property-validator validates JavaScript/TypeScript objects, not file paths or filesystem operations.
+
+### Q5: Does your tool have long-running operations?
+**NO**
+
+Validation is typically very fast (milliseconds). No progress tracking needed.
+
+---
+
+## Implementation
+
+### Current Setup
+
+```json
+{
+  "scripts": {
+    "dogfood": "npm run dogfood:flaky",
+    "dogfood:flaky": "flaky --test 'npm test' --runs 10"
+  },
+  "devDependencies": {
+    "@tuulbelt/test-flakiness-detector": "git+https://github.com/tuulbelt/test-flakiness-detector.git"
+  }
+}
+```
+
+### Planned: Add Output Diff Validation
+
+```json
+{
+  "scripts": {
+    "dogfood": "npm run dogfood:flaky && npm run dogfood:diff",
+    "dogfood:flaky": "flaky --test 'npm test' --runs 10",
+    "dogfood:diff": "node test/dogfood-diff.js"
+  },
+  "devDependencies": {
+    "@tuulbelt/test-flakiness-detector": "git+https://github.com/tuulbelt/test-flakiness-detector.git",
+    "@tuulbelt/output-diffing-utility": "git+https://github.com/tuulbelt/output-diffing-utility.git"
+  }
+}
+```
+
+**Test Strategy (dogfood-diff.js):**
+1. Run validator twice with same inputs
+2. Compare validation results (success and error cases)
+3. Verify error messages, paths, and expected/actual values are identical
+4. Use odiff to compare JSON serialization of results
+
+---
+
+**Status:** ✅ Q2 answered (YES - deterministic). Next: Add output-diffing-utility as devDependency.
