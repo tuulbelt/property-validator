@@ -1,0 +1,41 @@
+{
+  "name": "@tuulbelt/property-validator",
+  "version": "0.1.0",
+  "description": "Runtime type validation with TypeScript inference",
+  "main": "src/index.ts",
+  "type": "module",
+  "bin": {
+    "propval": "./src/index.ts",
+    "property-validator": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "node --import tsx --test test/index.test.ts test/error-messages.test.ts test/edge-cases.test.ts test/deep-nesting.test.ts",
+    "test:watch": "node --import tsx --test --watch test/**/*.test.ts",
+    "dogfood": "npm run dogfood:flaky && npm run dogfood:diff",
+    "dogfood:flaky": "flaky --test 'npm test' --runs 10",
+    "dogfood:diff": "bash scripts/dogfood-diff.sh"
+  },
+  "keywords": [
+    "tuulbelt",
+    "validation",
+    "typescript",
+    "runtime-validation",
+    "type-checking"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tuulbelt/property-validator.git"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "@tuulbelt/output-diffing-utility": "git+https://github.com/tuulbelt/output-diffing-utility.git",
+    "@tuulbelt/test-flakiness-detector": "git+https://github.com/tuulbelt/test-flakiness-detector.git",
+    "@types/node": "^25.0.3",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.0"
+  }
+}
