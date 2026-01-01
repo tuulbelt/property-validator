@@ -21,8 +21,8 @@ jobs:
 
     strategy:
       matrix:
-        # Test on LTS version only for speed; add 18, 22 for comprehensive testing
-        node-version: [20]
+        # Test on all LTS versions for compatibility
+        node-version: [18, 20, 22]
 
     steps:
       - name: Checkout repository
