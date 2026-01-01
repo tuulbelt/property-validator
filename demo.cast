@@ -1,0 +1,10 @@
+{"version": 2, "width": 80, "height": 24, "timestamp": 1767303616, "env": {"SHELL": "/bin/bash", "TERM": "xterm-256color"}, "title": "Property Validator / propval - Tuulbelt"}
+[0.005139, "o", "# Property Validator Demo\r\n"]
+[1.007565, "o", "\r\n# 1. Install globally for easy access\r\n"]
+[1.509101, "o", "$ npm link\r\n"]
+[2.510677, "o", "\r\n# 2. Validate valid user data\r\n"]
+[3.012297, "o", "$ cat demo-files/valid-user.json\r\n"]
+[3.013498, "o", "{\r\n  \"name\": \"Alice\",\r\n  \"age\": 30,\r\n  \"email\": \"alice@example.com\"\r\n}\r\n"]
+[4.014855, "o", "\r\n$ propval < demo-files/valid-user.json\r\n"]
+[5.070098, "o", "Error: No input provided\r\n"]
+[5.070362, "o", "Usage: propval [options] <json-data>\r\n"]
