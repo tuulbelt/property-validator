@@ -10,8 +10,8 @@
   },
   "scripts": {
     "build": "tsc",
-    "test": "node --import tsx --test test/index.test.ts",
-    "test:watch": "node --import tsx --test --watch test/index.test.ts",
+    "test": "node --import tsx --test test/index.test.ts test/error-messages.test.ts test/edge-cases.test.ts test/deep-nesting.test.ts",
+    "test:watch": "node --import tsx --test --watch test/**/*.test.ts",
     "dogfood": "npm run dogfood:flaky",
     "dogfood:flaky": "flaky --test 'npm test' --runs 10"
   },

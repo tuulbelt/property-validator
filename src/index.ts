@@ -23,6 +23,17 @@ export interface Validator<T> {
 }
 
 /**
+ * Get a clear type name for error messages
+ */
+function getTypeName(value: unknown): string {
+  if (value === null) return 'null';
+  if (value === undefined) return 'undefined';
+  if (Number.isNaN(value)) return 'NaN';
+  if (Array.isArray(value)) return 'array';
+  return typeof value;
+}
+
+/**
  * Validate data against a validator
  *
  * @param validator - Validator instance
@@ -57,7 +68,7 @@ export const v = {
         return typeof data === 'string';
       },
       error(data: unknown): string {
-        return `Expected string, got: ${typeof data}`;
+        return `Expected string, got ${getTypeName(data)}`;
       },
     };
   },
@@ -71,7 +82,7 @@ export const v = {
         return typeof data === 'number' && !Number.isNaN(data);
       },
       error(data: unknown): string {
-        return `Expected number, got: ${typeof data}`;
+        return `Expected number, got ${getTypeName(data)}`;
       },
     };
   },
@@ -85,7 +96,7 @@ export const v = {
         return typeof data === 'boolean';
       },
       error(data: unknown): string {
-        return `Expected boolean, got: ${typeof data}`;
+        return `Expected boolean, got ${getTypeName(data)}`;
       },
     };
   },
@@ -102,7 +113,7 @@ export const v = {
       },
       error(data: unknown): string {
         if (!Array.isArray(data)) {
-          return `Expected array, got: ${typeof data}`;
+          return `Expected array, got ${getTypeName(data)}`;
         }
         const invalidIndex = data.findIndex((item) => !itemValidator.validate(item));
         return `Invalid item at index ${invalidIndex}: ${itemValidator.error(data[invalidIndex])}`;
@@ -128,7 +139,7 @@ export const v = {
       },
       error(data: unknown): string {
         if (typeof data !== 'object' || data === null) {
-          return `Expected object, got: ${typeof data}`;
+          return `Expected object, got ${getTypeName(data)}`;
         }
         const obj = data as Record<string, unknown>;
         for (const [key, validator] of Object.entries(shape)) {
