@@ -165,25 +165,38 @@ npm test -- --watch   # Watch mode
 
 ## Dogfooding
 
-Tuulbelt tools validate each other via devDependencies. This tool uses test-flakiness-detector to validate test determinism.
+Tuulbelt tools validate each other via devDependencies. This tool uses:
+- **test-flakiness-detector** to validate test determinism
+- **output-diffing-utility** to verify validation output is deterministic
 
 **How It Works:**
 
 ```bash
-npm run dogfood    # Runs tests 10 times to catch flaky tests
+npm run dogfood           # Runs both flaky detection + output diff validation
+npm run dogfood:flaky     # Runs tests 10 times to catch flaky tests
+npm run dogfood:diff      # Validates output determinism via diff
 ```
 
 This runs automatically in CI on every push/PR.
+
+**Why This Matters:**
+- Validation must be **deterministic** (same input → same output, every time)
+- test-flakiness-detector ensures tests don't randomly fail
+- output-diffing-utility proves validation produces consistent results
+- Critical for caching, reproducible builds, and reliable testing
 
 **Configuration (package.json):**
 
 ```json
 {
   "scripts": {
-    "dogfood": "flaky --test 'npm test' --runs 10"
+    "dogfood": "npm run dogfood:flaky && npm run dogfood:diff",
+    "dogfood:flaky": "flaky --test 'npm test' --runs 10",
+    "dogfood:diff": "bash scripts/dogfood-diff.sh"
   },
   "devDependencies": {
-    "@tuulbelt/test-flakiness-detector": "git+https://github.com/tuulbelt/test-flakiness-detector.git"
+    "@tuulbelt/test-flakiness-detector": "git+https://github.com/tuulbelt/test-flakiness-detector.git",
+    "@tuulbelt/output-diffing-utility": "git+https://github.com/tuulbelt/output-diffing-utility.git"
   }
 }
 ```
@@ -200,13 +213,24 @@ Errors are returned in the `error` field of the result object, not thrown.
 
 ## Future Enhancements
 
-Potential improvements for future versions:
+Planned improvements for future versions:
 
-- Schema generation from TypeScript types
+### High Priority (v0.2.0)
+- **Constraints**: `.min()`, `.max()`, `.pattern()` for strings/numbers
+- **Better error paths**: Show full property path in nested objects (e.g., `user.address.city`)
+- **oneOf()**: Union/enum validation for multiple type options
+- **TypeScript inference utility**: `TypeOf<typeof schema>` for extracting inferred types
+
+### Medium Priority (v0.3.0+)
+- Schema generation from existing TypeScript types
 - Custom error message templates
-- Async validators for database checks
-- Integration with popular form libraries
-- Performance optimizations for large datasets
+- Async validators for database/API checks
+- Integration with popular form libraries (React Hook Form, Formik)
+
+### Performance (As Needed)
+- Optimizations for large datasets
+- Streaming validation for large files
+- Cached validator compilation
 
 ## Demo
 
