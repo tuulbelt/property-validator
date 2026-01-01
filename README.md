@@ -1,9 +1,10 @@
-# Property Validator
+# Property Validator / `propval`
 
 [![Tests](https://github.com/tuulbelt/property-validator/actions/workflows/test.yml/badge.svg)](https://github.com/tuulbelt/property-validator/actions/workflows/test.yml)
 ![Version](https://img.shields.io/badge/version-0.1.0-blue)
 ![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)
-![Zero Dependencies](https://img.shields.io/badge/dependencies-0-success)
+![Dogfooded](https://img.shields.io/badge/dogfooded-🐕-purple)
+![Tests](https://img.shields.io/badge/tests-101%2B%20passing-success)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Runtime type validation with TypeScript inference.
