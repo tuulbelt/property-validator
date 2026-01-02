@@ -97,17 +97,34 @@ bench.add('zod: object complex nested (valid)', () => {
   });
 });
 
-// Arrays
-bench.add('zod: array small (10 items)', () => {
+// Arrays - OBJECTS (UserSchema)
+bench.add('zod: array OBJECTS small (10 items)', () => {
   result = UsersListSchema.safeParse(small);
 });
 
-bench.add('zod: array medium (100 items)', () => {
+bench.add('zod: array OBJECTS medium (100 items)', () => {
   result = UsersListSchema.safeParse(medium);
 });
 
-bench.add('zod: array large (1000 items)', () => {
+bench.add('zod: array OBJECTS large (1000 items)', () => {
   result = UsersListSchema.safeParse(large);
+});
+
+// Arrays - PRIMITIVES (string[])
+const stringArraySmall = Array(10).fill('test');
+const stringArrayMedium = Array(100).fill('test');
+const stringArrayLarge = Array(1000).fill('test');
+
+bench.add('zod: array PRIMITIVES string[] small (10 items)', () => {
+  result = z.array(z.string()).safeParse(stringArraySmall);
+});
+
+bench.add('zod: array PRIMITIVES string[] medium (100 items)', () => {
+  result = z.array(z.string()).safeParse(stringArrayMedium);
+});
+
+bench.add('zod: array PRIMITIVES string[] large (1000 items)', () => {
+  result = z.array(z.string()).safeParse(stringArrayLarge);
 });
 
 // Union
