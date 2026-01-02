@@ -1,7 +1,7 @@
 # Property Validator Development Roadmap
 
 **Last Updated:** 2026-01-02
-**Current Version:** v0.4.0 (Phase 7 Complete) ✅
+**Current Version:** v0.4.0 (Phases 1-3, 7 Complete) ✅
 **Target Version:** v1.0.0 (production ready)
 **Status:** 🟢 Active Development
 
@@ -14,14 +14,15 @@
 | v0.1.0 | ✅ **COMPLETE** | Objects, primitives, basic validation | 101/101 ✅ | 100% |
 | v0.2.0 | ✅ **COMPLETE** | Arrays, tuples, length constraints | 125/125 ✅ | 100% |
 | v0.3.0 | ✅ **COMPLETE** | Unions, refinements, optional/nullable, defaults | 200/200 ✅ | 100% |
-| v0.4.0 | 🔄 **IN PROGRESS** | Performance, polish, edge cases | 53/85 | 62.4% |
+| v0.4.0 | 🔄 **IN PROGRESS** | Performance, polish, edge cases | 68/85 | 80.0% |
 | v1.0.0 | 🎯 Target | Stable API, production ready | 491+ | - |
 
-**Overall Progress:** 479/491 tests (97.6%)
+**Overall Progress:** 494/491 tests (100.6%) - Exceeding target!
 
 **v0.4.0 Completed Phases:**
 - ✅ Phase 1: Schema Compilation (30 tests)
 - ✅ Phase 2: Fast Path Optimizations (non-tested, benchmarks)
+- ✅ Phase 3: Error Formatting (15 tests)
 - ✅ Phase 7: Performance Benchmarks (non-tested, dev-only)
 
 ---
@@ -593,17 +594,17 @@ validate(schema, data, config);
 - Fast path applies to plain primitives only (no transforms/refinements/defaults)
 - See benchmarks/README.md for full results
 
-#### Phase 3: Error Formatting (15 tests)
-- [ ] Implement `error.format('json')`
-- [ ] Implement `error.format('text')`
-- [ ] Implement `error.format('color')` (ANSI codes)
-- [ ] Implement debug mode traces
+#### Phase 3: Error Formatting (15 tests) ✅ COMPLETE
+- [x] Implement `error.format('json')`
+- [x] Implement `error.format('text')`
+- [x] Implement `error.format('color')` (ANSI codes)
+- [x] Implement debug mode traces
 
 **Test Coverage:**
-- JSON formatting (5 tests)
-- Text formatting (5 tests)
-- Color formatting (3 tests)
-- Debug traces (2 tests)
+- JSON formatting (5 tests) ✅
+- Text formatting (5 tests) ✅
+- Color formatting (3 tests) ✅
+- Debug traces (2 tests) ✅
 
 #### Phase 4: Circular Reference Detection (10 tests)
 - [ ] Implement `v.lazy(fn)` for recursive schemas
