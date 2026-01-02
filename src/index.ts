@@ -601,6 +601,124 @@ export function compile<T>(validator: Validator<T>): CompiledValidator<T> {
 }
 
 /**
+ * Compile-time optimization for array validators.
+ *
+ * Pre-compiles specialized validators at construction time to eliminate
+ * runtime conditionals and function call overhead.
+ *
+ * For primitive validators (string, number, boolean) with no refinements:
+ * - Returns inline type-check function (zero function calls per item)
+ *
+ * For complex validators:
+ * - Returns optimized validateFast loop
+ *
+ * @param itemValidator - Validator for array items
+ * @returns Pre-compiled validation function
+ */
+function compileArrayValidator<T>(itemValidator: Validator<T>): (data: unknown[]) => boolean {
+  const itemType = itemValidator._type;
+  const hasRefinements = itemValidator._hasRefinements;
+  const hasTransform = itemValidator._transform !== undefined;
+  const hasDefault = itemValidator._default !== undefined;
+
+  // Fast path: Plain primitives (no refinements, transforms, or defaults)
+  const isPlainPrimitive = itemType && !hasRefinements && !hasTransform && !hasDefault;
+
+  if (isPlainPrimitive) {
+    if (itemType === 'string') {
+      // Optimized string[] validator - inline type check, zero function calls
+      return (data: unknown[]): boolean => {
+        for (let i = 0; i < data.length; i++) {
+          if (typeof data[i] !== 'string') return false;
+        }
+        return true;
+      };
+    } else if (itemType === 'number') {
+      // Optimized number[] validator - inline type check + NaN check
+      return (data: unknown[]): boolean => {
+        for (let i = 0; i < data.length; i++) {
+          const item = data[i];
+          if (typeof item !== 'number' || Number.isNaN(item)) return false;
+        }
+        return true;
+      };
+    } else if (itemType === 'boolean') {
+      // Optimized boolean[] validator - inline type check
+      return (data: unknown[]): boolean => {
+        for (let i = 0; i < data.length; i++) {
+          if (typeof data[i] !== 'boolean') return false;
+        }
+        return true;
+      };
+    }
+  }
+
+  // Generic path: Complex validators (objects, unions, refinements, etc.)
+  // Use validateFast to skip options overhead
+  return (data: unknown[]): boolean => {
+    for (let i = 0; i < data.length; i++) {
+      if (!validateFast(itemValidator, data[i]).ok) return false;
+    }
+    return true;
+  };
+}
+
+/**
+ * Compile-time optimization for array transform.
+ *
+ * Pre-compiles specialized transform functions at construction time.
+ *
+ * For plain primitives (no transforms):
+ * - Returns input directly (no clone, no transformation)
+ *
+ * For validators with transforms:
+ * - Returns optimized transform loop with copy-on-write
+ *
+ * @param itemValidator - Validator for array items
+ * @returns Pre-compiled transform function
+ */
+function compileArrayTransform<T>(itemValidator: Validator<T>): (data: any) => T[] {
+  const itemType = itemValidator._type;
+  const hasRefinements = itemValidator._hasRefinements;
+  const hasTransform = itemValidator._transform !== undefined;
+  const hasDefault = itemValidator._default !== undefined;
+
+  // Fast path: Plain primitives (no transforms, defaults, or refinements that modify values)
+  const isPlainPrimitive = itemType && !hasRefinements && !hasTransform && !hasDefault;
+
+  if (isPlainPrimitive) {
+    // No transformations needed - return input directly
+    return (data: any): T[] => data as T[];
+  }
+
+  // Generic path: Complex validators or validators with transforms
+  // Use copy-on-write strategy: only clone array if transforms are actually applied
+  return (data: any): T[] => {
+    const arr = data as unknown[];
+    let result: unknown[] | null = null;
+
+    for (let i = 0; i < arr.length; i++) {
+      const item = arr[i];
+      const validationResult = validateFast(itemValidator, item);
+
+      if (validationResult.ok && item !== validationResult.value) {
+        // First change detected - create copy
+        if (result === null) {
+          result = arr.slice(0, i); // Copy items up to this point
+        }
+        result.push(validationResult.value);
+      } else if (result !== null) {
+        // Already copying, add item as-is
+        result.push(item);
+      }
+    }
+
+    // If no transforms applied, return input directly (no clone)
+    return (result ?? arr) as T[];
+  };
+}
+
+/**
  * Validator builders
  */
 export const v = {
@@ -644,6 +762,11 @@ export const v = {
    * Array validator with optional length constraints
    */
   array<T>(itemValidator: Validator<T>): ArrayValidator<T> {
+    // COMPILE-TIME: Pre-compile validators ONCE at construction
+    // This eliminates runtime conditionals and function call overhead
+    const compiledValidate = compileArrayValidator(itemValidator);
+    const compiledTransform = compileArrayTransform(itemValidator);
+
     const createArrayValidator = (
       minLength?: number,
       maxLength?: number,
@@ -659,8 +782,8 @@ export const v = {
           if (maxLength !== undefined && data.length > maxLength) return false;
           if (exactLength !== undefined && data.length !== exactLength) return false;
 
-          // Use validateFast() to skip options overhead for each item
-          if (!data.every((item) => validateFast(itemValidator, item).ok)) return false;
+          // RUNTIME: Use pre-compiled validator (ZERO conditionals!)
+          if (!compiledValidate(data)) return false;
 
           // Check all refinements
           return refinements.every((refinement) => refinement.predicate(data));
@@ -700,30 +823,8 @@ export const v = {
         },
 
         _transform(data: any): T[] {
-          const arr = data as unknown[];
-
-          // For complex validators: only clone array if transforms are actually applied
-          let result: unknown[] | null = null;
-
-          for (let i = 0; i < arr.length; i++) {
-            const item = arr[i];
-            // OPTIMIZATION: Use validateFast() to skip options overhead
-            const validationResult = validateFast(itemValidator, item);
-
-            if (validationResult.ok && item !== validationResult.value) {
-              // First change detected - create copy
-              if (result === null) {
-                result = arr.slice(0, i); // Copy items up to this point
-              }
-              result.push(validationResult.value);
-            } else if (result !== null) {
-              // Already copying, add item as-is
-              result.push(item);
-            }
-          }
-
-          // If no transforms applied, return input directly (no clone)
-          return (result ?? arr) as T[];
+          // RUNTIME: Use pre-compiled transform (optimized copy-on-write)
+          return compiledTransform(data);
         },
 
         min(n: number): ArrayValidator<T> {

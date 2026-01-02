@@ -140,6 +140,33 @@ bench.add('array: large (1000 items)', () => {
   result = validate(UsersListSchema, large);
 });
 
+// Primitive array benchmarks (test hybrid compilation optimization)
+const stringArraySmall = Array(10).fill('test');
+const stringArrayMedium = Array(100).fill('test');
+const stringArrayLarge = Array(1000).fill('test');
+const numberArraySmall = Array(10).fill(42);
+const booleanArraySmall = Array(10).fill(true);
+
+bench.add('array: string[] small (10 items) - OPTIMIZED', () => {
+  result = validate(v.array(v.string()), stringArraySmall);
+});
+
+bench.add('array: string[] medium (100 items) - OPTIMIZED', () => {
+  result = validate(v.array(v.string()), stringArrayMedium);
+});
+
+bench.add('array: string[] large (1000 items) - OPTIMIZED', () => {
+  result = validate(v.array(v.string()), stringArrayLarge);
+});
+
+bench.add('array: number[] small (10 items) - OPTIMIZED', () => {
+  result = validate(v.array(v.number()), numberArraySmall);
+});
+
+bench.add('array: boolean[] small (10 items) - OPTIMIZED', () => {
+  result = validate(v.array(v.boolean()), booleanArraySmall);
+});
+
 bench.add('array: invalid (early rejection)', () => {
   const invalidData = {
     users: [
