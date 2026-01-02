@@ -1047,6 +1047,188 @@ After v0.6.0 release:
 
 ---
 
+## 🚀 v0.7.0 - Object Array Performance Optimization
+
+**Status:** 📋 Planned
+**Goal:** Close the 1.9x performance gap with zod on object arrays
+**Tests:** 526+ (all existing tests must pass)
+**Breaking Changes:** None (internal optimization only)
+**Target Performance:** 126k - 151k ops/sec object arrays (match/beat zod's 136k)
+
+### Overview
+
+Implement Phases 1-5 of the optimization plan to achieve competitive performance with zod and approach Valibot's speed.
+
+**See:** `OPTIMIZATION_PLAN.md` for complete implementation details, testing protocols, and debugging procedures.
+
+### Optimization Phases
+
+#### Phase 1: Return Original Object 🔥 CRITICAL
+- **Status:** ❌ Not Started
+- **Expected Impact:** +30-40% (70k → 91k - 98k ops/sec)
+- **Implementation:** Return original object reference instead of copying (Zod v4's key optimization)
+- **Testing:** Verify zero-copy doesn't break transformations
+
+#### Phase 2: Flatten Compiled Properties Structure
+- **Status:** ❌ Not Started
+- **Expected Impact:** +15-20% cumulative
+- **Implementation:** Use parallel arrays instead of array of objects
+- **Testing:** Verify elimination of destructuring overhead
+
+#### Phase 3: Inline Property Access ⚡
+- **Status:** ❌ Not Started
+- **Expected Impact:** +20-30% cumulative
+- **Implementation:** Generate code with `new Function()` for V8 optimization
+- **Testing:** Verify V8 optimizes direct property access, CSP fallback works
+
+#### Phase 4: Eliminate Fallback to .validate()
+- **Status:** ❌ Not Started
+- **Expected Impact:** +10-15% for nested objects
+- **Implementation:** Recursively compile nested object validators
+- **Testing:** Verify deep nesting and circular reference handling
+
+#### Phase 5: Profile & Verify V8 Optimization
+- **Status:** ❌ Not Started
+- **Expected Impact:** +5-10% (fine-tuning)
+- **Implementation:** Use `--trace-opt`, `--trace-deopt` to identify issues
+- **Testing:** Document V8 optimization status, fix deopt triggers
+
+### Success Criteria
+
+**Performance Targets:**
+- [ ] Object arrays: ≥136k ops/sec (match/beat zod)
+- [ ] Cumulative improvement: +80-115% over v0.6.0
+- [ ] Maintain current wins (primitives, unions, refinements)
+- [ ] Zero test regressions (526/526 passing)
+
+**Quality Gates:**
+- [ ] All phases benchmarked with actual results documented
+- [ ] V8 optimization verified (no critical deoptimizations)
+- [ ] Benchmarks updated with v0.7.0 results
+- [ ] ROADMAP.md and README.md updated
+- [ ] Honest performance reporting (no inflated numbers)
+
+### Research Foundation
+
+**Zod v4 Techniques:**
+- Return original object (doubled performance)
+- Minimal allocations
+- Type instantiation reduction
+
+**Valibot Insights:**
+- Modular design for tree-shaking
+- Functional composition
+- Trade-off: Slower on failures (exception-based)
+
+**Decision:** Focus on matching/beating zod, not competing with AOT compilers (Typia, TypeBox)
+
+### Post-Release Validation
+
+- [ ] Monitor for performance regressions
+- [ ] Verify improvements in real-world workloads
+- [ ] Collect community feedback
+- [ ] Prepare v0.8.0 planning
+
+---
+
+## 🔮 v0.8.0 - Modular Design (Bundle Size Optimization)
+
+**Status:** 🎯 Future (after v0.7.0)
+**Goal:** Tree-shakable API for better bundle sizes (Valibot-inspired)
+**Tests:** 526+ (all existing tests must pass)
+**Breaking Changes:** None (dual API approach)
+**Target Bundle Size:** 5 kB → 1-2 kB (for minimal imports)
+
+### Overview
+
+Implement Phase 6 of the optimization plan: Modular design for better tree-shaking.
+
+**See:** `OPTIMIZATION_PLAN.md` Phase 6 for complete implementation details.
+
+### Phase 6: Valibot-Inspired Modular Design
+
+**Current Problem:**
+```typescript
+import { v } from 'property-validator';
+// Imports everything: v.string, v.number, v.array, v.object, etc.
+// Bundle: ~5 kB even if you only use v.string()
+```
+
+**Valibot's Solution:**
+```typescript
+import { string, minLength, maxLength, pipe } from 'valibot';
+// Bundle: 1.37 kB (90% reduction from Zod's 13.5 kB)
+```
+
+### Implementation: Dual API (Backwards Compatible)
+
+**Option A: Keep existing API + add modular API**
+```typescript
+// Current API (still works):
+import { v } from 'property-validator';
+v.string().min(5).max(10);
+
+// New modular API:
+import { string, minLength, maxLength, pipe } from 'property-validator/modular';
+pipe(string(), minLength(5), maxLength(10));
+```
+
+**Option B: Breaking change (defer to v2.0.0)**
+```typescript
+// Remove v namespace entirely
+import { string, number, object, pipe } from 'property-validator';
+```
+
+**Decision:** Option A (dual API) to maintain backwards compatibility.
+
+### Tasks
+
+- [ ] Design modular API structure
+- [ ] Implement `property-validator/modular` entry point
+- [ ] Create pipe() composition function
+- [ ] Split validators into individual modules
+- [ ] Update build config for tree-shaking
+- [ ] Write migration guide
+- [ ] Document both APIs in README
+- [ ] Benchmark bundle sizes
+- [ ] Test tree-shaking with Rollup/Webpack/Vite
+
+### Success Criteria
+
+**Bundle Size Targets:**
+- [ ] Minimal import: ≤2 kB (vs 5 kB currently)
+- [ ] Full import: Same as v0.7.0 (~5 kB)
+- [ ] Tree-shaking verified with major bundlers
+
+**Quality Gates:**
+- [ ] All tests pass (526/526)
+- [ ] Both APIs work (existing + modular)
+- [ ] Documentation complete
+- [ ] Migration guide written
+- [ ] Zero runtime dependencies maintained
+
+### Trade-offs
+
+**Pros:**
+- ✅ Better tree-shaking (90% bundle size reduction possible)
+- ✅ Smaller bundles for frontend
+- ✅ Aligns with Valibot's proven approach
+- ✅ Backwards compatible (dual API)
+
+**Cons:**
+- ⚠️ More complex imports for new API
+- ⚠️ Documentation needs both API styles
+- ⚠️ Requires migration guide
+
+### Post-Release Validation
+
+- [ ] Measure bundle sizes in real projects
+- [ ] Collect feedback on new API
+- [ ] Monitor for tree-shaking issues
+- [ ] Prepare v1.0.0 planning
+
+---
+
 ## 🎯 v1.0.0 - Stable API, Production Ready
 
 **Status:** 🎯 Target
@@ -1056,11 +1238,12 @@ After v0.6.0 release:
 
 ### Release Criteria
 
-- [ ] All versions v0.1.0 - v0.6.0 complete
-- [ ] 526+ tests passing (all tests from v0.1.0 through v0.6.0)
+- [ ] All versions v0.1.0 - v0.8.0 complete (includes v0.7.0 optimization, v0.8.0 modular design)
+- [ ] 526+ tests passing (all tests from all versions)
 - [ ] Zero runtime dependencies
-- [ ] **Performance benchmarks competitive with zod (≥80% win rate, currently 83%)**
-- [ ] Object array performance improved to match or beat zod (currently 1.9x slower - needs work)
+- [ ] **v0.7.0 optimization complete:** Object array performance ≥136k ops/sec (match/beat zod)
+- [ ] **v0.8.0 modular design complete:** Bundle size 1-2 kB for minimal imports
+- [ ] **Performance benchmarks beat zod in ALL categories (6/6 wins or 5/6 with justification)**
 - [ ] Complete documentation (README, SPEC, API ref, examples)
 - [ ] Migration guide from other libraries
 - [ ] Real-world examples (API server, React forms, CLI config)
