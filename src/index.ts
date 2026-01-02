@@ -601,6 +601,79 @@ export function compile<T>(validator: Validator<T>): CompiledValidator<T> {
 }
 
 /**
+ * Compile a single property validator for inline validation.
+ * Returns a function that validates without allocating Result objects.
+ *
+ * @param validator - Property validator
+ * @returns Compiled validator function: (data: unknown) => boolean
+ * @internal
+ */
+function compilePropertyValidator<T>(validator: Validator<T>): (data: unknown) => boolean {
+  const validatorType = validator._type;
+  const hasRefinements = validator._hasRefinements;
+  const hasTransform = validator._transform !== undefined;
+  const hasDefault = validator._default !== undefined;
+
+  // Fast path: Plain primitives (no refinements, transforms, or defaults)
+  const isPlainPrimitive = validatorType && !hasRefinements && !hasTransform && !hasDefault;
+
+  if (isPlainPrimitive) {
+    // Inline primitive checks - zero allocations, zero function calls
+    if (validatorType === 'string') {
+      return (data: unknown): boolean => typeof data === 'string';
+    } else if (validatorType === 'number') {
+      return (data: unknown): boolean => typeof data === 'number' && !Number.isNaN(data);
+    } else if (validatorType === 'boolean') {
+      return (data: unknown): boolean => typeof data === 'boolean';
+    }
+  }
+
+  // Complex validators: Use validate() method (still faster than validateFast - no Result allocation)
+  return (data: unknown): boolean => validator.validate(data);
+}
+
+/**
+ * Compile an object validator for inline validation.
+ * Pre-compiles all property validators at construction time.
+ * Returns a function that validates without allocating Result objects or WeakSets.
+ *
+ * @param shape - Object schema (e.g., { name: v.string(), age: v.number() })
+ * @returns Compiled validator function: (data: unknown) => boolean
+ * @internal
+ */
+function compileObjectValidator<T extends Record<string, unknown>>(
+  shape: { [K in keyof T]: Validator<T[K]> }
+): (data: unknown) => boolean {
+  // Pre-compile property validators at construction time (ONCE!)
+  const compiledProperties: Array<{
+    key: string;
+    validator: (value: unknown) => boolean;
+  }> = [];
+
+  for (const [key, fieldValidator] of Object.entries(shape)) {
+    // Recursively compile each property validator
+    const compiledValidator = compilePropertyValidator(fieldValidator);
+    compiledProperties.push({ key, validator: compiledValidator });
+  }
+
+  // Return compiled validation function (ZERO allocations at runtime)
+  return (data: unknown): boolean => {
+    // Type check
+    if (typeof data !== 'object' || data === null) return false;
+
+    const obj = data as Record<string, unknown>;
+
+    // Validate each property with inline checks (no Result allocation)
+    for (let i = 0; i < compiledProperties.length; i++) {
+      const { key, validator } = compiledProperties[i];
+      if (!validator(obj[key])) return false;
+    }
+
+    return true;
+  };
+}
+
+/**
  * Compile-time optimization for array validators.
  *
  * Pre-compiles specialized validators at construction time to eliminate
@@ -608,6 +681,9 @@ export function compile<T>(validator: Validator<T>): CompiledValidator<T> {
  *
  * For primitive validators (string, number, boolean) with no refinements:
  * - Returns inline type-check function (zero function calls per item)
+ *
+ * For object validators (plain objects with primitive properties):
+ * - Returns compiled object validator (zero allocations per item)
  *
  * For complex validators:
  * - Returns optimized validateFast loop
@@ -653,7 +729,21 @@ function compileArrayValidator<T>(itemValidator: Validator<T>): (data: unknown[]
     }
   }
 
-  // Generic path: Complex validators (objects, unions, refinements, etc.)
+  // Object path: Compile object validators (eliminates Result/WeakSet allocations)
+  // Check if itemValidator is an object validator with stored shape
+  const objectShape = (itemValidator as any)._shape;
+  if (objectShape && !hasRefinements && !hasTransform && !hasDefault) {
+    // Compile the object validator ONCE at construction time
+    const compiledObjectValidator = compileObjectValidator(objectShape);
+    return (data: unknown[]): boolean => {
+      for (let i = 0; i < data.length; i++) {
+        if (!compiledObjectValidator(data[i])) return false;
+      }
+      return true;
+    };
+  }
+
+  // Generic path: Complex validators (unions, refinements, etc.)
   // Use validateFast to skip options overhead
   return (data: unknown[]): boolean => {
     for (let i = 0; i < data.length; i++) {
@@ -1400,6 +1490,9 @@ export const v = {
 
       return { ok: true, value: transformed as T };
     };
+
+    // Store shape for compilation optimization (used by compileArrayValidator)
+    (validator as any)._shape = shape;
 
     return validator;
   },

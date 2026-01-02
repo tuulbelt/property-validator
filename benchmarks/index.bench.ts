@@ -128,6 +128,24 @@ bench.add('object: complex nested (invalid - deep)', () => {
 // Array Validation
 // ----------------------------------------------------------------------------
 
+// OBJECT ARRAYS (direct array of objects - tests compilation)
+const userArraySmall = Array(10).fill({ name: 'Alice', age: 30, email: 'alice@example.com' });
+const userArrayMedium = Array(100).fill({ name: 'Bob', age: 25, email: 'bob@example.com' });
+const userArrayLarge = Array(1000).fill({ name: 'Charlie', age: 35, email: 'charlie@example.com' });
+
+bench.add('array: OBJECTS small (10 items) - COMPILED', () => {
+  result = validate(v.array(UserSchema), userArraySmall);
+});
+
+bench.add('array: OBJECTS medium (100 items) - COMPILED', () => {
+  result = validate(v.array(UserSchema), userArrayMedium);
+});
+
+bench.add('array: OBJECTS large (1000 items) - COMPILED', () => {
+  result = validate(v.array(UserSchema), userArrayLarge);
+});
+
+// Legacy benchmark (object wrapping array)
 bench.add('array: small (10 items)', () => {
   result = validate(UsersListSchema, small);
 });
