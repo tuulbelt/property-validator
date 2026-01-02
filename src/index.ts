@@ -446,6 +446,21 @@ function extractExpectedType(message: string): string {
  * ```
  */
 /**
+ * Singleton empty path array - reused for all successful validations
+ * to avoid allocation overhead
+ * @internal
+ */
+const EMPTY_PATH: readonly string[] = [];
+
+/**
+ * Ensure path is mutable (clone if it's the singleton EMPTY_PATH)
+ * @internal
+ */
+function ensureMutablePath(path: string[] | readonly string[]): string[] {
+  return path === EMPTY_PATH ? [] : path as string[];
+}
+
+/**
  * Fast path validation without path tracking or circular detection
  * Used when no special options are enabled for maximum performance
  *
@@ -455,11 +470,11 @@ function extractExpectedType(message: string): string {
  */
 function validateFast<T>(validator: Validator<T>, data: unknown): Result<T> {
   // If validator has custom path-aware validation (objects, arrays, unions),
-  // use it but with a minimal WeakSet (not actually used since checkCircular=false)
+  // use it but with minimal overhead (reused empty path, no circular checking)
   if (validator._validateWithPath) {
-    // Use validateWithPath but with minimal overhead (no actual circular checking)
-    // Path array will be allocated but won't be used unless error occurs
-    return validateWithPath(validator, data, [], new WeakSet(), 0, { checkCircular: false });
+    // OPTIMIZATION: Use singleton EMPTY_PATH to avoid allocation on success path
+    // Path will only be cloned if we need to modify it (on errors)
+    return validateWithPath(validator, data, EMPTY_PATH, new WeakSet(), 0, { checkCircular: false });
   }
 
   // For simple validators (primitives), do direct validation
@@ -886,6 +901,9 @@ export const v = {
             return { ok: false, error: message, details };
           }
 
+          // OPTIMIZATION: Lazy path allocation - clone only when needed (on error descent)
+          let mutablePath = ensureMutablePath(path);
+
           if (isPlainPrimitive) {
             // Inline validation for primitives - avoids validateWithPath overhead
             const primitiveType = itemValidator._type;
@@ -908,11 +926,11 @@ export const v = {
               if (!isValid) {
                 // Only build path and create error details on failure
                 const indexPath = `[${i}]`;
-                path.push(indexPath);
+                mutablePath.push(indexPath);
                 const message = `Invalid item at index ${i}: Expected ${primitiveType}, got ${getTypeName(item)}`;
                 const details = new ValidationError({
                   message,
-                  path,
+                  path: mutablePath,
                   value: item,
                   expected: primitiveType,
                   code: 'VALIDATION_ERROR',
@@ -929,8 +947,8 @@ export const v = {
               // OPTIMIZATION: Reuse path array with push/pop instead of spread
               // This avoids O(n * path_length) allocations and gives 3-4x speedup
               const indexPath = `[${i}]`;
-              path.push(indexPath);
-              const result = validateWithPath(itemValidator, data[i], path, seen, depth + 1, options);
+              mutablePath.push(indexPath);
+              const result = validateWithPath(itemValidator, data[i], mutablePath, seen, depth + 1, options);
 
               if (!result.ok) {
                 // Don't pop path - we're returning immediately, and result.details.path references this array
@@ -951,7 +969,7 @@ export const v = {
               }
 
               // Success - restore path for next iteration
-              path.pop();
+              mutablePath.pop();
             }
           }
 
@@ -1065,10 +1083,18 @@ export const v = {
         return { ok: false, error: message, details };
       }
 
+      // OPTIMIZATION: Lazy path allocation - clone only when needed (on error descent)
+      // Reuse path array with push/pop instead of spread (avoids O(n * path_length) allocations)
+      let mutablePath = ensureMutablePath(path);
+
       // Validate each element with index in path
       for (let i = 0; i < validators.length; i++) {
-        const result = validateWithPath(validators[i]!, data[i], [...path, `[${i}]`], seen, depth + 1, options);
+        const indexPath = `[${i}]`;
+        mutablePath.push(indexPath);
+        const result = validateWithPath(validators[i]!, data[i], mutablePath, seen, depth + 1, options);
+
         if (!result.ok) {
+          // Don't pop path - we're returning immediately, and result.details.path references this array
           // Wrap error message to include tuple context
           const wrappedError = `Invalid element at index ${i}: ${result.error}`;
           if (result.details) {
@@ -1084,6 +1110,9 @@ export const v = {
           }
           return { ok: false, error: wrappedError };
         }
+
+        // Success - restore path for next iteration
+        mutablePath.pop();
       }
 
       // All elements valid
@@ -1189,9 +1218,11 @@ export const v = {
       // Validate each field with extended path
       // OPTIMIZATION: Reuse path array with push/pop instead of spread
       // This avoids O(properties × path_length) allocations and gives 3-4x speedup
+      // OPTIMIZATION: Lazy path allocation - clone only when needed (on error descent)
+      let mutablePath = ensureMutablePath(path);
       for (const [key, fieldValidator] of Object.entries(shape)) {
-        path.push(key);
-        const result = validateWithPath(fieldValidator, obj[key], path, seen, depth + 1, options);
+        mutablePath.push(key);
+        const result = validateWithPath(fieldValidator, obj[key], mutablePath, seen, depth + 1, options);
 
         if (!result.ok) {
           // Don't pop path - we're returning immediately, and result.details.path references this array
@@ -1212,7 +1243,7 @@ export const v = {
         }
 
         // Success - restore path for next iteration
-        path.pop();
+        mutablePath.pop();
       }
 
       // Check refinements if present (refinements are in createValidator closure)
