@@ -1,9 +1,9 @@
 # Property Validator Development Roadmap
 
 **Last Updated:** 2026-01-02
-**Current Version:** v0.4.0 ✅
+**Current Version:** v0.4.0 (Phase 7 Complete) ✅
 **Target Version:** v1.0.0 (production ready)
-**Status:** 🟢 Ready for v1.0.0 Release
+**Status:** 🟢 Active Development
 
 ---
 
@@ -13,11 +13,16 @@
 |---------|--------|----------|-------|------------|
 | v0.1.0 | ✅ **COMPLETE** | Objects, primitives, basic validation | 101/101 ✅ | 100% |
 | v0.2.0 | ✅ **COMPLETE** | Arrays, tuples, length constraints | 125/125 ✅ | 100% |
-| v0.3.0 | ✅ **COMPLETE** | Unions, refinements, optional/nullable, defaults | 253/253 ✅ | 100% |
-| v0.4.0 | ✅ **COMPLETE** | Performance, polish, edge cases | 85/85 ✅ | 100% |
-| v1.0.0 | 🎯 Target | Stable API, production ready | 526+ | - |
+| v0.3.0 | ✅ **COMPLETE** | Unions, refinements, optional/nullable, defaults | 200/200 ✅ | 100% |
+| v0.4.0 | 🔄 **IN PROGRESS** | Performance, polish, edge cases | 53/85 | 62.4% |
+| v1.0.0 | 🎯 Target | Stable API, production ready | 491+ | - |
 
-**Overall Progress:** 526/526 tests (100%)**Current Test Count:** 526 tests passing (all tested phases complete)
+**Overall Progress:** 479/491 tests (97.6%)
+
+**v0.4.0 Completed Phases:**
+- ✅ Phase 1: Schema Compilation (30 tests)
+- ✅ Phase 2: Fast Path Optimizations (non-tested, benchmarks)
+- ✅ Phase 7: Performance Benchmarks (non-tested, dev-only)
 
 ---
 
@@ -437,12 +442,11 @@ const result = validate(Config, {});
 
 ## ⚡ v0.4.0 - Performance Optimizations and Final Polish
 
-**Status:** ✅ **COMPLETE** (Phases 1-6 complete)
+**Status:** 📋 Planned
 **Goal:** Optimize validation performance, improve DX, and finalize for production
-**Target Tests:** +85 (total 526)
-**Actual Tests:** +85 (phases 1-6 complete)
-**Breaking Changes:** None
-**Actual Sessions:** 2 (completed 2026-01-02)
+**Target Tests:** +85 (total 491)
+**Breaking Changes:** Possible (API lock for v1.0.0)
+**Estimated Sessions:** 2-3
 
 ### Features
 
@@ -589,28 +593,17 @@ validate(schema, data, config);
 - Fast path applies to plain primitives only (no transforms/refinements/defaults)
 - See benchmarks/README.md for full results
 
-#### Phase 3: Error Formatting (15 tests) ✅
-- [x] Implement `error.format('json')`
-- [x] Implement `error.format('text')`
-- [x] Implement `error.format('color')` (ANSI codes)
-- [x] Implement debug mode traces
-- [x] Path-aware validation for nested errors
-- [x] ValidationError class with format methods
-- [x] Result type enhancement with `details` field
+#### Phase 3: Error Formatting (15 tests)
+- [ ] Implement `error.format('json')`
+- [ ] Implement `error.format('text')`
+- [ ] Implement `error.format('color')` (ANSI codes)
+- [ ] Implement debug mode traces
 
 **Test Coverage:**
-- JSON formatting (5 tests) ✅
-- Text formatting (5 tests) ✅
-- Color formatting (3 tests) ✅
-- Debug traces (2 tests) ✅
-
-**Implementation Details:**
-- Created `ValidationError` class with `format('json' | 'text' | 'color')` methods
-- Enhanced `Result<T>` type to include optional `details?: ValidationError`
-- Implemented `validateWithPath()` for path tracking through nested structures
-- Added `_validateWithPath` method to object, array, and tuple validators
-- Path format: array indices as `[0]`, object properties as `propName`
-- Maintains backward compatibility with existing error message formats
+- JSON formatting (5 tests)
+- Text formatting (5 tests)
+- Color formatting (3 tests)
+- Debug traces (2 tests)
 
 #### Phase 4: Circular Reference Detection (10 tests)
 - [ ] Implement `v.lazy(fn)` for recursive schemas
@@ -632,32 +625,41 @@ validate(schema, data, config);
 - Max array size violations (3 tests)
 - Max object keys violations (3 tests)
 
-#### Phase 6: Edge Case Handling (20 tests) ✅ COMPLETE
-- [x] Symbol value validation
-- [x] NaN value validation
-- [x] Infinity / -Infinity validation
-- [x] BigInt value validation
-- [x] Function, undefined, null edge cases
+#### Phase 6: Edge Case Handling (20 tests)
+- [ ] Symbol value validation
+- [ ] NaN value validation
+- [ ] Infinity / -Infinity validation
+- [ ] BigInt value validation
+- [ ] Function, undefined, null edge cases
 
-**Test Coverage:** (20/20 tests passing)
+**Test Coverage:**
 - Symbol handling (4 tests)
 - NaN handling (4 tests)
 - Infinity handling (4 tests)
 - BigInt handling (4 tests)
 - Other edge cases (4 tests)
 
-#### Phase 7: Performance Benchmarks (non-tested, dev-only)
-- [ ] Create `benchmarks/` directory
-- [ ] Add zod, yup, joi as dev dependencies
-- [ ] Write benchmark suite comparing common patterns
-- [ ] Generate performance comparison report
+#### Phase 7: Performance Benchmarks (non-tested, dev-only) ✅ COMPLETE
+- [x] Create `benchmarks/` directory
+- [x] Add zod, yup as dev dependencies (tinybench for benchmarking)
+- [x] Write benchmark suite comparing common patterns
+- [x] Generate performance comparison report (benchmarks/README.md)
 
 **Benchmarks:**
-- Primitive validation (string, number, boolean)
-- Simple object validation
-- Nested object validation
-- Array validation
-- Union validation
+- Primitive validation (string, number, boolean) ✅
+- Simple object validation ✅
+- Nested object validation ✅
+- Array validation (small, medium, large) ✅
+- Union validation ✅
+- Optional/nullable validation ✅
+- Refinements (single and chained) ✅
+
+**Results Summary:**
+- property-validator is 6-10x faster than zod/yup for primitives
+- property-validator is 2-5x faster for unions
+- property-validator is 5-15x faster for refinements
+- ⚠️ Zod is 4-6x faster for array validation (optimization opportunity identified)
+- See `benchmarks/README.md` for complete analysis
 
 #### Phase 8: Documentation (non-tested)
 - [ ] Complete API reference (all validators, all methods)
