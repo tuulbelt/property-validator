@@ -14,7 +14,8 @@
 | v0.1.0 | ✅ **COMPLETE** | Objects, primitives, basic validation | 101/101 ✅ | 100% |
 | v0.2.0 | ✅ **COMPLETE** | Arrays, tuples, length constraints | 125/125 ✅ | 100% |
 | v0.3.0 | ✅ **COMPLETE** | Unions, refinements, optional/nullable, defaults | 200/200 ✅ | 100% |
-| v0.4.0 | ✅ **COMPLETE** | Performance, polish, edge cases | 85/85 | 100% |
+| v0.4.0 | ✅ **COMPLETE** | Performance, polish, edge cases | 85/85 ✅ | 100% |
+| v0.5.0 | 📋 Planned | Built-in validators (email, url, date, etc.) | 0/70 | 0% |
 | v1.0.0 | 🎯 Target | Stable API, production ready | 491+ | - |
 
 **Overall Progress:** 511/491 tests (104.1%) - Exceeding target!
@@ -708,6 +709,106 @@ validate(schema, data, config);
 - [ ] Dogfooding passes
 - [ ] `/quality-check` passes
 - [ ] API ready for v1.0.0 freeze
+
+---
+
+## 🎯 v0.5.0 - Built-in Validators (Common Types)
+
+**Status:** 📋 Planned
+**Goal:** Add commonly-used built-in validators to match zod's feature set
+**Estimated Tests:** +60-80
+**Breaking Changes:** None (additive only)
+
+### Features
+
+#### 1. String Validators
+- `v.string().email()` - Email validation (RFC 5322)
+- `v.string().url()` - URL validation (with protocol)
+- `v.string().uuid()` - UUID validation (v4)
+- `v.string().regex(pattern)` - Custom regex validation
+- `v.string().startsWith(prefix)` - String prefix check
+- `v.string().endsWith(suffix)` - String suffix check
+- `v.string().includes(substring)` - Substring check
+- `v.string().trim()` - Transform: trim whitespace
+- `v.string().toLowerCase()` - Transform: convert to lowercase
+- `v.string().toUpperCase()` - Transform: convert to uppercase
+
+#### 2. Number Validators
+- `v.number().int()` - Integer validation
+- `v.number().positive()` - Must be > 0
+- `v.number().negative()` - Must be < 0
+- `v.number().nonnegative()` - Must be >= 0
+- `v.number().nonpositive()` - Must be <= 0
+- `v.number().finite()` - Must not be Infinity/-Infinity
+- `v.number().safe()` - Must be safe integer (Number.isSafeInteger)
+- `v.number().multipleOf(n)` - Divisible by n
+
+#### 3. Date Validators
+- `v.date()` - Date object validation
+- `v.date().min(date)` - Minimum date
+- `v.date().max(date)` - Maximum date
+- `v.date().past()` - Must be before now
+- `v.date().future()` - Must be after now
+
+#### 4. Special Types
+- `v.literal(value)` - Already exists, keep as-is
+- `v.enum([...values])` - Enum validation (already via union)
+- `v.nan()` - Validates NaN
+- `v.null()` - Validates null (already exists via nullable)
+- `v.undefined()` - Validates undefined (already exists via optional)
+- `v.any()` - Accepts any value (escape hatch)
+- `v.unknown()` - Accepts any value (type-safe any)
+- `v.never()` - Never validates (for impossible states)
+
+#### 5. Advanced Validators
+- `v.record(keyValidator, valueValidator)` - Record/map validation
+- `v.map(keyValidator, valueValidator)` - ES6 Map validation
+- `v.set(itemValidator)` - ES6 Set validation
+- `v.promise(validator)` - Promise validation
+- `v.function()` - Function type validation
+
+### Implementation Strategy
+
+**Phase 1: String methods** (+15 tests)
+- Email, URL, UUID validators
+- String transforms (trim, case conversion)
+- Regex and includes/startsWith/endsWith
+
+**Phase 2: Number methods** (+10 tests)
+- Integer, positive, negative, finite, safe
+- multipleOf for divisibility checks
+
+**Phase 3: Date validator** (+12 tests)
+- Basic date validation
+- Min/max/past/future constraints
+
+**Phase 4: Special types** (+8 tests)
+- any, unknown, never
+- nan validator
+
+**Phase 5: Advanced validators** (+20 tests)
+- record, map, set
+- promise, function
+
+### Performance Considerations
+
+- String validators (email, url) use built-in regex patterns
+- Date validators use native Date comparison
+- All validators maintain zero external dependencies
+- Inline primitive checks where possible
+
+### Acceptance Criteria
+
+- [ ] All string validators implemented with tests
+- [ ] All number validators implemented with tests
+- [ ] Date validator with min/max/past/future
+- [ ] Special types (any, unknown, never, nan)
+- [ ] Advanced validators (record, map, set, promise, function)
+- [ ] 60-80 new tests passing
+- [ ] Zero runtime dependencies maintained
+- [ ] Performance benchmarks show no regression
+- [ ] Documentation updated with all new validators
+- [ ] Examples added for each validator category
 
 ---
 
