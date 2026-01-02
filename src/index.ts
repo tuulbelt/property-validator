@@ -8,11 +8,129 @@
 import { realpathSync } from 'node:fs';
 
 /**
+ * Structured validation error with formatting support
+ */
+export class ValidationError extends Error {
+  public readonly path: string[];
+  public readonly value: unknown;
+  public readonly expected: string;
+  public readonly code: string;
+
+  constructor(options: {
+    message: string;
+    path?: string[];
+    value?: unknown;
+    expected?: string;
+    code?: string;
+  }) {
+    super(options.message);
+    this.name = 'ValidationError';
+    this.path = options.path || [];
+    this.value = options.value;
+    this.expected = options.expected || '';
+    this.code = options.code || 'VALIDATION_ERROR';
+  }
+
+  /**
+   * Format error in different styles
+   */
+  format(style: 'json' | 'text' | 'color'): string {
+    switch (style) {
+      case 'json':
+        return this.formatJSON();
+      case 'text':
+        return this.formatText();
+      case 'color':
+        return this.formatColor();
+      default:
+        return this.message;
+    }
+  }
+
+  /**
+   * Format as JSON
+   */
+  private formatJSON(): string {
+    return JSON.stringify(
+      {
+        error: this.code,
+        message: this.message,
+        path: this.path.length > 0 ? this.path.join('.') : undefined,
+        expected: this.expected || undefined,
+        received: this.getTypeName(this.value),
+      },
+      null,
+      2
+    );
+  }
+
+  /**
+   * Format as plain text
+   */
+  private formatText(): string {
+    const parts: string[] = [];
+
+    if (this.path.length > 0) {
+      parts.push(`At path: ${this.path.join('.')}`);
+    }
+
+    parts.push(`Error: ${this.message}`);
+
+    if (this.expected) {
+      parts.push(`Expected: ${this.expected}`);
+    }
+
+    parts.push(`Received: ${this.getTypeName(this.value)}`);
+
+    return parts.join('\n');
+  }
+
+  /**
+   * Format with ANSI colors for terminal output
+   */
+  private formatColor(): string {
+    const red = '\x1b[31m';
+    const yellow = '\x1b[33m';
+    const blue = '\x1b[34m';
+    const gray = '\x1b[90m';
+    const reset = '\x1b[0m';
+    const bold = '\x1b[1m';
+
+    const parts: string[] = [];
+
+    if (this.path.length > 0) {
+      parts.push(`${gray}At path:${reset} ${blue}${this.path.join('.')}${reset}`);
+    }
+
+    parts.push(`${red}${bold}Error:${reset} ${this.message}`);
+
+    if (this.expected) {
+      parts.push(`${gray}Expected:${reset} ${this.expected}`);
+    }
+
+    parts.push(`${gray}Received:${reset} ${yellow}${this.getTypeName(this.value)}${reset}`);
+
+    return parts.join('\n');
+  }
+
+  /**
+   * Get type name for error messages
+   */
+  private getTypeName(value: unknown): string {
+    if (value === null) return 'null';
+    if (value === undefined) return 'undefined';
+    if (Number.isNaN(value)) return 'NaN';
+    if (Array.isArray(value)) return 'array';
+    return typeof value;
+  }
+}
+
+/**
  * Validation result
  */
 export type Result<T> =
   | { ok: true; value: T }
-  | { ok: false; error: string };
+  | { ok: false; error: string; details?: ValidationError };
 
 /**
  * Validator interface
