@@ -65,7 +65,7 @@ import { validate, v } from '@tuulbelt/property-validator';
 const userValidator = v.object({
   name: v.string(),
   age: v.number(),
-  email: v.string().email()
+  email: v.string()
 });
 
 // Validate data
@@ -120,13 +120,75 @@ Validate data against a validator.
 
 ### Validator Builders
 
+**Primitives:**
 - `v.string()` — String validator
 - `v.number()` — Number validator
 - `v.boolean()` — Boolean validator
-- `v.array(itemValidator)` — Array validator
+
+**Collections:**
+- `v.array(itemValidator)` — Array validator (homogeneous elements)
+  - `.min(n)` — Minimum length constraint
+  - `.max(n)` — Maximum length constraint
+  - `.length(n)` — Exact length constraint
+  - `.nonempty()` — Requires at least 1 element
+- `v.tuple([...validators])` — Tuple validator (fixed-length, per-index types)
+
+**Objects:**
 - `v.object(shape)` — Object validator with shape
-- `v.optional(validator)` — Optional field
-- `v.nullable(validator)` — Nullable field
+
+**Modifiers:**
+- `v.optional(validator)` — Optional field (allows undefined)
+- `v.nullable(validator)` — Nullable field (allows null)
+
+### Array Examples
+
+```typescript
+// Basic array validation
+const numbersValidator = v.array(v.number());
+validate(numbersValidator, [1, 2, 3]); // ✓
+
+// Array with length constraints
+const tagsValidator = v.array(v.string()).min(1).max(5);
+validate(tagsValidator, ['typescript', 'validation']); // ✓
+
+// Array of objects
+const usersValidator = v.array(v.object({
+  name: v.string(),
+  age: v.number()
+}));
+validate(usersValidator, [
+  { name: 'Alice', age: 30 },
+  { name: 'Bob', age: 25 }
+]); // ✓
+
+// Nested arrays (2D matrix)
+const matrixValidator = v.array(v.array(v.number()));
+validate(matrixValidator, [[1, 2], [3, 4]]); // ✓
+```
+
+### Tuple Examples
+
+```typescript
+// Coordinate tuple [x, y]
+const coordValidator = v.tuple([v.number(), v.number()]);
+validate(coordValidator, [10, 20]); // ✓
+
+// Mixed-type tuple
+const personValidator = v.tuple([
+  v.string(),   // name
+  v.number(),   // age
+  v.boolean()   // active
+]);
+validate(personValidator, ['Alice', 30, true]); // ✓
+
+// Tuple with optional field
+const entryValidator = v.tuple([
+  v.string(),
+  v.optional(v.number())
+]);
+validate(entryValidator, ['key', undefined]); // ✓
+validate(entryValidator, ['key', 42]); // ✓
+```
 
 ### Custom Validators
 

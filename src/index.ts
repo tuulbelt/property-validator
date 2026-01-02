@@ -23,6 +23,23 @@ export interface Validator<T> {
 }
 
 /**
+ * Array validator with length constraints
+ */
+export interface ArrayValidator<T> extends Validator<T[]> {
+  min(n: number): ArrayValidator<T>;
+  max(n: number): ArrayValidator<T>;
+  length(n: number): ArrayValidator<T>;
+  nonempty(): ArrayValidator<T>;
+}
+
+/**
+ * Tuple type inference helper
+ */
+type TupleType<T extends readonly Validator<any>[]> = {
+  [K in keyof T]: T[K] extends Validator<infer U> ? U : never;
+};
+
+/**
  * Get a clear type name for error messages
  */
 function getTypeName(value: unknown): string {
@@ -102,21 +119,113 @@ export const v = {
   },
 
   /**
-   * Array validator
+   * Array validator with optional length constraints
    */
-  array<T>(itemValidator: Validator<T>): Validator<T[]> {
+  array<T>(itemValidator: Validator<T>): ArrayValidator<T> {
+    const createArrayValidator = (
+      minLength?: number,
+      maxLength?: number,
+      exactLength?: number
+    ): ArrayValidator<T> => {
+      return {
+        validate(data: unknown): data is T[] {
+          if (!Array.isArray(data)) return false;
+
+          // Check length constraints
+          if (minLength !== undefined && data.length < minLength) return false;
+          if (maxLength !== undefined && data.length > maxLength) return false;
+          if (exactLength !== undefined && data.length !== exactLength) return false;
+
+          // Validate each item
+          return data.every((item) => itemValidator.validate(item));
+        },
+
+        error(data: unknown): string {
+          if (!Array.isArray(data)) {
+            return `Expected array, got ${getTypeName(data)}`;
+          }
+
+          // Check length constraints first
+          if (minLength !== undefined && data.length < minLength) {
+            return `Array must have at least ${minLength} element(s), got ${data.length}`;
+          }
+          if (maxLength !== undefined && data.length > maxLength) {
+            return `Array must have at most ${maxLength} element(s), got ${data.length}`;
+          }
+          if (exactLength !== undefined && data.length !== exactLength) {
+            return `Array must have exactly ${exactLength} element(s), got ${data.length}`;
+          }
+
+          // Find first invalid item
+          const invalidIndex = data.findIndex((item) => !itemValidator.validate(item));
+          if (invalidIndex !== -1) {
+            return `Invalid item at index ${invalidIndex}: ${itemValidator.error(data[invalidIndex])}`;
+          }
+
+          return 'Array validation failed';
+        },
+
+        min(n: number): ArrayValidator<T> {
+          return createArrayValidator(n, maxLength, exactLength);
+        },
+
+        max(n: number): ArrayValidator<T> {
+          return createArrayValidator(minLength, n, exactLength);
+        },
+
+        length(n: number): ArrayValidator<T> {
+          return createArrayValidator(undefined, undefined, n);
+        },
+
+        nonempty(): ArrayValidator<T> {
+          return createArrayValidator(1, maxLength, exactLength);
+        },
+      };
+    };
+
+    return createArrayValidator();
+  },
+
+  /**
+   * Tuple validator - fixed-length array with per-index types
+   */
+  tuple<T extends readonly Validator<any>[]>(
+    validators: T
+  ): Validator<TupleType<T>> {
     return {
-      validate(data: unknown): data is T[] {
-        return (
-          Array.isArray(data) && data.every((item) => itemValidator.validate(item))
+      validate(data: unknown): data is TupleType<T> {
+        if (!Array.isArray(data)) return false;
+
+        // Must have exact length
+        if (data.length !== validators.length) return false;
+
+        // Validate each element at its index
+        return validators.every((validator, index) =>
+          validator.validate(data[index])
         );
       },
+
       error(data: unknown): string {
         if (!Array.isArray(data)) {
-          return `Expected array, got ${getTypeName(data)}`;
+          return `Expected tuple (array), got ${getTypeName(data)}`;
         }
-        const invalidIndex = data.findIndex((item) => !itemValidator.validate(item));
-        return `Invalid item at index ${invalidIndex}: ${itemValidator.error(data[invalidIndex])}`;
+
+        // Check length first
+        if (data.length !== validators.length) {
+          return `Tuple must have exactly ${validators.length} element(s), got ${data.length}`;
+        }
+
+        // Find first invalid element
+        const invalidIndex = validators.findIndex(
+          (validator, index) => !validator.validate(data[index])
+        );
+
+        if (invalidIndex !== -1) {
+          const validator = validators[invalidIndex];
+          return `Invalid element at index ${invalidIndex}: ${validator!.error(data[invalidIndex])}`;
+        }
+
+        return 'Tuple validation failed';
       },
     };
   },
