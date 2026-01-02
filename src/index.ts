@@ -659,8 +659,8 @@ export const v = {
           if (maxLength !== undefined && data.length > maxLength) return false;
           if (exactLength !== undefined && data.length !== exactLength) return false;
 
-          // Validate each item using top-level validate() to apply transforms/defaults
-          if (!data.every((item) => validate(itemValidator, item).ok)) return false;
+          // Use validateFast() to skip options overhead for each item
+          if (!data.every((item) => validateFast(itemValidator, item).ok)) return false;
 
           // Check all refinements
           return refinements.every((refinement) => refinement.predicate(data));
@@ -700,14 +700,15 @@ export const v = {
         },
 
         _transform(data: any): T[] {
-          // OPTIMIZATION: Only clone array if transforms are actually applied
-          // This gives ~1.5x speedup by returning input directly when no changes needed
           const arr = data as unknown[];
+
+          // For complex validators: only clone array if transforms are actually applied
           let result: unknown[] | null = null;
 
           for (let i = 0; i < arr.length; i++) {
             const item = arr[i];
-            const validationResult = validate(itemValidator, item);
+            // OPTIMIZATION: Use validateFast() to skip options overhead
+            const validationResult = validateFast(itemValidator, item);
 
             if (validationResult.ok && item !== validationResult.value) {
               // First change detected - create copy
