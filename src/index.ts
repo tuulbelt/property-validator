@@ -148,6 +148,7 @@ export interface Validator<T> {
   _default?: T | (() => T);  // Internal: default value or function
   _type?: string;  // Internal: validator type for optimizations
   _hasRefinements?: boolean;  // Internal: whether validator has refinements
+  _validateWithPath?: (data: unknown, path: string[]) => Result<T>;  // Internal: path-aware validation
 }
 
 /**
@@ -296,6 +297,58 @@ function createValidator<T>(
 }
 
 /**
+ * Internal validation function with path tracking
+ * @internal - exported for use by validators, not for public API
+ */
+export function validateWithPath<T>(
+  validator: Validator<T>,
+  data: unknown,
+  path: string[] = []
+): Result<T> {
+  // If validator has path-aware validation, use it
+  if (validator._validateWithPath) {
+    return validator._validateWithPath(data, path);
+  }
+
+  // Apply default value if data is undefined and default is present
+  let processedData = data;
+  if (data === undefined && validator._default !== undefined) {
+    processedData =
+      typeof validator._default === 'function'
+        ? (validator._default as () => T)()
+        : validator._default;
+  }
+
+  if (validator.validate(processedData)) {
+    // Apply transformation if present
+    const value = validator._transform
+      ? validator._transform(processedData)
+      : processedData;
+    return { ok: true, value: value as T };
+  }
+
+  // Create detailed error with path information
+  const errorMessage = validator.error(processedData);
+  const details = new ValidationError({
+    message: errorMessage,
+    path: path,
+    value: processedData,
+    expected: validator._type || extractExpectedType(errorMessage),
+    code: 'VALIDATION_ERROR',
+  });
+
+  return { ok: false, error: errorMessage, details };
+}
+
+/**
+ * Extract expected type from error message
+ */
+function extractExpectedType(message: string): string {
+  const match = message.match(/Expected (\w+)/);
+  return match ? match[1] : '';
+}
+
+/**
  * Validate data against a validator
  *
  * @param validator - Validator instance
@@ -307,26 +360,13 @@ function createValidator<T>(
  * const result = validate(v.string(), "hello");
  * if (result.ok) {
  *   console.log(result.value); // Type: string
+ * } else {
+ *   console.log(result.details?.format('color')); // Formatted error
  * }
  * ```
  */
 export function validate<T>(validator: Validator<T>, data: unknown): Result<T> {
-  // Apply default value if data is undefined and default is present
-  let processedData = data;
-  if (data === undefined && validator._default !== undefined) {
-    processedData = typeof validator._default === 'function'
-      ? (validator._default as () => T)()
-      : validator._default;
-  }
-
-  if (validator.validate(processedData)) {
-    // Apply transformation if present
-    const value = validator._transform
-      ? validator._transform(processedData)
-      : processedData;
-    return { ok: true, value: value as T };
-  }
-  return { ok: false, error: validator.error(processedData) };
+  return validateWithPath(validator, data, []);
 }
 
 /**
@@ -614,6 +654,95 @@ export const v = {
           );
           return baseValidator.default(value);
         },
+
+        _validateWithPath(data: unknown, path: string[]): Result<T[]> {
+          if (!Array.isArray(data)) {
+            const details = new ValidationError({
+              message: `Expected array, got ${getTypeName(data)}`,
+              path: path,
+              value: data,
+              expected: 'array',
+              code: 'VALIDATION_ERROR',
+            });
+            return { ok: false, error: details.message, details };
+          }
+
+          // Check length constraints
+          if (minLength !== undefined && data.length < minLength) {
+            const message = `Array must have at least ${minLength} element(s), got ${data.length}`;
+            const details = new ValidationError({
+              message,
+              path,
+              value: data,
+              expected: `array with min length ${minLength}`,
+              code: 'VALIDATION_ERROR',
+            });
+            return { ok: false, error: message, details };
+          }
+          if (maxLength !== undefined && data.length > maxLength) {
+            const message = `Array must have at most ${maxLength} element(s), got ${data.length}`;
+            const details = new ValidationError({
+              message,
+              path,
+              value: data,
+              expected: `array with max length ${maxLength}`,
+              code: 'VALIDATION_ERROR',
+            });
+            return { ok: false, error: message, details };
+          }
+          if (exactLength !== undefined && data.length !== exactLength) {
+            const message = `Array must have exactly ${exactLength} element(s), got ${data.length}`;
+            const details = new ValidationError({
+              message,
+              path,
+              value: data,
+              expected: `array with length ${exactLength}`,
+              code: 'VALIDATION_ERROR',
+            });
+            return { ok: false, error: message, details };
+          }
+
+          // Validate each element with index in path (skip holes in sparse arrays)
+          for (let i = 0; i < data.length; i++) {
+            // Skip holes in sparse arrays (like [1, , 3])
+            if (!(i in data)) continue;
+
+            const result = validateWithPath(itemValidator, data[i], [...path, `[${i}]`]);
+            if (!result.ok) {
+              // Wrap error message to include array context
+              const wrappedError = `Invalid item at index ${i}: ${result.error}`;
+              if (result.details) {
+                // Create new ValidationError with wrapped message but keep original path
+                const details = new ValidationError({
+                  message: wrappedError,
+                  path: result.details.path,
+                  value: result.details.value,
+                  expected: result.details.expected,
+                  code: result.details.code,
+                });
+                return { ok: false, error: wrappedError, details };
+              }
+              return { ok: false, error: wrappedError };
+            }
+          }
+
+          // Check refinements
+          const failedRefinement = refinements.find((r) => !r.predicate(data));
+          if (failedRefinement) {
+            const details = new ValidationError({
+              message: failedRefinement.message,
+              path,
+              value: data,
+              expected: 'valid array',
+              code: 'VALIDATION_ERROR',
+            });
+            return { ok: false, error: failedRefinement.message, details };
+          }
+
+          // All elements valid, apply transform if needed
+          const transformed = validator._transform ? validator._transform(data) : data;
+          return { ok: true, value: transformed };
+        },
       };
 
       return validator;
@@ -628,7 +757,7 @@ export const v = {
   tuple<T extends readonly Validator<any>[]>(
     validators: T
   ): Validator<TupleType<T>> {
-    return createValidator(
+    const validator = createValidator(
       (data): data is TupleType<T> => {
         if (!Array.isArray(data)) return false;
 
@@ -663,6 +792,59 @@ export const v = {
         return 'Tuple validation failed';
       }
     );
+
+    // Path-aware validation for tuple elements
+    validator._validateWithPath = (data: unknown, path: string[]): Result<TupleType<T>> => {
+      if (!Array.isArray(data)) {
+        const details = new ValidationError({
+          message: `Expected tuple (array), got ${getTypeName(data)}`,
+          path: path,
+          value: data,
+          expected: 'tuple',
+          code: 'VALIDATION_ERROR',
+        });
+        return { ok: false, error: details.message, details };
+      }
+
+      // Check length
+      if (data.length !== validators.length) {
+        const message = `Tuple must have exactly ${validators.length} element(s), got ${data.length}`;
+        const details = new ValidationError({
+          message,
+          path,
+          value: data,
+          expected: `tuple with ${validators.length} elements`,
+          code: 'VALIDATION_ERROR',
+        });
+        return { ok: false, error: message, details };
+      }
+
+      // Validate each element with index in path
+      for (let i = 0; i < validators.length; i++) {
+        const result = validateWithPath(validators[i], data[i], [...path, `[${i}]`]);
+        if (!result.ok) {
+          // Wrap error message to include tuple context
+          const wrappedError = `Invalid element at index ${i}: ${result.error}`;
+          if (result.details) {
+            // Create new ValidationError with wrapped message but keep original path
+            const details = new ValidationError({
+              message: wrappedError,
+              path: result.details.path,
+              value: result.details.value,
+              expected: result.details.expected,
+              code: result.details.code,
+            });
+            return { ok: false, error: wrappedError, details };
+          }
+          return { ok: false, error: wrappedError };
+        }
+      }
+
+      // All elements valid
+      return { ok: true, value: data as TupleType<T> };
+    };
+
+    return validator;
   },
 
   /**
@@ -709,6 +891,60 @@ export const v = {
         }
       }
       return result as T;
+    };
+
+    // Path-aware validation for nested errors
+    validator._validateWithPath = (data: unknown, path: string[]): Result<T> => {
+      if (typeof data !== 'object' || data === null) {
+        const details = new ValidationError({
+          message: `Expected object, got ${getTypeName(data)}`,
+          path: path,
+          value: data,
+          expected: 'object',
+          code: 'VALIDATION_ERROR',
+        });
+        return { ok: false, error: details.message, details };
+      }
+
+      const obj = data as Record<string, unknown>;
+      // Validate each field with extended path
+      for (const [key, fieldValidator] of Object.entries(shape)) {
+        const result = validateWithPath(fieldValidator, obj[key], [...path, key]);
+        if (!result.ok) {
+          // Wrap error message to include property context
+          const wrappedError = `Invalid property '${key}': ${result.error}`;
+          if (result.details) {
+            // Create new ValidationError with wrapped message but keep original path
+            const details = new ValidationError({
+              message: wrappedError,
+              path: result.details.path,
+              value: result.details.value,
+              expected: result.details.expected,
+              code: result.details.code,
+            });
+            return { ok: false, error: wrappedError, details };
+          }
+          return { ok: false, error: wrappedError };
+        }
+      }
+
+      // Check refinements if present (refinements are in createValidator closure)
+      // We need to call the base validator to check them
+      if (validator._hasRefinements && !validator.validate(data)) {
+        const errorMessage = validator.error(data);
+        const details = new ValidationError({
+          message: errorMessage,
+          path,
+          value: data,
+          expected: 'valid object',
+          code: 'VALIDATION_ERROR',
+        });
+        return { ok: false, error: errorMessage, details };
+      }
+
+      // All fields valid, apply transform if needed
+      const transformed = validator._transform ? validator._transform(data) : data;
+      return { ok: true, value: transformed as T };
     };
 
     return validator;

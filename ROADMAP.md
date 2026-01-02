@@ -13,11 +13,11 @@
 |---------|--------|----------|-------|------------|
 | v0.1.0 | ✅ **COMPLETE** | Objects, primitives, basic validation | 101/101 ✅ | 100% |
 | v0.2.0 | ✅ **COMPLETE** | Arrays, tuples, length constraints | 125/125 ✅ | 100% |
-| v0.3.0 | ✅ **COMPLETE** | Unions, refinements, optional/nullable, defaults | 200/200 ✅ | 100% |
-| v0.4.0 | 🔄 **IN PROGRESS** | Performance, polish, edge cases | 30/85 | 35.3% |
-| v1.0.0 | 🎯 Target | Stable API, production ready | 491+ | - |
+| v0.3.0 | ✅ **COMPLETE** | Unions, refinements, optional/nullable, defaults | 253/253 ✅ | 100% |
+| v0.4.0 | 🔄 **IN PROGRESS** | Performance, polish, edge cases | 45/85 | 52.9% |
+| v1.0.0 | 🎯 Target | Stable API, production ready | 564+ | - |
 
-**Overall Progress:** 456/491 tests (92.9%)
+**Overall Progress:** 479/564 tests (84.9%)**Current Test Count:** 479 tests passing (all phases 1-3 complete)
 
 ---
 
@@ -437,11 +437,12 @@ const result = validate(Config, {});
 
 ## ⚡ v0.4.0 - Performance Optimizations and Final Polish
 
-**Status:** 📋 Planned
+**Status:** 🔄 **IN PROGRESS** (Phase 3/10 complete)
 **Goal:** Optimize validation performance, improve DX, and finalize for production
-**Target Tests:** +85 (total 491)
+**Target Tests:** +85 (total 564)
+**Actual Tests:** +45 so far (phases 1-3 complete)
 **Breaking Changes:** Possible (API lock for v1.0.0)
-**Estimated Sessions:** 2-3
+**Estimated Sessions:** 2-3 (1 completed so far)
 
 ### Features
 
@@ -588,17 +589,28 @@ validate(schema, data, config);
 - Fast path applies to plain primitives only (no transforms/refinements/defaults)
 - See benchmarks/README.md for full results
 
-#### Phase 3: Error Formatting (15 tests)
-- [ ] Implement `error.format('json')`
-- [ ] Implement `error.format('text')`
-- [ ] Implement `error.format('color')` (ANSI codes)
-- [ ] Implement debug mode traces
+#### Phase 3: Error Formatting (15 tests) ✅
+- [x] Implement `error.format('json')`
+- [x] Implement `error.format('text')`
+- [x] Implement `error.format('color')` (ANSI codes)
+- [x] Implement debug mode traces
+- [x] Path-aware validation for nested errors
+- [x] ValidationError class with format methods
+- [x] Result type enhancement with `details` field
 
 **Test Coverage:**
-- JSON formatting (5 tests)
-- Text formatting (5 tests)
-- Color formatting (3 tests)
-- Debug traces (2 tests)
+- JSON formatting (5 tests) ✅
+- Text formatting (5 tests) ✅
+- Color formatting (3 tests) ✅
+- Debug traces (2 tests) ✅
+
+**Implementation Details:**
+- Created `ValidationError` class with `format('json' | 'text' | 'color')` methods
+- Enhanced `Result<T>` type to include optional `details?: ValidationError`
+- Implemented `validateWithPath()` for path tracking through nested structures
+- Added `_validateWithPath` method to object, array, and tuple validators
+- Path format: array indices as `[0]`, object properties as `propName`
+- Maintains backward compatibility with existing error message formats
 
 #### Phase 4: Circular Reference Detection (10 tests)
 - [ ] Implement `v.lazy(fn)` for recursive schemas
