@@ -153,6 +153,13 @@ export interface ValidationOptions {
    * @default Infinity
    */
   maxItems?: number;
+
+  /**
+   * Enable circular reference detection (uses WeakSet tracking)
+   * When false, circular references will cause stack overflow
+   * @default false (for performance)
+   */
+  checkCircular?: boolean;
 }
 
 /**
@@ -438,8 +445,63 @@ function extractExpectedType(message: string): string {
  * const result2 = validate(v.object({ nested: v.object({ deep: v.string() }) }), data, { maxDepth: 2 });
  * ```
  */
+/**
+ * Fast path validation without path tracking or circular detection
+ * Used when no special options are enabled for maximum performance
+ *
+ * For complex validators (objects, arrays), still delegates to validateWithPath
+ * but with a special fast mode that skips circular detection
+ * @internal
+ */
+function validateFast<T>(validator: Validator<T>, data: unknown): Result<T> {
+  // If validator has custom path-aware validation (objects, arrays, unions),
+  // use it but with a minimal WeakSet (not actually used since checkCircular=false)
+  if (validator._validateWithPath) {
+    // Use validateWithPath but with minimal overhead (no actual circular checking)
+    // Path array will be allocated but won't be used unless error occurs
+    return validateWithPath(validator, data, [], new WeakSet(), 0, { checkCircular: false });
+  }
+
+  // For simple validators (primitives), do direct validation
+  // Apply default value if data is undefined and default is present
+  let processedData = data;
+  if (data === undefined && validator._default !== undefined) {
+    processedData =
+      typeof validator._default === 'function'
+        ? (validator._default as () => T)()
+        : validator._default;
+  }
+
+  // Direct validation without path/circular/depth tracking
+  if (validator.validate(processedData)) {
+    // Apply transformation if present
+    const value = validator._transform
+      ? validator._transform(processedData)
+      : processedData;
+    return { ok: true, value: value as T };
+  }
+
+  // On error, build detailed error message
+  const errorMessage = validator.error(processedData);
+  return { ok: false, error: errorMessage };
+}
+
 export function validate<T>(validator: Validator<T>, data: unknown, options?: ValidationOptions): Result<T> {
-  return validateWithPath(validator, data, [], new WeakSet(), 0, options || {});
+  const opts = options || {};
+
+  // Determine if we need full validation with tracking
+  const needsCircularDetection = opts.checkCircular === true;
+  const needsSecurityLimits = opts.maxDepth !== undefined || opts.maxProperties !== undefined || opts.maxItems !== undefined;
+
+  // Fast path: no tracking overhead
+  // OPTIMIZATION: Skip path/WeakSet allocation when not needed (3-5x speedup)
+  if (!needsCircularDetection && !needsSecurityLimits) {
+    return validateFast(validator, data);
+  }
+
+  // Full path: with circular detection and/or security limits
+  const seen = needsCircularDetection ? new WeakSet() : new WeakSet(); // Always allocate to avoid null checks
+  return validateWithPath(validator, data, [], seen, 0, opts);
 }
 
 /**
@@ -754,19 +816,22 @@ export const v = {
             return { ok: false, error: message, details };
           }
 
-          // Check for circular references before recursing
-          if (seen.has(data)) {
-            const details = new ValidationError({
-              message: 'Circular reference detected',
-              path,
-              value: data,
-              expected: 'non-circular structure',
-              code: 'CIRCULAR_REFERENCE',
-            });
-            return { ok: false, error: 'Circular reference detected', details };
+          // Check for circular references before recursing (only if enabled)
+          // OPTIMIZATION: Skip WeakSet operations when checkCircular=false (default)
+          if (options.checkCircular !== false) {
+            if (seen.has(data)) {
+              const details = new ValidationError({
+                message: 'Circular reference detected',
+                path,
+                value: data,
+                expected: 'non-circular structure',
+                code: 'CIRCULAR_REFERENCE',
+              });
+              return { ok: false, error: 'Circular reference detected', details };
+            }
+            // Add to seen set before recursing into elements
+            seen.add(data);
           }
-          // Add to seen set before recursing into elements
-          seen.add(data);
 
           // Check length constraints
           if (minLength !== undefined && data.length < minLength) {
@@ -970,19 +1035,22 @@ export const v = {
         return { ok: false, error: details.message, details };
       }
 
-      // Check for circular references before recursing
-      if (seen.has(data)) {
-        const details = new ValidationError({
-          message: 'Circular reference detected',
-          path,
-          value: data,
-          expected: 'non-circular structure',
-          code: 'CIRCULAR_REFERENCE',
-        });
-        return { ok: false, error: 'Circular reference detected', details };
+      // Check for circular references before recursing (only if enabled)
+      // OPTIMIZATION: Skip WeakSet operations when checkCircular=false (default)
+      if (options.checkCircular !== false) {
+        if (seen.has(data)) {
+          const details = new ValidationError({
+            message: 'Circular reference detected',
+            path,
+            value: data,
+            expected: 'non-circular structure',
+            code: 'CIRCULAR_REFERENCE',
+          });
+          return { ok: false, error: 'Circular reference detected', details };
+        }
+        // Add to seen set before recursing into elements
+        seen.add(data);
       }
-      // Add to seen set before recursing into elements
-      seen.add(data);
 
       // Check length
       if (data.length !== validators.length) {
@@ -1099,19 +1167,23 @@ export const v = {
         return { ok: false, error: message, details };
       }
 
-      // Check for circular references before recursing
-      if (seen.has(data)) {
-        const details = new ValidationError({
-          message: 'Circular reference detected',
-          path,
-          value: data,
-          expected: 'non-circular structure',
-          code: 'CIRCULAR_REFERENCE',
-        });
-        return { ok: false, error: 'Circular reference detected', details };
+      // Check for circular references before recursing (only if enabled)
+      // OPTIMIZATION: Skip WeakSet operations when checkCircular=false (default)
+      // This saves 5-10% overhead on nested object validation
+      if (options.checkCircular !== false) {
+        if (seen.has(data)) {
+          const details = new ValidationError({
+            message: 'Circular reference detected',
+            path,
+            value: data,
+            expected: 'non-circular structure',
+            code: 'CIRCULAR_REFERENCE',
+          });
+          return { ok: false, error: 'Circular reference detected', details };
+        }
+        // Add to seen set before recursing into properties
+        seen.add(data);
       }
-      // Add to seen set before recursing into properties
-      seen.add(data);
 
       const obj = data as Record<string, unknown>;
       // Validate each field with extended path

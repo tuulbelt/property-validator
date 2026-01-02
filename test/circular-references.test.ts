@@ -138,7 +138,7 @@ test('circular references: detection', async (t) => {
     };
     tree.children.push(tree); // Circular!
 
-    const result = validate(TreeNode, tree);
+    const result = validate(TreeNode, tree, { checkCircular: true });
     assert.strictEqual(result.ok, false);
     if (!result.ok) {
       assert.match(result.error, /circular|recursive|loop/i);
@@ -156,7 +156,7 @@ test('circular references: detection', async (t) => {
     const tree: any = { value: 1, children: [child] };
     child.children.push(tree); // Indirect circular!
 
-    const result = validate(TreeNode, tree);
+    const result = validate(TreeNode, tree, { checkCircular: true });
     assert.strictEqual(result.ok, false);
     if (!result.ok) {
       assert.match(result.error, /circular|recursive|loop/i);
@@ -178,7 +178,7 @@ test('circular references: detection', async (t) => {
     // This should fail for circular reference, but this is actually
     // a design decision - do we allow same object twice?
     // For now, let's say YES - it's only circular if it references an ancestor
-    const result = validate(TreeNode, tree);
+    const result = validate(TreeNode, tree, { checkCircular: true });
 
     // This test documents current behavior - may need adjustment
     // based on whether we track "in current path" or "seen globally"
@@ -228,7 +228,7 @@ test('circular references: detection', async (t) => {
     node2.next = node3;
     node3.next = node1; // Circular!
 
-    const result = validate(LinkedListNode, node1);
+    const result = validate(LinkedListNode, node1, { checkCircular: true });
     assert.strictEqual(result.ok, false);
     if (!result.ok) {
       assert.match(result.error, /circular|recursive|loop/i);
