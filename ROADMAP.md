@@ -1,7 +1,7 @@
 # Property Validator Development Roadmap
 
 **Last Updated:** 2026-01-02
-**Current Version:** v0.4.0 (Phases 1-3, 7 Complete) ✅
+**Current Version:** v0.4.0 (Phases 1-4, 7 Complete) ✅
 **Target Version:** v1.0.0 (production ready)
 **Status:** 🟢 Active Development
 
@@ -14,15 +14,16 @@
 | v0.1.0 | ✅ **COMPLETE** | Objects, primitives, basic validation | 101/101 ✅ | 100% |
 | v0.2.0 | ✅ **COMPLETE** | Arrays, tuples, length constraints | 125/125 ✅ | 100% |
 | v0.3.0 | ✅ **COMPLETE** | Unions, refinements, optional/nullable, defaults | 200/200 ✅ | 100% |
-| v0.4.0 | 🔄 **IN PROGRESS** | Performance, polish, edge cases | 68/85 | 80.0% |
+| v0.4.0 | 🔄 **IN PROGRESS** | Performance, polish, edge cases | 78/85 | 91.8% |
 | v1.0.0 | 🎯 Target | Stable API, production ready | 491+ | - |
 
-**Overall Progress:** 494/491 tests (100.6%) - Exceeding target!
+**Overall Progress:** 504/491 tests (102.6%) - Exceeding target!
 
 **v0.4.0 Completed Phases:**
 - ✅ Phase 1: Schema Compilation (30 tests)
 - ✅ Phase 2: Fast Path Optimizations (non-tested, benchmarks)
 - ✅ Phase 3: Error Formatting (15 tests)
+- ✅ Phase 4: Circular Reference Detection (10 tests)
 - ✅ Phase 7: Performance Benchmarks (non-tested, dev-only)
 
 ---
@@ -606,14 +607,14 @@ validate(schema, data, config);
 - Color formatting (3 tests) ✅
 - Debug traces (2 tests) ✅
 
-#### Phase 4: Circular Reference Detection (10 tests)
-- [ ] Implement `v.lazy(fn)` for recursive schemas
-- [ ] Detect circular references during validation
-- [ ] Prevent infinite loops
+#### Phase 4: Circular Reference Detection (10 tests) ✅ COMPLETE
+- [x] Implement `v.lazy(fn)` for recursive schemas
+- [x] Detect circular references during validation
+- [x] Prevent infinite loops
 
 **Test Coverage:**
-- Lazy schema evaluation (5 tests)
-- Circular reference detection (5 tests)
+- Lazy schema evaluation (5 tests) ✅
+- Circular reference detection (5 tests) ✅
 
 #### Phase 5: Security Limits (10 tests)
 - [ ] Implement `maxDepth` config option
