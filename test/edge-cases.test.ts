@@ -201,3 +201,215 @@ test('edge cases - complex combinations', async (t) => {
     assert.strictEqual(result.ok, true);
   });
 });
+
+// ============================================================================
+// Phase 6: Special JavaScript Values (20 tests)
+// ============================================================================
+
+test('edge cases - Symbol values', async (t) => {
+  await t.test('rejects Symbol for string validator', () => {
+    const sym = Symbol('test');
+    const result = validate(v.string(), sym);
+    assert.strictEqual(result.ok, false);
+    if (!result.ok) {
+      assert.match(result.error, /string/i);
+    }
+  });
+
+  await t.test('rejects Symbol for number validator', () => {
+    const sym = Symbol('test');
+    const result = validate(v.number(), sym);
+    assert.strictEqual(result.ok, false);
+    if (!result.ok) {
+      assert.match(result.error, /number/i);
+    }
+  });
+
+  await t.test('rejects Symbol for boolean validator', () => {
+    const sym = Symbol('test');
+    const result = validate(v.boolean(), sym);
+    assert.strictEqual(result.ok, false);
+    if (!result.ok) {
+      assert.match(result.error, /boolean/i);
+    }
+  });
+
+  await t.test('rejects Symbol in object properties', () => {
+    const validator = v.object({
+      name: v.string(),
+    });
+    const sym = Symbol('name');
+    const result = validate(validator, { name: sym });
+    assert.strictEqual(result.ok, false);
+    if (!result.ok) {
+      assert.match(result.error, /string/i);
+    }
+  });
+});
+
+test('edge cases - NaN values', async (t) => {
+  await t.test('rejects NaN for number validator', () => {
+    const result = validate(v.number(), NaN);
+    assert.strictEqual(result.ok, false);
+    if (!result.ok) {
+      assert.match(result.error, /number/i);
+    }
+  });
+
+  await t.test('rejects NaN in array of numbers', () => {
+    const result = validate(v.array(v.number()), [1, NaN, 3]);
+    assert.strictEqual(result.ok, false);
+    if (!result.ok) {
+      assert.match(result.error, /Invalid item/i);
+    }
+  });
+
+  await t.test('rejects NaN in object number property', () => {
+    const validator = v.object({
+      age: v.number(),
+    });
+    const result = validate(validator, { age: NaN });
+    assert.strictEqual(result.ok, false);
+    if (!result.ok) {
+      assert.match(result.error, /number/i);
+    }
+  });
+
+  await t.test('base validator rejects NaN before refinement', () => {
+    const NonNaNNumber = v.number().refine(
+      n => !Number.isNaN(n),
+      'Must not be NaN'
+    );
+    const result1 = validate(NonNaNNumber, 42);
+    assert.strictEqual(result1.ok, true);
+
+    const result2 = validate(NonNaNNumber, NaN);
+    assert.strictEqual(result2.ok, false);
+    if (!result2.ok) {
+      // Base validator rejects NaN before refinement runs
+      assert.match(result2.error, /number/i);
+    }
+  });
+});
+
+test('edge cases - Infinity and -Infinity', async (t) => {
+  await t.test('number validator accepts Infinity by default', () => {
+    const result = validate(v.number(), Infinity);
+    assert.strictEqual(result.ok, true);
+    if (result.ok) {
+      assert.strictEqual(result.value, Infinity);
+    }
+  });
+
+  await t.test('refinement can reject Infinity', () => {
+    const FiniteNumber = v.number().refine(
+      n => Number.isFinite(n),
+      'Must be finite'
+    );
+    const result1 = validate(FiniteNumber, 42);
+    assert.strictEqual(result1.ok, true);
+
+    const result2 = validate(FiniteNumber, Infinity);
+    assert.strictEqual(result2.ok, false);
+    if (!result2.ok) {
+      assert.match(result2.error, /finite/i);
+    }
+  });
+
+  await t.test('array can contain Infinity values', () => {
+    const result = validate(v.array(v.number()), [1, Infinity, -Infinity, 2]);
+    assert.strictEqual(result.ok, true);
+  });
+
+  await t.test('object properties can be Infinity', () => {
+    const validator = v.object({
+      max: v.number(),
+      min: v.number(),
+    });
+    const result = validate(validator, { max: Infinity, min: -Infinity });
+    assert.strictEqual(result.ok, true);
+  });
+});
+
+test('edge cases - BigInt values', async (t) => {
+  await t.test('rejects BigInt for number validator', () => {
+    const result = validate(v.number(), 42n);
+    assert.strictEqual(result.ok, false);
+    if (!result.ok) {
+      assert.match(result.error, /number/i);
+    }
+  });
+
+  await t.test('rejects BigInt for string validator', () => {
+    const result = validate(v.string(), 42n);
+    assert.strictEqual(result.ok, false);
+    if (!result.ok) {
+      assert.match(result.error, /string/i);
+    }
+  });
+
+  await t.test('rejects BigInt in array', () => {
+    const result = validate(v.array(v.number()), [1, 2n, 3]);
+    assert.strictEqual(result.ok, false);
+    if (!result.ok) {
+      assert.match(result.error, /number/i);
+    }
+  });
+
+  await t.test('rejects BigInt in object property', () => {
+    const validator = v.object({
+      count: v.number(),
+    });
+    const result = validate(validator, { count: 100n });
+    assert.strictEqual(result.ok, false);
+    if (!result.ok) {
+      assert.match(result.error, /number/i);
+    }
+  });
+});
+
+test('edge cases - Functions and special types', async (t) => {
+  await t.test('rejects function for string validator', () => {
+    const fn = () => 'hello';
+    const result = validate(v.string(), fn);
+    assert.strictEqual(result.ok, false);
+    if (!result.ok) {
+      assert.match(result.error, /string/i);
+    }
+  });
+
+  await t.test('rejects function for object validator', () => {
+    const validator = v.object({
+      name: v.string(),
+    });
+    const fn = () => ({ name: 'test' });
+    const result = validate(validator, fn);
+    assert.strictEqual(result.ok, false);
+    if (!result.ok) {
+      assert.match(result.error, /object/i);
+    }
+  });
+
+  await t.test('handles sparse arrays correctly', () => {
+    // Create sparse array: [1, <empty>, 3]
+    const sparse = [1, , 3];
+    const result = validate(v.array(v.number()), sparse);
+    assert.strictEqual(result.ok, true);
+    if (result.ok) {
+      // Validator skips holes during validation and returns array as-is
+      assert.strictEqual(result.value.length, 3);
+      assert.strictEqual(result.value[0], 1);
+      assert.strictEqual(result.value[2], 3);
+      assert.strictEqual(1 in result.value, false); // Index 1 is a hole
+    }
+  });
+
+  await t.test('handles Date objects (rejects as non-primitive)', () => {
+    const date = new Date();
+    const result = validate(v.string(), date);
+    assert.strictEqual(result.ok, false);
+    if (!result.ok) {
+      assert.match(result.error, /string/i);
+    }
+  });
+});
