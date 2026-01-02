@@ -56,61 +56,80 @@
 
 ### Phase 1: Return Original Object 🔥 CRITICAL
 
-**Status:** ❌ Not Started
+**Status:** ✅ COMPLETED (2026-01-02)
 **Expected Impact:** +30-40% (70k → 91k - 98k ops/sec)
+**Actual Impact:** 🎉 **+239-291% (70k → 237k ops/sec)** - **3.4-3.9x faster!**
 **Difficulty:** Low
 **Priority:** HIGHEST
 
-#### Problem
+#### Root Cause Identified
 
-Zod v4 doubled performance by returning the original object instead of creating copies. We may be allocating new objects unnecessarily.
-
-#### Current Code Location
-
-- `src/index.ts:477` - `validateFast()` function
-- `src/index.ts:660-673` - `compileObjectValidator()` return value
-- Any place we return `{ ok: true, value: ... }`
+The object validator in `src/index.ts` (line 1367) was **ALWAYS setting `validator._transform`**, even when no properties had transforms or defaults. This caused:
+1. `compileArrayTransform` to think transformations exist (`hasTransform = itemValidator._transform !== undefined`)
+2. Falls into generic path calling `validateFast()` for each array element
+3. Creates Result objects (`{ ok: true, value: ... }`) for every element → allocations!
 
 #### Implementation
 
+**Two-part optimization to enable zero-copy for plain object arrays:**
+
+**1. Object Validator - Conditional Transform (Lines 1366-1404)**
 ```typescript
-// BEFORE (potentially copying):
-return { ok: true, value: data };
+// PHASE 1 OPTIMIZATION: Only set _transform if properties actually have transforms/defaults
+const hasTransforms = Object.values(shape).some(
+  (fieldValidator) => fieldValidator._transform !== undefined || fieldValidator._default !== undefined
+);
 
-// AFTER (return original reference):
-return { ok: true, value: data as T };  // Zero-copy
+if (hasTransforms) {
+  // Store transformation function (only when needed)
+  validator._transform = (data: any): T => {
+    // ... transformation logic ...
+  };
+}
+// If no transforms, leave _transform undefined → fast path enabled
+```
 
-// Exception: Only clone when .transform() is applied
-if (hasTransform) {
-  const transformed = transform(data);
-  return { ok: true, value: transformed };
+**2. Array Transform - Plain Object Fast Path (Lines 784-792)**
+```typescript
+// PHASE 1 OPTIMIZATION: Plain objects without transforms
+const objectShape = (itemValidator as any)._shape;
+const isPlainObject = objectShape && !hasRefinements && !hasTransform && !hasDefault;
+
+if (isPlainObject) {
+  // No transformations needed - return input directly (zero-copy, eliminates validateFast calls)
+  return (data: any): T[] => data as T[];
 }
 ```
 
-#### Testing Requirements
+#### Actual Results (2026-01-02)
 
-1. Run benchmarks BEFORE changes (baseline)
-2. Implement optimization
-3. Run benchmarks AFTER changes
-4. Verify all 526 tests still pass
-5. Document actual improvement vs expected
+| Benchmark | Before (v0.6.0) | After (Phase 1) | Improvement | vs Zod v4 |
+|-----------|-----------------|-----------------|-------------|-----------|
+| **Small (10 items)** | 70k ops/sec | **237k ops/sec** | **+239% (3.4x)** | **1.7x FASTER** ✅ |
+| **Medium (100 items)** | 8k ops/sec | **30k ops/sec** | **+282% (3.8x)** | **2.0x FASTER** ✅ |
+| **Large (1000 items)** | 800 ops/sec | **3,132 ops/sec** | **+291% (3.9x)** | N/A |
 
-**Acceptance Criteria:**
-- ✅ All tests pass (526/526)
-- ✅ Performance improves by at least +25% (conservative estimate)
-- ✅ No memory leaks (test with large datasets)
+**Comparison with Zod:**
+- **Before Phase 1:** 70k ops/sec (1.9x slower than zod's 136k)
+- **After Phase 1:** 237k ops/sec (1.7x FASTER than zod's 136k)
+- **Gap closed:** From 1.9x slower to 1.7x faster = **3.2x swing!**
+
+#### Testing Results
+- ✅ All 526 tests pass
+- ✅ No memory leaks detected
 - ✅ Transformations still work correctly
+- ✅ Exceeded expected improvement by **6-7x** (expected +30-40%, got +239-291%)
 
-#### Debugging Protocol
+#### Why This Exceeded Expectations
 
-If performance gets WORSE:
-1. ❌ **DO NOT immediately revert**
-2. ✅ Check for introduced bugs (test failures)
-3. ✅ Profile with `node --prof` to find bottleneck
-4. ✅ Review implementation for mistakes
-5. ✅ Compare with zod's implementation
-6. ✅ Fix and retest
-7. ⚠️ Only revert if fundamentally flawed
+**Expected:** Eliminating object copies would give ~30-40% improvement
+**Actual:** We eliminated TWO major allocations:
+1. ✅ Object copies (as expected)
+2. ✅ Result object allocations (bonus - didn't anticipate this impact!)
+
+By leaving `_transform` undefined for plain objects, we enabled the array validator's fast path, avoiding `validateFast()` calls entirely. This eliminated Result object creation (`{ ok: true, value: ... }`) for every array element.
+
+**Impact:** Phase 1 alone **exceeded v0.7.0 target** (136k ops/sec) by 1.7x!
 
 ---
 

@@ -781,6 +781,16 @@ function compileArrayTransform<T>(itemValidator: Validator<T>): (data: any) => T
     return (data: any): T[] => data as T[];
   }
 
+  // PHASE 1 OPTIMIZATION: Plain objects without transforms
+  // Object validators without transforms can return input directly (zero-copy)
+  const objectShape = (itemValidator as any)._shape;
+  const isPlainObject = objectShape && !hasRefinements && !hasTransform && !hasDefault;
+
+  if (isPlainObject) {
+    // No transformations needed - return input directly (eliminates validateFast calls)
+    return (data: any): T[] => data as T[];
+  }
+
   // Generic path: Complex validators or validators with transforms
   // Use copy-on-write strategy: only clone array if transforms are actually applied
   return (data: any): T[] => {
@@ -1363,35 +1373,45 @@ export const v = {
       }
     );
 
-    // Store transformation function to apply transforms/defaults to object properties
-    validator._transform = (data: any): T => {
-      const obj = data as Record<string, unknown>;
+    // PHASE 1 OPTIMIZATION: Only set _transform if properties actually have transforms/defaults
+    // This allows compileArrayTransform to avoid calling validateFast() on each item
+    // Expected impact: +30-40% for object arrays (eliminates Result object allocations)
+    const hasTransforms = Object.values(shape).some(
+      (fieldValidator) => fieldValidator._transform !== undefined || fieldValidator._default !== undefined
+    );
 
-      // OPTIMIZATION: Only clone if transforms are actually applied
-      // This gives ~1.5x speedup by returning input directly when no changes needed
-      let result: Record<string, unknown> | null = null;
+    if (hasTransforms) {
+      // Store transformation function to apply transforms/defaults to object properties
+      validator._transform = (data: any): T => {
+        const obj = data as Record<string, unknown>;
 
-      // Apply transforms/defaults to properties in the shape
-      for (const [key, fieldValidator] of Object.entries(shape)) {
-        const fieldResult = validate(fieldValidator, obj[key]);
-        if (fieldResult.ok) {
-          const originalValue = obj[key];
-          const transformedValue = fieldResult.value;
+        // OPTIMIZATION: Only clone if transforms are actually applied
+        // This gives ~1.5x speedup by returning input directly when no changes needed
+        let result: Record<string, unknown> | null = null;
 
-          // Only create result object if a value changed
-          if (originalValue !== transformedValue) {
-            if (result === null) {
-              // First change detected - create copy
-              result = { ...obj };
+        // Apply transforms/defaults to properties in the shape
+        for (const [key, fieldValidator] of Object.entries(shape)) {
+          const fieldResult = validate(fieldValidator, obj[key]);
+          if (fieldResult.ok) {
+            const originalValue = obj[key];
+            const transformedValue = fieldResult.value;
+
+            // Only create result object if a value changed
+            if (originalValue !== transformedValue) {
+              if (result === null) {
+                // First change detected - create copy
+                result = { ...obj };
+              }
+              result[key] = transformedValue;
             }
-            result[key] = transformedValue;
           }
         }
-      }
 
-      // If no transforms applied, return input directly (no clone)
-      return (result ?? obj) as T;
-    };
+        // If no transforms applied, return input directly (no clone)
+        return (result ?? obj) as T;
+      };
+    }
+    // If no transforms, leave _transform undefined → compileArrayTransform uses optimized path
 
     // Path-aware validation for nested errors
     validator._validateWithPath = (data: unknown, path: string[], seen: WeakSet<object>, depth: number, options: ValidationOptions): Result<T> => {
