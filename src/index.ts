@@ -133,6 +133,29 @@ export type Result<T> =
   | { ok: false; error: string; details?: ValidationError };
 
 /**
+ * Validation options for security limits
+ */
+export interface ValidationOptions {
+  /**
+   * Maximum nesting depth for objects and arrays (prevents stack overflow)
+   * @default Infinity
+   */
+  maxDepth?: number;
+
+  /**
+   * Maximum number of properties in an object (prevents DoS attacks)
+   * @default Infinity
+   */
+  maxProperties?: number;
+
+  /**
+   * Maximum number of items in an array (prevents DoS attacks)
+   * @default Infinity
+   */
+  maxItems?: number;
+}
+
+/**
  * Validator interface
  */
 export interface Validator<T> {
@@ -148,7 +171,7 @@ export interface Validator<T> {
   _default?: T | (() => T);  // Internal: default value or function
   _type?: string;  // Internal: validator type for optimizations
   _hasRefinements?: boolean;  // Internal: whether validator has refinements
-  _validateWithPath?: (data: unknown, path: string[]) => Result<T>;  // Internal: path-aware validation
+  _validateWithPath?: (data: unknown, path: string[], seen: WeakSet<object>, depth: number, options: ValidationOptions) => Result<T>;  // Internal: path-aware validation
 }
 
 /**
@@ -256,27 +279,57 @@ function createValidator<T>(
 
     optional(): Validator<T | undefined> {
       // Create validator that accepts T or undefined
-      return createValidator(
+      const optionalValidator = createValidator(
         (data): data is T | undefined => data === undefined || validator.validate(data),
         (data) => validator.error(data)
       );
+
+      // Delegate path-aware validation to wrapped validator
+      optionalValidator._validateWithPath = (data: unknown, path: string[], seen: WeakSet<object>, depth: number, options: ValidationOptions): Result<T | undefined> => {
+        if (data === undefined) {
+          return { ok: true, value: undefined as T | undefined };
+        }
+        return validateWithPath(validator, data, path, seen, depth, options) as Result<T | undefined>;
+      };
+
+      return optionalValidator;
     },
 
     nullable(): Validator<T | null> {
       // Create validator that accepts T or null
-      return createValidator(
+      const nullableValidator = createValidator(
         (data): data is T | null => data === null || validator.validate(data),
         (data) => validator.error(data)
       );
+
+      // Delegate path-aware validation to wrapped validator
+      nullableValidator._validateWithPath = (data: unknown, path: string[], seen: WeakSet<object>, depth: number, options: ValidationOptions): Result<T | null> => {
+        if (data === null) {
+          return { ok: true, value: null as T | null };
+        }
+        return validateWithPath(validator, data, path, seen, depth, options) as Result<T | null>;
+      };
+
+      return nullableValidator;
     },
 
     nullish(): Validator<T | undefined | null> {
       // Create validator that accepts T, undefined, or null
-      return createValidator(
+      const nullishValidator = createValidator(
         (data): data is T | undefined | null =>
           data === undefined || data === null || validator.validate(data),
         (data) => validator.error(data)
       );
+
+      // Delegate path-aware validation to wrapped validator
+      nullishValidator._validateWithPath = (data: unknown, path: string[], seen: WeakSet<object>, depth: number, options: ValidationOptions): Result<T | undefined | null> => {
+        if (data === undefined || data === null) {
+          return { ok: true, value: data as T | undefined | null };
+        }
+        return validateWithPath(validator, data, path, seen, depth, options) as Result<T | undefined | null>;
+      };
+
+      return nullishValidator;
     },
 
     default(value: T | (() => T)): Validator<T> {
@@ -303,11 +356,27 @@ function createValidator<T>(
 export function validateWithPath<T>(
   validator: Validator<T>,
   data: unknown,
-  path: string[] = []
+  path: string[] = [],
+  seen: WeakSet<object> = new WeakSet(),
+  depth: number = 0,
+  options: ValidationOptions = {}
 ): Result<T> {
-  // If validator has path-aware validation, use it
+  // Check maximum depth limit
+  const maxDepth = options.maxDepth ?? Infinity;
+  if (depth > maxDepth) {
+    const details = new ValidationError({
+      message: `Maximum nesting depth exceeded (${maxDepth})`,
+      path,
+      value: data,
+      expected: `depth <= ${maxDepth}`,
+      code: 'MAX_DEPTH_EXCEEDED',
+    });
+    return { ok: false, error: `Maximum nesting depth exceeded (${maxDepth})`, details };
+  }
+
+  // If validator has path-aware validation, use it (it will handle circular detection and depth)
   if (validator._validateWithPath) {
-    return validator._validateWithPath(data, path);
+    return validator._validateWithPath(data, path, seen, depth, options);
   }
 
   // Apply default value if data is undefined and default is present
@@ -353,6 +422,7 @@ function extractExpectedType(message: string): string {
  *
  * @param validator - Validator instance
  * @param data - Unknown data to validate
+ * @param options - Validation options (maxDepth, maxProperties, maxItems)
  * @returns Validation result
  *
  * @example
@@ -363,10 +433,13 @@ function extractExpectedType(message: string): string {
  * } else {
  *   console.log(result.details?.format('color')); // Formatted error
  * }
+ *
+ * // With security limits
+ * const result2 = validate(v.object({ nested: v.object({ deep: v.string() }) }), data, { maxDepth: 2 });
  * ```
  */
-export function validate<T>(validator: Validator<T>, data: unknown): Result<T> {
-  return validateWithPath(validator, data, []);
+export function validate<T>(validator: Validator<T>, data: unknown, options?: ValidationOptions): Result<T> {
+  return validateWithPath(validator, data, [], new WeakSet(), 0, options || {});
 }
 
 /**
@@ -655,7 +728,7 @@ export const v = {
           return baseValidator.default(value);
         },
 
-        _validateWithPath(data: unknown, path: string[]): Result<T[]> {
+        _validateWithPath(data: unknown, path: string[], seen: WeakSet<object>, depth: number, options: ValidationOptions): Result<T[]> {
           if (!Array.isArray(data)) {
             const details = new ValidationError({
               message: `Expected array, got ${getTypeName(data)}`,
@@ -666,6 +739,34 @@ export const v = {
             });
             return { ok: false, error: details.message, details };
           }
+
+          // Check maximum items limit
+          const maxItems = options.maxItems ?? Infinity;
+          if (data.length > maxItems) {
+            const message = `Array exceeds maximum items limit (${maxItems})`;
+            const details = new ValidationError({
+              message,
+              path,
+              value: data,
+              expected: `array with at most ${maxItems} items`,
+              code: 'MAX_ITEMS_EXCEEDED',
+            });
+            return { ok: false, error: message, details };
+          }
+
+          // Check for circular references before recursing
+          if (seen.has(data)) {
+            const details = new ValidationError({
+              message: 'Circular reference detected',
+              path,
+              value: data,
+              expected: 'non-circular structure',
+              code: 'CIRCULAR_REFERENCE',
+            });
+            return { ok: false, error: 'Circular reference detected', details };
+          }
+          // Add to seen set before recursing into elements
+          seen.add(data);
 
           // Check length constraints
           if (minLength !== undefined && data.length < minLength) {
@@ -707,7 +808,7 @@ export const v = {
             // Skip holes in sparse arrays (like [1, , 3])
             if (!(i in data)) continue;
 
-            const result = validateWithPath(itemValidator, data[i], [...path, `[${i}]`]);
+            const result = validateWithPath(itemValidator, data[i], [...path, `[${i}]`], seen, depth + 1, options);
             if (!result.ok) {
               // Wrap error message to include array context
               const wrappedError = `Invalid item at index ${i}: ${result.error}`;
@@ -794,7 +895,7 @@ export const v = {
     );
 
     // Path-aware validation for tuple elements
-    validator._validateWithPath = (data: unknown, path: string[]): Result<TupleType<T>> => {
+    validator._validateWithPath = (data: unknown, path: string[], seen: WeakSet<object>, depth: number, options: ValidationOptions): Result<TupleType<T>> => {
       if (!Array.isArray(data)) {
         const details = new ValidationError({
           message: `Expected tuple (array), got ${getTypeName(data)}`,
@@ -805,6 +906,20 @@ export const v = {
         });
         return { ok: false, error: details.message, details };
       }
+
+      // Check for circular references before recursing
+      if (seen.has(data)) {
+        const details = new ValidationError({
+          message: 'Circular reference detected',
+          path,
+          value: data,
+          expected: 'non-circular structure',
+          code: 'CIRCULAR_REFERENCE',
+        });
+        return { ok: false, error: 'Circular reference detected', details };
+      }
+      // Add to seen set before recursing into elements
+      seen.add(data);
 
       // Check length
       if (data.length !== validators.length) {
@@ -821,7 +936,7 @@ export const v = {
 
       // Validate each element with index in path
       for (let i = 0; i < validators.length; i++) {
-        const result = validateWithPath(validators[i]!, data[i], [...path, `[${i}]`]);
+        const result = validateWithPath(validators[i]!, data[i], [...path, `[${i}]`], seen, depth + 1, options);
         if (!result.ok) {
           // Wrap error message to include tuple context
           const wrappedError = `Invalid element at index ${i}: ${result.error}`;
@@ -894,7 +1009,7 @@ export const v = {
     };
 
     // Path-aware validation for nested errors
-    validator._validateWithPath = (data: unknown, path: string[]): Result<T> => {
+    validator._validateWithPath = (data: unknown, path: string[], seen: WeakSet<object>, depth: number, options: ValidationOptions): Result<T> => {
       if (typeof data !== 'object' || data === null) {
         const details = new ValidationError({
           message: `Expected object, got ${getTypeName(data)}`,
@@ -906,10 +1021,39 @@ export const v = {
         return { ok: false, error: details.message, details };
       }
 
+      // Check maximum properties limit
+      const maxProperties = options.maxProperties ?? Infinity;
+      const propertyCount = Object.keys(data).length;
+      if (propertyCount > maxProperties) {
+        const message = `Object exceeds maximum properties limit (${maxProperties})`;
+        const details = new ValidationError({
+          message,
+          path,
+          value: data,
+          expected: `object with at most ${maxProperties} properties`,
+          code: 'MAX_PROPERTIES_EXCEEDED',
+        });
+        return { ok: false, error: message, details };
+      }
+
+      // Check for circular references before recursing
+      if (seen.has(data)) {
+        const details = new ValidationError({
+          message: 'Circular reference detected',
+          path,
+          value: data,
+          expected: 'non-circular structure',
+          code: 'CIRCULAR_REFERENCE',
+        });
+        return { ok: false, error: 'Circular reference detected', details };
+      }
+      // Add to seen set before recursing into properties
+      seen.add(data);
+
       const obj = data as Record<string, unknown>;
       // Validate each field with extended path
       for (const [key, fieldValidator] of Object.entries(shape)) {
-        const result = validateWithPath(fieldValidator, obj[key], [...path, key]);
+        const result = validateWithPath(fieldValidator, obj[key], [...path, key], seen, depth + 1, options);
         if (!result.ok) {
           // Wrap error message to include property context
           const wrappedError = `Invalid property '${key}': ${result.error}`;
@@ -1018,6 +1162,62 @@ export const v = {
       (data): data is T[number] => unionValidator.validate(data),
       (data) => `Expected one of ${JSON.stringify(values)}, got ${JSON.stringify(data)}`
     );
+  },
+
+  /**
+   * Lazy validator - defers validator creation for recursive schemas
+   *
+   * @param fn - Function that returns the validator
+   * @returns A lazy validator
+   *
+   * @example
+   * ```typescript
+   * // Define recursive tree structure
+   * const TreeNode = v.object({
+   *   value: v.number(),
+   *   children: v.lazy(() => v.array(TreeNode))
+   * });
+   *
+   * const tree = {
+   *   value: 1,
+   *   children: [
+   *     { value: 2, children: [] },
+   *     { value: 3, children: [] }
+   *   ]
+   * };
+   *
+   * const result = validate(TreeNode, tree);
+   * ```
+   */
+  lazy<T>(fn: () => Validator<T>): Validator<T> {
+    // Cache the validator once it's created
+    let cachedValidator: Validator<T> | null = null;
+
+    const getValidator = (): Validator<T> => {
+      if (cachedValidator === null) {
+        cachedValidator = fn();
+      }
+      return cachedValidator;
+    };
+
+    const lazyValidator = createValidator(
+      (data): data is T => {
+        const validator = getValidator();
+        return validator.validate(data);
+      },
+      (data) => {
+        const validator = getValidator();
+        return validator.error(data);
+      }
+    );
+
+    // Delegate path-aware validation to the wrapped validator
+    lazyValidator._validateWithPath = (data: unknown, path: string[], seen: WeakSet<object>, depth: number, options: ValidationOptions): Result<T> => {
+      const validator = getValidator();
+      return validateWithPath(validator, data, path, seen, depth, options);
+    };
+
+    return lazyValidator;
   },
 
   /**
