@@ -1,0 +1,117 @@
+
+> property-validator-benchmarks@1.0.0 bench:compare
+> node --import tsx index.bench.ts && echo '
+> --- Competitor Comparison ---
+> ' && node --import tsx competitors/zod.bench.ts && node --import tsx competitors/yup.bench.ts
+
+🔥 Property Validator Benchmarks
+
+Running benchmarks (this may take a minute)...
+
+
+📊 Results:
+
+┌─────────┬────────────────────────────────────────────┬─────────────┬──────────────┬───────────┬─────────┐
+│ (index) │ Benchmark                                  │ ops/sec     │ Average (ns) │ Margin    │ Samples │
+├─────────┼────────────────────────────────────────────┼─────────────┼──────────────┼───────────┼─────────┤
+│ 0       │ 'primitive: string (valid)'                │ '2,655,158' │ '376.63'     │ '±2.85%'  │ 265516  │
+│ 1       │ 'primitive: number (valid)'                │ '2,375,457' │ '420.97'     │ '±13.64%' │ 237546  │
+│ 2       │ 'primitive: boolean (valid)'               │ '2,655,789' │ '376.54'     │ '±2.90%'  │ 265579  │
+│ 3       │ 'primitive: string (invalid)'              │ '165,789'   │ '6031.78'    │ '±1.37%'  │ 16579   │
+│ 4       │ 'object: simple (valid)'                   │ '1,233,328' │ '810.81'     │ '±2.52%'  │ 123333  │
+│ 5       │ 'object: simple (invalid - missing field)' │ '70,244'    │ '14236.10'   │ '±1.14%'  │ 7025    │
+│ 6       │ 'object: simple (invalid - wrong type)'    │ '71,109'    │ '14062.83'   │ '±2.46%'  │ 7112    │
+│ 7       │ 'object: complex nested (valid)'           │ '217,773'   │ '4591.94'    │ '±2.68%'  │ 21778   │
+│ 8       │ 'object: complex nested (invalid - deep)'  │ '38,269'    │ '26130.74'   │ '±1.85%'  │ 3827    │
+│ 9       │ 'array: small (10 items)'                  │ '32,067'    │ '31184.99'   │ '±2.66%'  │ 3207    │
+│ 10      │ 'array: medium (100 items)'                │ '3,337'     │ '299693.75'  │ '±2.82%'  │ 334     │
+│ 11      │ 'array: large (1000 items)'                │ '330'       │ '3030796.21' │ '±3.45%'  │ 34      │
+│ 12      │ 'array: invalid (early rejection)'         │ '41,244'    │ '24246.22'   │ '±0.77%'  │ 4125    │
+│ 13      │ 'array: invalid (late rejection)'          │ '23,503'    │ '42546.89'   │ '±1.90%'  │ 2351    │
+│ 14      │ 'union: string match (1st option)'         │ '4,827,565' │ '207.14'     │ '±2.61%'  │ 482758  │
+│ 15      │ 'union: number match (2nd option)'         │ '4,624,970' │ '216.22'     │ '±1.10%'  │ 462499  │
+│ 16      │ 'union: boolean match (3rd option)'        │ '4,352,348' │ '229.76'     │ '±1.18%'  │ 435236  │
+│ 17      │ 'union: no match (all options fail)'       │ '158,611'   │ '6304.72'    │ '±1.79%'  │ 15862   │
+│ 18      │ 'optional: present'                        │ '1,963,797' │ '509.22'     │ '±3.01%'  │ 196380  │
+│ 19      │ 'optional: absent'                         │ '1,906,728' │ '524.46'     │ '±3.05%'  │ 190673  │
+│ 20      │ 'nullable: non-null'                       │ '1,906,853' │ '524.42'     │ '±3.34%'  │ 190686  │
+│ 21      │ 'nullable: null'                           │ '2,047,465' │ '488.41'     │ '±3.30%'  │ 204747  │
+│ 22      │ 'refinement: pass (single)'                │ '2,493,975' │ '400.97'     │ '±3.42%'  │ 249398  │
+│ 23      │ 'refinement: fail (single)'                │ '160,563'   │ '6228.10'    │ '±1.12%'  │ 16057   │
+│ 24      │ 'refinement: pass (chained)'               │ '5,791,759' │ '172.66'     │ '±3.02%'  │ 579176  │
+│ 25      │ 'refinement: fail (chained - 1st)'         │ '173,304'   │ '5770.19'    │ '±1.04%'  │ 17331   │
+│ 26      │ 'refinement: fail (chained - 2nd)'         │ '167,397'   │ '5973.84'    │ '±1.69%'  │ 16740   │
+│ 27      │ 'compiled: simple object (valid)'          │ 'N/A'       │ 'N/A'        │ 'N/A'     │ 'N/A'   │
+│ 28      │ 'compiled: simple object (invalid)'        │ 'N/A'       │ 'N/A'        │ 'N/A'     │ 'N/A'   │
+└─────────┴────────────────────────────────────────────┴─────────────┴──────────────┴───────────┴─────────┘
+
+✅ Benchmark complete!
+
+ℹ️  Run `npm run bench:compare` to compare against zod and yup.
+
+
+--- Competitor Comparison ---
+
+
+🔵 Zod Competitor Benchmark
+
+Running benchmarks...
+
+
+📊 Results:
+
+┌─────────┬──────────────────────────────────────┬─────────────┬──────────────┬───────────┐
+│ (index) │ Benchmark                            │ ops/sec     │ Average (ns) │ Margin    │
+├─────────┼──────────────────────────────────────┼─────────────┼──────────────┼───────────┤
+│ 0       │ 'zod: primitive string (valid)'      │ '700,084'   │ '1428.40'    │ '±3.63%'  │
+│ 1       │ 'zod: primitive number (valid)'      │ '725,821'   │ '1377.75'    │ '±1.75%'  │
+│ 2       │ 'zod: primitive string (invalid)'    │ '368,769'   │ '2711.73'    │ '±13.25%' │
+│ 3       │ 'zod: object simple (valid)'         │ '1,166,857' │ '857.00'     │ '±3.60%'  │
+│ 4       │ 'zod: object simple (invalid)'       │ '476,567'   │ '2098.34'    │ '±14.52%' │
+│ 5       │ 'zod: object complex nested (valid)' │ '206,119'   │ '4851.56'    │ '±8.35%'  │
+│ 6       │ 'zod: array small (10 items)'        │ '115,673'   │ '8645.07'    │ '±2.82%'  │
+│ 7       │ 'zod: array medium (100 items)'      │ '14,249'    │ '70178.70'   │ '±5.18%'  │
+│ 8       │ 'zod: array large (1000 items)'      │ '1,378'     │ '725716.65'  │ '±3.43%'  │
+│ 9       │ 'zod: union string match'            │ '3,960,999' │ '252.46'     │ '±2.12%'  │
+│ 10      │ 'zod: union number match'            │ '1,526,022' │ '655.30'     │ '±2.62%'  │
+│ 11      │ 'zod: optional present'              │ '401,617'   │ '2489.93'    │ '±2.01%'  │
+│ 12      │ 'zod: optional absent'               │ '406,726'   │ '2458.66'    │ '±2.43%'  │
+│ 13      │ 'zod: refinement pass'               │ '447,354'   │ '2235.37'    │ '±22.31%' │
+│ 14      │ 'zod: refinement fail'               │ '282,345'   │ '3541.77'    │ '±25.06%' │
+└─────────┴──────────────────────────────────────┴─────────────┴──────────────┴───────────┘
+
+✅ Zod benchmark complete!
+
+
+🟡 Yup Competitor Benchmark
+
+Running benchmarks...
+
+
+📊 Results:
+
+┌─────────┬──────────────────────────────────────┬───────────┬──────────────┬──────────┐
+│ (index) │ Benchmark                            │ ops/sec   │ Average (ns) │ Margin   │
+├─────────┼──────────────────────────────────────┼───────────┼──────────────┼──────────┤
+│ 0       │ 'yup: primitive string (valid)'      │ '614,858' │ '1626.39'    │ '±2.33%' │
+│ 1       │ 'yup: primitive number (valid)'      │ '558,736' │ '1789.75'    │ '±6.53%' │
+│ 2       │ 'yup: primitive string (invalid)'    │ '564,050' │ '1772.89'    │ '±5.73%' │
+│ 3       │ 'yup: object simple (valid)'         │ '108,313' │ '9232.49'    │ '±2.46%' │
+│ 4       │ 'yup: object simple (invalid)'       │ '30,124'  │ '33196.64'   │ '±1.96%' │
+│ 5       │ 'yup: object complex nested (valid)' │ '37,031'  │ '27004.17'   │ '±2.66%' │
+│ 6       │ 'yup: array small (10 items)'        │ '10,691'  │ '93535.75'   │ '±2.87%' │
+│ 7       │ 'yup: array medium (100 items)'      │ '1,092'   │ '916124.79'  │ '±2.68%' │
+│ 8       │ 'yup: array large (1000 items)'      │ '111'     │ '8978501.17' │ '±4.57%' │
+│ 9       │ 'yup: union string match'            │ '806,793' │ '1239.47'    │ '±1.81%' │
+│ 10      │ 'yup: union number match'            │ '801,513' │ '1247.64'    │ '±2.11%' │
+│ 11      │ 'yup: optional present'              │ '240,213' │ '4162.97'    │ '±5.66%' │
+│ 12      │ 'yup: optional absent'               │ '252,823' │ '3955.34'    │ '±2.17%' │
+│ 13      │ 'yup: refinement pass'               │ '622,407' │ '1606.67'    │ '±2.60%' │
+│ 14      │ 'yup: refinement fail'               │ '44,852'  │ '22295.61'   │ '±2.04%' │
+└─────────┴──────────────────────────────────────┴───────────┴──────────────┴──────────┘
+
+✅ Yup benchmark complete!
+
+⚠️  Note: Yup is async by default, which adds overhead.
+   Direct comparison may not be entirely fair.
+
