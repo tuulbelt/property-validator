@@ -658,12 +658,22 @@ validate(schema, data, config);
 - Optional/nullable validation ✅
 - Refinements (single and chained) ✅
 
-**Results Summary:**
-- property-validator is 6-10x faster than zod/yup for primitives
-- property-validator is 2-5x faster for unions
-- property-validator is 5-15x faster for refinements
-- ⚠️ Zod is 4-6x faster for array validation (optimization opportunity identified)
+**Results Summary (After Optimization - 2026-01-02):**
+- ✅ Primitives: 4.5-6x FASTER than zod (3-4M vs 680k ops/sec)
+- ✅ Objects: 1.3-1.4x FASTER than zod (simple and complex)
+- ✅ Unions: 2-5x FASTER than zod (7.4M vs 3.8M ops/sec for strings)
+- ✅ Refinements: 17-22x FASTER than zod (8.2M vs 462k ops/sec for chained)
+- ⚠️ Arrays: 3.1-3.3x slower than zod (32k vs 107k for 10 items)
+  - Gap reduced from 4.9x → 3.3x (-33% improvement)
+  - Trade-off: Richer error messages with full path tracking
 - See `benchmarks/README.md` for complete analysis
+
+**Optimizations Applied:**
+1. Opt-in circular detection (default: false) - saves 5-10% overhead
+2. Fast-path for default case (no options) - 3-5x speedup
+3. Primitive inline validation - eliminates function call overhead
+4. Path pooling (push/pop vs spread) - 3-4x speedup on nested structures
+5. Lazy path allocation infrastructure - foundation for future work
 
 #### Phase 8: Documentation (non-tested)
 - [ ] Complete API reference (all validators, all methods)
@@ -782,7 +792,13 @@ Test Coverage: 40/40 passing ✅
 - None (additive only)
 
 **v0.4.0:**
-- TBD (will document during implementation)
+- **Circular detection now opt-in** (breaking): Default `checkCircular: false` for performance
+  - Users validating potentially circular data must now explicitly enable:
+    ```typescript
+    validate(schema, data, { checkCircular: true })
+    ```
+  - Rationale: 5-10% performance improvement on default path
+  - Migration: Add `{ checkCircular: true }` to validate() calls that need it
 
 **v1.0.0:**
 - API frozen (no more breaking changes after this)
