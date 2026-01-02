@@ -1,10 +1,10 @@
 # Property Validator / `propval`
 
 [![Tests](https://github.com/tuulbelt/property-validator/actions/workflows/test.yml/badge.svg)](https://github.com/tuulbelt/property-validator/actions/workflows/test.yml)
-![Version](https://img.shields.io/badge/version-0.1.0-blue)
+![Version](https://img.shields.io/badge/version-0.3.0-blue)
 ![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)
 ![Dogfooded](https://img.shields.io/badge/dogfooded-🐕-purple)
-![Tests](https://img.shields.io/badge/tests-101%2B%20passing-success)
+![Tests](https://img.shields.io/badge/tests-426%20passing-success)
 ![Zero Dependencies](https://img.shields.io/badge/dependencies-0-success)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
@@ -136,9 +136,22 @@ Validate data against a validator.
 **Objects:**
 - `v.object(shape)` — Object validator with shape
 
+**Unions and Literals:**
+- `v.union([validator1, validator2, ...])` — Union validator (OR logic, validates if any schema matches)
+- `v.literal(value)` — Literal validator (exact value matching using `===`)
+- `v.enum(['a', 'b', 'c'])` — Enum validator (union of string literals)
+
 **Modifiers:**
-- `v.optional(validator)` — Optional field (allows undefined)
-- `v.nullable(validator)` — Nullable field (allows null)
+- `v.optional(validator)` — Optional field (allows undefined) *[deprecated: use `.optional()` method]*
+- `v.nullable(validator)` — Nullable field (allows null) *[deprecated: use `.nullable()` method]*
+
+**Chainable Methods (all validators):**
+- `.refine(predicate, message)` — Add custom validation logic
+- `.transform(fn)` — Transform validated value (changes type)
+- `.optional()` — Allow undefined
+- `.nullable()` — Allow null
+- `.nullish()` — Allow undefined or null
+- `.default(value)` — Provide default value (static or lazy function)
 
 ### Array Examples
 
@@ -188,6 +201,118 @@ const entryValidator = v.tuple([
 ]);
 validate(entryValidator, ['key', undefined]); // ✓
 validate(entryValidator, ['key', 42]); // ✓
+```
+
+### Union Examples
+
+```typescript
+// Simple union (string | number)
+const stringOrNumber = v.union([v.string(), v.number()]);
+validate(stringOrNumber, 'hello'); // ✓
+validate(stringOrNumber, 42); // ✓
+validate(stringOrNumber, true); // ✗
+
+// Discriminated unions (tagged unions)
+const apiResponse = v.union([
+  v.object({ type: v.literal('success'), data: v.string() }),
+  v.object({ type: v.literal('error'), message: v.string() })
+]);
+validate(apiResponse, { type: 'success', data: 'OK' }); // ✓
+validate(apiResponse, { type: 'error', message: 'Failed' }); // ✓
+
+// Enum as union sugar
+const statusValidator = v.enum(['active', 'inactive', 'pending']);
+validate(statusValidator, 'active'); // ✓
+validate(statusValidator, 'archived'); // ✗
+```
+
+### Refinement Examples
+
+```typescript
+// Positive number
+const positiveNumber = v.number().refine(n => n > 0, 'Must be positive');
+validate(positiveNumber, 5); // ✓
+validate(positiveNumber, -5); // ✗ "Must be positive"
+
+// Email validation
+const email = v.string().refine(
+  s => s.includes('@') && s.includes('.'),
+  'Invalid email format'
+);
+validate(email, 'alice@example.com'); // ✓
+validate(email, 'not-an-email'); // ✗
+
+// Chained refinements
+const password = v.string()
+  .refine(s => s.length >= 8, 'Password must be at least 8 characters')
+  .refine(s => /[A-Z]/.test(s), 'Password must contain uppercase letter')
+  .refine(s => /[0-9]/.test(s), 'Password must contain number');
+validate(password, 'SecurePass123'); // ✓
+validate(password, 'weak'); // ✗ "Password must be at least 8 characters"
+```
+
+### Transform Examples
+
+```typescript
+// Parse string to integer
+const parsedInt = v.string().transform(s => parseInt(s, 10));
+const result = validate(parsedInt, '42');
+if (result.ok) {
+  console.log(result.value); // 42 (number)
+}
+
+// Trim and lowercase
+const normalized = v.string()
+  .transform(s => s.trim())
+  .transform(s => s.toLowerCase());
+validate(normalized, '  HELLO  '); // ✓ value: "hello"
+
+// Transform with refinement
+const positiveInt = v.string()
+  .transform(s => parseInt(s, 10))
+  .refine(n => n > 0, 'Must be positive integer');
+validate(positiveInt, '42'); // ✓ value: 42
+validate(positiveInt, '-5'); // ✗ "Must be positive integer"
+```
+
+### Optional, Nullable, and Default Examples
+
+```typescript
+// Optional field (allows undefined)
+const optionalString = v.string().optional();
+validate(optionalString, 'hello'); // ✓
+validate(optionalString, undefined); // ✓
+validate(optionalString, null); // ✗
+
+// Nullable field (allows null)
+const nullableNumber = v.number().nullable();
+validate(nullableNumber, 42); // ✓
+validate(nullableNumber, null); // ✓
+validate(nullableNumber, undefined); // ✗
+
+// Nullish (allows both undefined and null)
+const nullishBoolean = v.boolean().nullish();
+validate(nullishBoolean, true); // ✓
+validate(nullishBoolean, undefined); // ✓
+validate(nullishBoolean, null); // ✓
+
+// Static default value
+const withDefault = v.string().default('default-value');
+validate(withDefault, 'custom'); // ✓ value: "custom"
+validate(withDefault, undefined); // ✓ value: "default-value"
+
+// Lazy default (function called each time)
+const withTimestamp = v.number().default(() => Date.now());
+validate(withTimestamp, undefined); // ✓ value: current timestamp
+
+// Config with defaults
+const configValidator = v.object({
+  port: v.number().default(3000),
+  host: v.string().default('localhost'),
+  debug: v.boolean().default(false)
+});
+validate(configValidator, { port: undefined, host: undefined, debug: undefined });
+// ✓ value: { port: 3000, host: "localhost", debug: false }
 ```
 
 ### Custom Validators
@@ -278,18 +403,19 @@ Errors are returned in the `error` field of the result object, not thrown.
 
 Planned improvements for future versions:
 
-### High Priority (v0.2.0)
-- **Constraints**: `.min()`, `.max()`, `.pattern()` for strings/numbers
+### High Priority (v0.4.0)
 - **Better error paths**: Show full property path in nested objects (e.g., `user.address.city`)
-- **oneOf()**: Union/enum validation for multiple type options
 - **TypeScript inference utility**: `TypeOf<typeof schema>` for extracting inferred types
+- **String constraints**: `.pattern()`, `.email()`, `.url()` validators
+- **Number constraints**: `.int()`, `.positive()`, `.negative()` validators
 
-### Medium Priority (v0.3.0)
+### Medium Priority (v0.5.0)
 - Schema generation from existing TypeScript types
-- Custom error message templates
 - Async validators for database/API checks
+- Record/Map validators for dynamic keys
+- Intersection types
 
-### Performance (v0.4.0)
+### Performance (v0.6.0)
 - Optimizations for large datasets
 - Streaming validation for large files
 - Cached validator compilation
@@ -300,6 +426,20 @@ Planned improvements for future versions:
 - Benchmarking suite against other validators
 - JSON Schema standard compatibility layer
 - Binary serialization format for schemas
+
+### Completed in v0.2.0
+- ✅ Array constraints: `.min()`, `.max()`, `.length()`, `.nonempty()`
+- ✅ Tuple validators with per-index types
+- ✅ Nested array support
+
+### Completed in v0.3.0
+- ✅ Union validators (`v.union()`)
+- ✅ Literal validators (`v.literal()`)
+- ✅ Enum validators (`v.enum()`)
+- ✅ Refinement validators (`.refine()`)
+- ✅ Transform validators (`.transform()`)
+- ✅ Chainable optional/nullable/nullish methods
+- ✅ Default values (static and lazy)
 
 ## Demo
 

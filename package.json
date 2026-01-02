@@ -10,7 +10,7 @@
   },
   "scripts": {
     "build": "tsc",
-    "test": "node --import tsx --test test/index.test.ts test/error-messages.test.ts test/edge-cases.test.ts test/deep-nesting.test.ts test/arrays.test.ts test/tuples.test.ts test/nested-arrays.test.ts",
+    "test": "node --import tsx --test test/index.test.ts test/error-messages.test.ts test/edge-cases.test.ts test/deep-nesting.test.ts test/arrays.test.ts test/tuples.test.ts test/nested-arrays.test.ts test/unions.test.ts test/literals.test.ts test/refinements.test.ts test/transforms.test.ts test/optional-nullable.test.ts test/default-values.test.ts test/enhanced-error-messages.test.ts",
     "test:watch": "node --import tsx --test --watch test/**/*.test.ts",
     "dogfood": "npm run dogfood:flaky && npm run dogfood:diff",
     "dogfood:flaky": "flaky --test 'npm test' --runs 10",

@@ -20,6 +20,14 @@ export type Result<T> =
 export interface Validator<T> {
   validate(data: unknown): data is T;
   error(data: unknown): string;
+  refine(predicate: (value: T) => boolean, message: string): Validator<T>;
+  transform<U>(fn: (value: T) => U): Validator<U>;
+  optional(): Validator<T | undefined>;
+  nullable(): Validator<T | null>;
+  nullish(): Validator<T | undefined | null>;
+  default(value: T | (() => T)): Validator<T>;
+  _transform?: (value: any) => T;  // Internal: transformation function
+  _default?: T | (() => T);  // Internal: default value or function
 }
 
 /**
@@ -30,6 +38,7 @@ export interface ArrayValidator<T> extends Validator<T[]> {
   max(n: number): ArrayValidator<T>;
   length(n: number): ArrayValidator<T>;
   nonempty(): ArrayValidator<T>;
+  // Inherit refine and transform from Validator
 }
 
 /**
@@ -40,6 +49,18 @@ type TupleType<T extends readonly Validator<any>[]> = {
 };
 
 /**
+ * Union type inference helper
+ */
+type UnionType<T extends readonly Validator<any>[]> = T extends readonly [
+  Validator<infer U>,
+  ...infer Rest
+]
+  ? Rest extends readonly Validator<any>[]
+    ? U | UnionType<Rest>
+    : U
+  : never;
+
+/**
  * Get a clear type name for error messages
  */
 function getTypeName(value: unknown): string {
@@ -48,6 +69,108 @@ function getTypeName(value: unknown): string {
   if (Number.isNaN(value)) return 'NaN';
   if (Array.isArray(value)) return 'array';
   return typeof value;
+}
+
+/**
+ * Create a validator with refinement and transform support
+ */
+function createValidator<T>(
+  validateFn: (data: unknown) => data is T,
+  errorFn: (data: unknown) => string
+): Validator<T> {
+  const refinements: Array<{ predicate: (value: T) => boolean; message: string }> = [];
+
+  const validator: Validator<T> = {
+    validate(data: unknown): data is T {
+      // First check base validation
+      if (!validateFn(data)) {
+        return false;
+      }
+
+      // Then check all refinements
+      return refinements.every((refinement) => refinement.predicate(data));
+    },
+
+    error(data: unknown): string {
+      // Check base validation first
+      if (!validateFn(data)) {
+        return errorFn(data);
+      }
+
+      // Find first failing refinement
+      const failedRefinement = refinements.find(
+        (refinement) => !refinement.predicate(data as T)
+      );
+
+      return failedRefinement ? failedRefinement.message : errorFn(data);
+    },
+
+    refine(predicate: (value: T) => boolean, message: string): Validator<T> {
+      // Create new validator with additional refinement
+      refinements.push({ predicate, message });
+      return validator;
+    },
+
+    transform<U>(fn: (value: T) => U): Validator<U> {
+      // Create new validator using createValidator helper (with all methods)
+      const transformedValidator = createValidator<U>(
+        // Validation: validate as T first
+        (data): data is U => validator.validate(data),
+        // Error: use current validator's error
+        (data) => validator.error(data)
+      );
+
+      // Store transformation function that chains with previous transforms
+      transformedValidator._transform = (value: any): U => {
+        // If current validator has a transform, apply it first
+        const baseValue = validator._transform ? validator._transform(value) : value;
+        // Then apply this transformation
+        return fn(baseValue as T);
+      };
+
+      return transformedValidator;
+    },
+
+    optional(): Validator<T | undefined> {
+      // Create validator that accepts T or undefined
+      return createValidator(
+        (data): data is T | undefined => data === undefined || validator.validate(data),
+        (data) => validator.error(data)
+      );
+    },
+
+    nullable(): Validator<T | null> {
+      // Create validator that accepts T or null
+      return createValidator(
+        (data): data is T | null => data === null || validator.validate(data),
+        (data) => validator.error(data)
+      );
+    },
+
+    nullish(): Validator<T | undefined | null> {
+      // Create validator that accepts T, undefined, or null
+      return createValidator(
+        (data): data is T | undefined | null =>
+          data === undefined || data === null || validator.validate(data),
+        (data) => validator.error(data)
+      );
+    },
+
+    default(value: T | (() => T)): Validator<T> {
+      // Create validator that replaces undefined with default value
+      const defaultValidator = createValidator(
+        (data): data is T => data === undefined || validator.validate(data),
+        (data) => validator.error(data)
+      );
+
+      // Store default value or function
+      defaultValidator._default = value;
+
+      return defaultValidator;
+    },
+  };
+
+  return validator;
 }
 
 /**
@@ -66,10 +189,22 @@ function getTypeName(value: unknown): string {
  * ```
  */
 export function validate<T>(validator: Validator<T>, data: unknown): Result<T> {
-  if (validator.validate(data)) {
-    return { ok: true, value: data };
+  // Apply default value if data is undefined and default is present
+  let processedData = data;
+  if (data === undefined && validator._default !== undefined) {
+    processedData = typeof validator._default === 'function'
+      ? (validator._default as () => T)()
+      : validator._default;
   }
-  return { ok: false, error: validator.error(data) };
+
+  if (validator.validate(processedData)) {
+    // Apply transformation if present
+    const value = validator._transform
+      ? validator._transform(processedData)
+      : processedData;
+    return { ok: true, value: value as T };
+  }
+  return { ok: false, error: validator.error(processedData) };
 }
 
 /**
@@ -80,42 +215,30 @@ export const v = {
    * String validator
    */
   string(): Validator<string> {
-    return {
-      validate(data: unknown): data is string {
-        return typeof data === 'string';
-      },
-      error(data: unknown): string {
-        return `Expected string, got ${getTypeName(data)}`;
-      },
-    };
+    return createValidator(
+      (data): data is string => typeof data === 'string',
+      (data) => `Expected string, got ${getTypeName(data)}`
+    );
   },
 
   /**
    * Number validator
    */
   number(): Validator<number> {
-    return {
-      validate(data: unknown): data is number {
-        return typeof data === 'number' && !Number.isNaN(data);
-      },
-      error(data: unknown): string {
-        return `Expected number, got ${getTypeName(data)}`;
-      },
-    };
+    return createValidator(
+      (data): data is number => typeof data === 'number' && !Number.isNaN(data),
+      (data) => `Expected number, got ${getTypeName(data)}`
+    );
   },
 
   /**
    * Boolean validator
    */
   boolean(): Validator<boolean> {
-    return {
-      validate(data: unknown): data is boolean {
-        return typeof data === 'boolean';
-      },
-      error(data: unknown): string {
-        return `Expected boolean, got ${getTypeName(data)}`;
-      },
-    };
+    return createValidator(
+      (data): data is boolean => typeof data === 'boolean',
+      (data) => `Expected boolean, got ${getTypeName(data)}`
+    );
   },
 
   /**
@@ -125,7 +248,8 @@ export const v = {
     const createArrayValidator = (
       minLength?: number,
       maxLength?: number,
-      exactLength?: number
+      exactLength?: number,
+      refinements: Array<{ predicate: (value: T[]) => boolean; message: string }> = []
     ): ArrayValidator<T> => {
       return {
         validate(data: unknown): data is T[] {
@@ -137,7 +261,10 @@ export const v = {
           if (exactLength !== undefined && data.length !== exactLength) return false;
 
           // Validate each item
-          return data.every((item) => itemValidator.validate(item));
+          if (!data.every((item) => itemValidator.validate(item))) return false;
+
+          // Check all refinements
+          return refinements.every((refinement) => refinement.predicate(data));
         },
 
         error(data: unknown): string {
@@ -162,23 +289,113 @@ export const v = {
             return `Invalid item at index ${invalidIndex}: ${itemValidator.error(data[invalidIndex])}`;
           }
 
+          // Check refinements
+          const failedRefinement = refinements.find(
+            (refinement) => !refinement.predicate(data)
+          );
+          if (failedRefinement) {
+            return failedRefinement.message;
+          }
+
           return 'Array validation failed';
         },
 
         min(n: number): ArrayValidator<T> {
-          return createArrayValidator(n, maxLength, exactLength);
+          return createArrayValidator(n, maxLength, exactLength, refinements);
         },
 
         max(n: number): ArrayValidator<T> {
-          return createArrayValidator(minLength, n, exactLength);
+          return createArrayValidator(minLength, n, exactLength, refinements);
         },
 
         length(n: number): ArrayValidator<T> {
-          return createArrayValidator(undefined, undefined, n);
+          return createArrayValidator(undefined, undefined, n, refinements);
         },
 
         nonempty(): ArrayValidator<T> {
-          return createArrayValidator(1, maxLength, exactLength);
+          return createArrayValidator(1, maxLength, exactLength, refinements);
+        },
+
+        refine(predicate: (value: T[]) => boolean, message: string): ArrayValidator<T> {
+          return createArrayValidator(minLength, maxLength, exactLength, [
+            ...refinements,
+            { predicate, message },
+          ]);
+        },
+
+        transform<U>(fn: (value: T[]) => U): Validator<U> {
+          // Create a base validator for transform
+          const baseValidator = createValidator<T[]>(
+            (data): data is T[] => {
+              const arrayValidator = createArrayValidator(minLength, maxLength, exactLength, refinements);
+              return arrayValidator.validate(data);
+            },
+            (data) => {
+              const arrayValidator = createArrayValidator(minLength, maxLength, exactLength, refinements);
+              return arrayValidator.error(data);
+            }
+          );
+          return baseValidator.transform(fn);
+        },
+
+        optional(): Validator<T[] | undefined> {
+          // Create a base validator then apply optional
+          const baseValidator = createValidator<T[]>(
+            (data): data is T[] => {
+              const arrayValidator = createArrayValidator(minLength, maxLength, exactLength, refinements);
+              return arrayValidator.validate(data);
+            },
+            (data) => {
+              const arrayValidator = createArrayValidator(minLength, maxLength, exactLength, refinements);
+              return arrayValidator.error(data);
+            }
+          );
+          return baseValidator.optional();
+        },
+
+        nullable(): Validator<T[] | null> {
+          // Create a base validator then apply nullable
+          const baseValidator = createValidator<T[]>(
+            (data): data is T[] => {
+              const arrayValidator = createArrayValidator(minLength, maxLength, exactLength, refinements);
+              return arrayValidator.validate(data);
+            },
+            (data) => {
+              const arrayValidator = createArrayValidator(minLength, maxLength, exactLength, refinements);
+              return arrayValidator.error(data);
+            }
+          );
+          return baseValidator.nullable();
+        },
+
+        nullish(): Validator<T[] | undefined | null> {
+          // Create a base validator then apply nullish
+          const baseValidator = createValidator<T[]>(
+            (data): data is T[] => {
+              const arrayValidator = createArrayValidator(minLength, maxLength, exactLength, refinements);
+              return arrayValidator.validate(data);
+            },
+            (data) => {
+              const arrayValidator = createArrayValidator(minLength, maxLength, exactLength, refinements);
+              return arrayValidator.error(data);
+            }
+          );
+          return baseValidator.nullish();
+        },
+
+        default(value: T[] | (() => T[])): Validator<T[]> {
+          // Create a base validator then apply default
+          const baseValidator = createValidator<T[]>(
+            (data): data is T[] => {
+              const arrayValidator = createArrayValidator(minLength, maxLength, exactLength, refinements);
+              return arrayValidator.validate(data);
+            },
+            (data) => {
+              const arrayValidator = createArrayValidator(minLength, maxLength, exactLength, refinements);
+              return arrayValidator.error(data);
+            }
+          );
+          return baseValidator.default(value);
         },
       };
     };
@@ -192,8 +409,8 @@ export const v = {
   tuple<T extends readonly Validator<any>[]>(
     validators: T
   ): Validator<TupleType<T>> {
-    return {
-      validate(data: unknown): data is TupleType<T> {
+    return createValidator(
+      (data): data is TupleType<T> => {
         if (!Array.isArray(data)) return false;
 
         // Must have exact length
@@ -204,8 +421,7 @@ export const v = {
           validator.validate(data[index])
         );
       },
-
-      error(data: unknown): string {
+      (data) => {
         if (!Array.isArray(data)) {
           return `Expected tuple (array), got ${getTypeName(data)}`;
         }
@@ -226,8 +442,8 @@ export const v = {
         }
 
         return 'Tuple validation failed';
-      },
-    };
+      }
+    );
   },
 
   /**
@@ -236,8 +452,8 @@ export const v = {
   object<T extends Record<string, unknown>>(
     shape: { [K in keyof T]: Validator<T[K]> }
   ): Validator<T> {
-    return {
-      validate(data: unknown): data is T {
+    return createValidator(
+      (data): data is T => {
         if (typeof data !== 'object' || data === null) {
           return false;
         }
@@ -246,7 +462,7 @@ export const v = {
           validator.validate(obj[key])
         );
       },
-      error(data: unknown): string {
+      (data) => {
         if (typeof data !== 'object' || data === null) {
           return `Expected object, got ${getTypeName(data)}`;
         }
@@ -257,36 +473,78 @@ export const v = {
           }
         }
         return 'Unknown validation error';
-      },
-    };
+      }
+    );
   },
 
   /**
    * Optional validator
    */
   optional<T>(validator: Validator<T>): Validator<T | undefined> {
-    return {
-      validate(data: unknown): data is T | undefined {
-        return data === undefined || validator.validate(data);
-      },
-      error(data: unknown): string {
-        return validator.error(data);
-      },
-    };
+    return createValidator(
+      (data): data is T | undefined => data === undefined || validator.validate(data),
+      (data) => validator.error(data)
+    );
   },
 
   /**
    * Nullable validator
    */
   nullable<T>(validator: Validator<T>): Validator<T | null> {
-    return {
-      validate(data: unknown): data is T | null {
-        return data === null || validator.validate(data);
+    return createValidator(
+      (data): data is T | null => data === null || validator.validate(data),
+      (data) => validator.error(data)
+    );
+  },
+
+  /**
+   * Union validator - validates if data matches any of the provided schemas
+   */
+  union<T extends readonly Validator<any>[]>(
+    validators: T
+  ): Validator<UnionType<T>> {
+    return createValidator(
+      (data): data is UnionType<T> => {
+        // Try each validator in order, return true on first success
+        return validators.some((validator) => validator.validate(data));
       },
-      error(data: unknown): string {
-        return validator.error(data);
-      },
-    };
+      (data) => {
+        // If validation failed, collect errors from all validators
+        const errors = validators.map((validator) => validator.error(data));
+
+        // Return aggregated error message
+        if (errors.length === 1) {
+          return errors[0] || 'Union validation failed';
+        }
+
+        return `Expected one of:\n  - ${errors.join('\n  - ')}`;
+      }
+    );
+  },
+
+  /**
+   * Literal validator - validates exact value match
+   */
+  literal<T extends string | number | boolean | null>(
+    value: T
+  ): Validator<T> {
+    return createValidator(
+      (data): data is T => data === value,
+      (data) => `Expected literal value ${JSON.stringify(value)}, got ${getTypeName(data)}`
+    );
+  },
+
+  /**
+   * Enum validator - validates string literal union (sugar for union of literals)
+   */
+  enum<T extends readonly string[]>(values: T): Validator<T[number]> {
+    const literals = values.map((value) => v.literal(value));
+    const unionValidator = v.union(literals as any);
+
+    return createValidator(
+      (data): data is T[number] => unionValidator.validate(data),
+      (data) => `Expected one of ${JSON.stringify(values)}, got ${JSON.stringify(data)}`
+    );
   },
 };
 
