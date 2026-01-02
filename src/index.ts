@@ -234,6 +234,7 @@ function main(): void {
     const userValidator = v.object({
       name: v.string(),
       age: v.number(),
+      email: v.string(),
     });
 
     const result = validate(userValidator, data);
