@@ -345,7 +345,7 @@ export function validateWithPath<T>(
  */
 function extractExpectedType(message: string): string {
   const match = message.match(/Expected (\w+)/);
-  return match ? match[1] : '';
+  return match ? match[1]! : '';
 }
 
 /**
@@ -554,7 +554,7 @@ export const v = {
           return (data as unknown[]).map((item) => {
             const result = validate(itemValidator, item);
             return result.ok ? result.value : item;
-          });
+          }) as T[];
         },
 
         min(n: number): ArrayValidator<T> {
@@ -741,7 +741,7 @@ export const v = {
 
           // All elements valid, apply transform if needed
           const transformed = validator._transform ? validator._transform(data) : data;
-          return { ok: true, value: transformed };
+          return { ok: true, value: transformed as T[] };
         },
       };
 
@@ -821,7 +821,7 @@ export const v = {
 
       // Validate each element with index in path
       for (let i = 0; i < validators.length; i++) {
-        const result = validateWithPath(validators[i], data[i], [...path, `[${i}]`]);
+        const result = validateWithPath(validators[i]!, data[i], [...path, `[${i}]`]);
         if (!result.ok) {
           // Wrap error message to include tuple context
           const wrappedError = `Invalid element at index ${i}: ${result.error}`;
