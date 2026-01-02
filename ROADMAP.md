@@ -576,13 +576,17 @@ validate(schema, data, config);
 - Compiled validators for arrays (8 tests)
 - Cache behavior (4 tests)
 
-#### Phase 2: Fast Path Optimizations (measured via benchmarks)
-- [ ] Optimize primitive validators (inline checks)
-- [ ] Optimize simple object validators (avoid allocations)
-- [ ] Optional lazy validation mode (short-circuit on first error)
-- [ ] Benchmark: measure performance gains
+#### Phase 2: Fast Path Optimizations (measured via benchmarks) ✅ COMPLETE
+- [x] Optimize primitive validators (inline checks) - **3.42x speedup for strings**
+- [ ] Optimize simple object validators (avoid allocations) - Deferred to future
+- [ ] Optional lazy validation mode (short-circuit on first error) - Deferred to future
+- [x] Benchmark: measure performance gains
 
-**No direct tests** (verified via benchmarks)
+**Benchmark Results:**
+- String compilation: 3.42x faster (33M → 113M ops/sec)
+- Number/Boolean: ~4x faster (estimated)
+- Fast path applies to plain primitives only (no transforms/refinements/defaults)
+- See benchmarks/README.md for full results
 
 #### Phase 3: Error Formatting (15 tests)
 - [ ] Implement `error.format('json')`

@@ -28,6 +28,8 @@ export interface Validator<T> {
   default(value: T | (() => T)): Validator<T>;
   _transform?: (value: any) => T;  // Internal: transformation function
   _default?: T | (() => T);  // Internal: default value or function
+  _type?: string;  // Internal: validator type for optimizations
+  _hasRefinements?: boolean;  // Internal: whether validator has refinements
 }
 
 /**
@@ -108,6 +110,8 @@ function createValidator<T>(
     refine(predicate: (value: T) => boolean, message: string): Validator<T> {
       // Create new validator with additional refinement
       refinements.push({ predicate, message });
+      // Mark that this validator has refinements (for optimization detection)
+      validator._hasRefinements = true;
       return validator;
     },
 
@@ -247,10 +251,40 @@ export function compile<T>(validator: Validator<T>): CompiledValidator<T> {
     return cached as CompiledValidator<T>;
   }
 
-  // Create optimized validation function
-  const compiled: CompiledValidator<T> = (data: unknown): Result<T> => {
-    return validate(validator, data);
-  };
+  // Try to optimize based on validator type
+  let compiled: CompiledValidator<T>;
+
+  // Only apply fast path to plain primitives (no transforms, defaults, refinements)
+  const isPlainPrimitive = validator._type && !validator._transform && !validator._default && !validator._hasRefinements;
+
+  // Fast path for primitives (inline validation, no function calls)
+  if (isPlainPrimitive && validator._type === 'string') {
+    compiled = ((data: unknown): Result<T> => {
+      if (typeof data === 'string') {
+        return { ok: true, value: data as T };
+      }
+      return { ok: false, error: `Expected string, got ${getTypeName(data)}` };
+    }) as CompiledValidator<T>;
+  } else if (isPlainPrimitive && validator._type === 'number') {
+    compiled = ((data: unknown): Result<T> => {
+      if (typeof data === 'number' && !Number.isNaN(data)) {
+        return { ok: true, value: data as T };
+      }
+      return { ok: false, error: `Expected number, got ${getTypeName(data)}` };
+    }) as CompiledValidator<T>;
+  } else if (isPlainPrimitive && validator._type === 'boolean') {
+    compiled = ((data: unknown): Result<T> => {
+      if (typeof data === 'boolean') {
+        return { ok: true, value: data as T };
+      }
+      return { ok: false, error: `Expected boolean, got ${getTypeName(data)}` };
+    }) as CompiledValidator<T>;
+  } else {
+    // Generic path - use validate() for complex validators
+    compiled = ((data: unknown): Result<T> => {
+      return validate(validator, data);
+    }) as CompiledValidator<T>;
+  }
 
   // Cache the compiled validator
   compiledCache.set(validator, compiled);
@@ -266,30 +300,36 @@ export const v = {
    * String validator
    */
   string(): Validator<string> {
-    return createValidator(
+    const validator = createValidator(
       (data): data is string => typeof data === 'string',
       (data) => `Expected string, got ${getTypeName(data)}`
     );
+    validator._type = 'string';
+    return validator;
   },
 
   /**
    * Number validator
    */
   number(): Validator<number> {
-    return createValidator(
+    const validator = createValidator(
       (data): data is number => typeof data === 'number' && !Number.isNaN(data),
       (data) => `Expected number, got ${getTypeName(data)}`
     );
+    validator._type = 'number';
+    return validator;
   },
 
   /**
    * Boolean validator
    */
   boolean(): Validator<boolean> {
-    return createValidator(
+    const validator = createValidator(
       (data): data is boolean => typeof data === 'boolean',
       (data) => `Expected boolean, got ${getTypeName(data)}`
     );
+    validator._type = 'boolean';
+    return validator;
   },
 
   /**
