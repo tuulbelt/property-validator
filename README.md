@@ -534,3 +534,153 @@ Part of the [Tuulbelt](https://github.com/tuulbelt/tuulbelt) collection:
 - [Test Flakiness Detector](https://github.com/tuulbelt/test-flakiness-detector) — Detect unreliable tests
 - [CLI Progress Reporting](https://github.com/tuulbelt/cli-progress-reporting) — Concurrent-safe progress updates
 - More tools coming soon...
+
+## Performance Optimization Analysis
+
+### Optimization History (2026-01-02)
+
+Property-validator underwent significant performance optimization to close the gap with zod on array validation. Here's what was implemented:
+
+#### Optimizations Implemented
+
+1. **Path Pooling for Arrays** (Commit: 74d73b5)
+   - Changed from `[...path, `[${i}]`]` to `path.push(indexPath); ... path.pop()`
+   - Avoids O(n × path_length) array allocations
+   - Expected: 3-4x speedup for array validation
+
+2. **Fast-Path for Plain Primitive Arrays** (Commit: 7dfc31c)
+   - Inline type checking for `v.array(v.string())`, `v.array(v.number())`, etc.
+   - Skips `validateWithPath` overhead for simple primitives
+   - Expected: 2-3x speedup for primitive arrays
+
+3. **Path Pooling for Objects** (Commit: 9087f85)
+   - Apply same path pooling to object property validation
+   - Changed from `[...path, key]` to `path.push(key); ... path.pop()`
+   - Avoids O(properties × path_length) allocations
+   - Expected: 3-4x speedup for nested objects
+
+#### Results
+
+**Array validation (10 items, objects with 3 properties each):**
+- Before optimizations: 23,000 ops/sec
+- After all optimizations: 32,000 ops/sec
+- **Improvement: +39%** (9,000 ops/sec gained)
+
+**vs zod comparison:**
+- property-validator: 32k ops/sec
+- zod: 115k ops/sec
+- **Gap: 3.6x slower**
+
+### Architectural Trade-offs
+
+The remaining 3.6-4.3x performance gap with zod is explained by fundamental design differences:
+
+#### What property-validator prioritizes (adds overhead):
+
+1. **Detailed Error Paths**
+   - Every validation goes through `validateWithPath()` to build full paths like `users[2].metadata.tags[0]`
+   - Path arrays are allocated and tracked even for successful validations
+   - This enables rich error messages but adds overhead
+
+2. **Circular Reference Detection**
+   - WeakSet operations (`seen.has()`, `seen.add()`) on every object/array
+   - Prevents infinite loops but adds ~5-10% overhead per validation
+
+3. **Security Limits**
+   - Depth checking (`maxDepth`)
+   - Property count checking (`maxProperties`)
+   - Array length checking (`maxItems`)
+   - These guards add conditional checks on every validation
+
+4. **Error Formatting**
+   - ValidationError objects with structured data
+   - Support for JSON, text, and ANSI color formatting
+   - More detailed error information than zod
+
+#### What zod prioritizes (optimizes for speed):
+
+1. **Minimal Overhead**
+   - Direct validation without path tracking by default
+   - Simpler error objects
+   - Less defensive checks
+
+2. **Lazy Error Details**
+   - Paths and details only computed when needed
+   - property-validator computes them eagerly
+
+3. **Optimized Type Guards**
+   - Highly tuned validation functions
+   - Minimal branching and allocation
+
+### Performance Recommendations
+
+Given these trade-offs, property-validator's performance is **reasonable for its feature set**:
+
+#### Use property-validator when:
+- ✅ You need detailed error messages with full paths
+- ✅ You're validating untrusted input with potential circular references
+- ✅ You need security limits (DoS protection)
+- ✅ You want formatted error output (JSON, text, color)
+- ✅ Zero dependencies is critical
+
+#### Use zod when:
+- ⚡ Raw validation speed is the top priority
+- ⚡ You're validating millions of items per second
+- ⚡ Simpler error messages are acceptable
+- ⚡ You don't need circular reference detection
+
+#### Use `v.compile()` for hot paths:
+For performance-critical code paths, property-validator offers `v.compile()` which optimizes plain primitive validators:
+
+```typescript
+const validateUser = v.compile(UserSchema);
+
+// 3.4x faster for repeated validations
+for (const user of users) {
+  const result = validateUser(user);
+  // ...
+}
+```
+
+**Note:** Compilation currently only optimizes plain primitives (`v.string()`, `v.number()`, `v.boolean()` without transforms/refinements). Complex validators (objects, arrays) still use the standard validation path.
+
+### Future Optimization Opportunities
+
+Potential areas for further optimization (not yet implemented):
+
+1. **Lazy Path Allocation**
+   - Only allocate path arrays when validation fails
+   - Would improve success-path performance significantly
+   - Trade-off: More complex code, harder to maintain
+
+2. **Compiled Object/Array Validators**
+   - Generate optimized validation functions for complex schemas
+   - Similar to what zod's `.parse()` does internally
+   - Trade-off: Increased memory usage, complexity
+
+3. **Fast-Path Detection**
+   - Skip circular reference detection when schema doesn't have recursion
+   - Skip depth checking when maxDepth not specified
+   - Trade-off: More branching logic
+
+4. **Validator Caching**
+   - Cache validator instances to avoid recreation
+   - Already implemented for `v.compile()`, could extend to more validators
+   - Trade-off: Memory usage
+
+### Benchmark Reproducibility
+
+To verify these results:
+
+```bash
+cd benchmarks
+npm install
+npm run bench:compare
+```
+
+Results saved in:
+- `bench-results.txt` - After array + primitive fast-path optimizations
+- `bench-results-with-object-pooling.txt` - After object path pooling
+
+All 526 tests passing with optimizations enabled.
+

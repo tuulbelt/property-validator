@@ -31,13 +31,13 @@ Property-validator delivers **2-15x faster** validation across most scenarios co
 | **Primitives** | 3.4 - 3.8 M ops/sec | 375k - 597k ops/sec | 492k - 514k ops/sec | property-validator (6-10x faster) |
 | **Objects (simple)** | 861k ops/sec | 948k ops/sec | 111k ops/sec | zod (10% faster than pv) |
 | **Objects (complex)** | 195k ops/sec | 200k ops/sec | 34k ops/sec | Similar (pv/zod ~5x faster than yup) |
-| **Arrays (10 items)** | 23k ops/sec | 110k ops/sec | 9.8k ops/sec | **zod** (4.7x faster than pv) |
-| **Arrays (100 items)** | 2.3k ops/sec | 9.4k ops/sec | 1k ops/sec | **zod** (4x faster than pv) |
-| **Arrays (1000 items)** | 228 ops/sec | 1.3k ops/sec | 96 ops/sec | **zod** (5.7x faster than pv) |
+| **Arrays (10 items)** | 32k ops/sec | 115k ops/sec | 10.7k ops/sec | **zod** (3.6x faster than pv) |
+| **Arrays (100 items)** | 3.3k ops/sec | 14.2k ops/sec | 1.1k ops/sec | **zod** (4.3x faster than pv) |
+| **Arrays (1000 items)** | 330 ops/sec | 1.4k ops/sec | 111 ops/sec | **zod** (4.2x faster than pv) |
 | **Unions** | 1.6 - 6.4 M ops/sec | 1.2 - 3.4 M ops/sec | 723k - 736k ops/sec | property-validator (2-5x faster) |
 | **Refinements** | 2.4 - 7.8 M ops/sec | 336k - 510k ops/sec | 41k - 585k ops/sec | property-validator (5-15x faster) |
 
-**Key Insight:** Zod significantly outperforms property-validator on array validation (4-6x faster), suggesting optimization opportunities in the array validator implementation.
+**Update (2026-01-02):** After implementing path pooling optimizations for both arrays and objects, array performance improved by **+39%** (23k → 32k ops/sec for 10 items). However, zod remains **3.6-4.3x faster** on array validation. See [Performance Optimization Analysis](#performance-optimization-analysis) below for details on the remaining gap.
 
 ## Detailed Results
 
