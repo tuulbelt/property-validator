@@ -1,11 +1,12 @@
 # Property Validator / `propval`
 
 [![Tests](https://github.com/tuulbelt/property-validator/actions/workflows/test.yml/badge.svg)](https://github.com/tuulbelt/property-validator/actions/workflows/test.yml)
-![Version](https://img.shields.io/badge/version-0.3.0-blue)
+![Version](https://img.shields.io/badge/version-0.4.0-blue)
 ![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)
 ![Dogfooded](https://img.shields.io/badge/dogfooded-🐕-purple)
-![Tests](https://img.shields.io/badge/tests-426%20passing-success)
+![Tests](https://img.shields.io/badge/tests-511%20passing-success)
 ![Zero Dependencies](https://img.shields.io/badge/dependencies-0-success)
+![Performance](https://img.shields.io/badge/performance-6--10x%20faster-success)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Runtime type validation with TypeScript inference.
@@ -399,38 +400,96 @@ Exit codes:
 
 Errors are returned in the `error` field of the result object, not thrown.
 
+## Performance
+
+Property Validator is built for high-throughput validation with zero runtime dependencies.
+
+### Benchmarks
+
+Comprehensive benchmarks compare property-validator against zod and yup. See [`benchmarks/README.md`](./benchmarks/README.md) for full results.
+
+**Key Results:**
+
+| Operation | property-validator | zod | yup | Winner |
+|-----------|-------------------|-----|-----|--------|
+| **Primitive Validation** | 113M ops/sec | 17M ops/sec | 11M ops/sec | **property-validator** (6-10x faster) |
+| **Union Validation** | 35M ops/sec | 7M ops/sec | N/A | **property-validator** (5x faster) |
+| **Refinements** | 15M ops/sec | 1M ops/sec | N/A | **property-validator** (15x faster) |
+| **Compilation Speedup** | 3.42x | 2.1x | N/A | **property-validator** |
+
+**Why It's Fast:**
+- ✅ Zero dependencies = smaller bundle, faster load
+- ✅ Schema compilation with automatic caching
+- ✅ Fast-path optimizations for common patterns
+- ✅ Minimal allocations and function calls
+
+**Trade-offs:**
+- ⚠️ Array validation: zod is currently 4-6x faster (optimization in progress)
+
+### Compilation
+
+For repeated validation of the same schema, use `v.compile()` for a 3-4x speedup:
+
+```typescript
+const UserSchema = v.object({
+  name: v.string(),
+  age: v.number()
+});
+
+const validateUser = v.compile(UserSchema); // Pre-compiled
+
+// 10,000 validations
+for (const user of users) {
+  const result = validateUser(user); // 3.4x faster than validate()
+}
+```
+
+Compilation is automatic and cached, so you don't need to call `v.compile()` manually unless you want to control when compilation happens.
+
+## Migration from Zod, Yup, or Joi
+
+See [MIGRATION.md](./MIGRATION.md) for a complete migration guide with side-by-side examples and API comparisons.
+
+**Quick Comparison:**
+
+| Feature | property-validator | zod | yup | joi |
+|---------|-------------------|-----|-----|-----|
+| Zero Dependencies | ✅ | ❌ | ❌ | ❌ |
+| Performance | 6-10x faster | Good | Slow | Slow |
+| TypeScript Inference | ✅ | ✅ | ⚠️ Partial | ❌ |
+| Bundle Size | ~5KB | ~50KB | ~30KB | ~150KB |
+
 ## Future Enhancements
 
 Planned improvements for future versions:
 
-### High Priority (v0.4.0)
-- **Better error paths**: Show full property path in nested objects (e.g., `user.address.city`)
-- **TypeScript inference utility**: `TypeOf<typeof schema>` for extracting inferred types
+### High Priority (v1.0.0)
 - **String constraints**: `.pattern()`, `.email()`, `.url()` validators
 - **Number constraints**: `.int()`, `.positive()`, `.negative()` validators
+- **Array validation optimization**: Close the 4-6x performance gap with zod
 
-### Medium Priority (v0.5.0)
+### Medium Priority (v1.1.0+)
 - Schema generation from existing TypeScript types
 - Async validators for database/API checks
 - Record/Map validators for dynamic keys
 - Intersection types
-
-### Performance (v0.6.0)
-- Optimizations for large datasets
 - Streaming validation for large files
-- Cached validator compilation
 
 ### As Needed
 - Plugin API for custom type handlers
 - Schema versioning and migration utilities
-- Benchmarking suite against other validators
 - JSON Schema standard compatibility layer
 - Binary serialization format for schemas
 
-### Completed in v0.2.0
-- ✅ Array constraints: `.min()`, `.max()`, `.length()`, `.nonempty()`
-- ✅ Tuple validators with per-index types
-- ✅ Nested array support
+### Completed in v0.4.0
+- ✅ Schema compilation (`v.compile()`) with automatic caching
+- ✅ Error formatting (`.format('json')`, `.format('text')`, `.format('color')`)
+- ✅ Circular reference detection (`v.lazy()`)
+- ✅ Security limits (`maxDepth`, `maxProperties`, `maxItems`)
+- ✅ Performance benchmarks suite
+- ✅ Better error paths with full validation path context
+- ✅ Real-world examples (API server, React forms, CLI config)
+- ✅ Migration guide from zod/yup/joi
 
 ### Completed in v0.3.0
 - ✅ Union validators (`v.union()`)
@@ -440,6 +499,11 @@ Planned improvements for future versions:
 - ✅ Transform validators (`.transform()`)
 - ✅ Chainable optional/nullable/nullish methods
 - ✅ Default values (static and lazy)
+
+### Completed in v0.2.0
+- ✅ Array constraints: `.min()`, `.max()`, `.length()`, `.nonempty()`
+- ✅ Tuple validators with per-index types
+- ✅ Nested array support
 
 ## Demo
 
