@@ -659,21 +659,25 @@ validate(schema, data, config);
 - Refinements (single and chained) ✅
 
 **Results Summary (After Optimization - 2026-01-02):**
-- ✅ Primitives: 4.5-6x FASTER than zod (3-4M vs 680k ops/sec)
-- ✅ Objects: 1.3-1.4x FASTER than zod (simple and complex)
-- ✅ Unions: 2-5x FASTER than zod (7.4M vs 3.8M ops/sec for strings)
-- ✅ Refinements: 17-22x FASTER than zod (8.2M vs 462k ops/sec for chained)
-- ⚠️ Arrays: 3.1-3.3x slower than zod (32k vs 107k for 10 items)
-  - Gap reduced from 4.9x → 3.3x (-33% improvement)
+- ✅ Primitives: 5-6x FASTER than zod (3.7-4.4M vs 624-697k ops/sec)
+- ✅ Objects (simple): **1.65x FASTER** than zod (1.58M vs 954k ops/sec) 🎉
+- ✅ Objects (complex nested): 1.43x FASTER than zod (276k vs 194k ops/sec)
+- ✅ Unions: 2-4x FASTER than zod (6.9-7.5M vs 1.5-3.5M ops/sec)
+- ✅ Refinements: 15-17x FASTER than zod (8M vs 459-519k ops/sec)
+- ⚠️ Arrays: 2.72x slower than zod (48.8k vs 133k for 10 items)
+  - Gap reduced from 3.06x → 2.72x via input-direct optimization
   - Trade-off: Richer error messages with full path tracking
 - See `benchmarks/README.md` for complete analysis
 
-**Optimizations Applied:**
-1. Opt-in circular detection (default: false) - saves 5-10% overhead
+**Optimizations Applied (2026-01-02):**
+1. **Return input directly (no cloning)** - ~1.5x speedup for objects/arrays
+   - Objects: Skip spread operator when no transforms applied
+   - Arrays: Only clone when item transforms needed
+   - Verified via identity check: `input === result.value` on success path
 2. Fast-path for default case (no options) - 3-5x speedup
 3. Primitive inline validation - eliminates function call overhead
 4. Path pooling (push/pop vs spread) - 3-4x speedup on nested structures
-5. Lazy path allocation infrastructure - foundation for future work
+5. Opt-in circular detection (default: false) - saves 5-10% overhead
 
 #### Phase 8: Documentation (non-tested)
 - [ ] Complete API reference (all validators, all methods)
