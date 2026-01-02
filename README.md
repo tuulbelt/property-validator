@@ -1,12 +1,12 @@
 # Property Validator / `propval`
 
 [![Tests](https://github.com/tuulbelt/property-validator/actions/workflows/test.yml/badge.svg)](https://github.com/tuulbelt/property-validator/actions/workflows/test.yml)
-![Version](https://img.shields.io/badge/version-0.4.0-blue)
+![Version](https://img.shields.io/badge/version-0.6.0-blue)
 ![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)
 ![Dogfooded](https://img.shields.io/badge/dogfooded-🐕-purple)
-![Tests](https://img.shields.io/badge/tests-511%20passing-success)
+![Tests](https://img.shields.io/badge/tests-526%20passing-success)
 ![Zero Dependencies](https://img.shields.io/badge/dependencies-0-success)
-![Performance](https://img.shields.io/badge/performance-6--10x%20faster-success)
+![Performance](https://img.shields.io/badge/performance-5%2F6%20wins%20vs%20zod-success)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Runtime type validation with TypeScript inference.
@@ -408,23 +408,27 @@ Property Validator is built for high-throughput validation with zero runtime dep
 
 Comprehensive benchmarks compare property-validator against zod and yup. See [`benchmarks/README.md`](./benchmarks/README.md) for full results.
 
-**Key Results:**
+**Key Results (v0.6.0):**
 
-| Operation | property-validator | zod | yup | Winner |
-|-----------|-------------------|-----|-----|--------|
-| **Primitive Validation** | 113M ops/sec | 17M ops/sec | 11M ops/sec | **property-validator** (6-10x faster) |
-| **Union Validation** | 35M ops/sec | 7M ops/sec | N/A | **property-validator** (5x faster) |
-| **Refinements** | 15M ops/sec | 1M ops/sec | N/A | **property-validator** (15x faster) |
-| **Compilation Speedup** | 3.42x | 2.1x | N/A | **property-validator** |
+| Operation | property-validator | zod | Winner |
+|-----------|-------------------|-----|--------|
+| **Primitives** | 3.9M ops/sec | 698k ops/sec | **property-validator** (5.6x faster) ✅ |
+| **Objects (simple)** | 1.69M ops/sec | 1.26M ops/sec | **property-validator** (1.3x faster) ✅ |
+| **Primitive Arrays** | 888k ops/sec | 333k ops/sec | **property-validator** (2.7x faster) ✅ |
+| **Object Arrays** | 70k ops/sec | 136k ops/sec | **zod** (1.9x faster) ❌ |
+| **Unions** | 7.1M ops/sec | 4.1M ops/sec | **property-validator** (1.7x faster) ✅ |
+| **Refinements** | 7.2M ops/sec | 474k ops/sec | **property-validator** (15x faster) ✅ |
+
+**Final Score: 5 wins, 1 loss (83% win rate)** 📊
 
 **Why It's Fast:**
 - ✅ Zero dependencies = smaller bundle, faster load
-- ✅ Schema compilation with automatic caching
+- ✅ Hybrid compilation (v0.6.0): inline primitive checks, compiled object validators
 - ✅ Fast-path optimizations for common patterns
-- ✅ Minimal allocations and function calls
+- ✅ Minimal allocations (eliminated via compilation)
 
 **Trade-offs:**
-- ⚠️ Array validation: zod is currently 4-6x faster (optimization in progress)
+- ⚠️ Object array validation: zod is currently 1.9x faster (needs profiling and further optimization)
 
 ### Compilation
 
@@ -455,7 +459,7 @@ See [MIGRATION.md](./MIGRATION.md) for a complete migration guide with side-by-s
 | Feature | property-validator | zod | yup | joi |
 |---------|-------------------|-----|-----|-----|
 | Zero Dependencies | ✅ | ❌ | ❌ | ❌ |
-| Performance | 6-10x faster | Good | Slow | Slow |
+| Performance | 5/6 wins vs zod | Good | Slow | Slow |
 | TypeScript Inference | ✅ | ✅ | ⚠️ Partial | ❌ |
 | Bundle Size | ~5KB | ~50KB | ~30KB | ~150KB |
 
@@ -466,7 +470,7 @@ Planned improvements for future versions:
 ### High Priority (v1.0.0)
 - **String constraints**: `.pattern()`, `.email()`, `.url()` validators
 - **Number constraints**: `.int()`, `.positive()`, `.negative()` validators
-- **Array validation optimization**: Close the 4-6x performance gap with zod
+- **Object array optimization**: Close the 1.9x performance gap with zod (v0.6.0 improved from 46k → 70k ops/sec, but more work needed)
 
 ### Medium Priority (v1.1.0+)
 - Schema generation from existing TypeScript types
@@ -537,43 +541,48 @@ Part of the [Tuulbelt](https://github.com/tuulbelt/tuulbelt) collection:
 
 ## Performance Optimization Analysis
 
-### Optimization History (2026-01-02)
+### Optimization History
 
-Property-validator underwent significant performance optimization to close the gap with zod on array validation. Here's what was implemented:
+Property-validator underwent significant performance optimization across multiple versions:
 
-#### Optimizations Implemented
+#### v0.6.0: Hybrid Compilation (2026-01-02)
 
-1. **Path Pooling for Arrays** (Commit: 74d73b5)
-   - Changed from `[...path, `[${i}]`]` to `path.push(indexPath); ... path.pop()`
-   - Avoids O(n × path_length) array allocations
-   - Expected: 3-4x speedup for array validation
+**Goal:** Eliminate allocations in array validation to achieve competitive performance with zod.
 
-2. **Fast-Path for Plain Primitive Arrays** (Commit: 7dfc31c)
-   - Inline type checking for `v.array(v.string())`, `v.array(v.number())`, etc.
-   - Skips `validateWithPath` overhead for simple primitives
-   - Expected: 2-3x speedup for primitive arrays
+**Optimizations Implemented:**
 
-3. **Path Pooling for Objects** (Commit: 9087f85)
-   - Apply same path pooling to object property validation
-   - Changed from `[...path, key]` to `path.push(key); ... path.pop()`
-   - Avoids O(properties × path_length) allocations
-   - Expected: 3-4x speedup for nested objects
+1. **Primitive Array Compilation**
+   - Inline type checks for `v.array(v.string())`, `v.array(v.number())`, etc.
+   - Zero allocations at runtime (compiled to simple loops with typeof checks)
+   - **Result:** 888k ops/sec → **2.7x faster than zod** ✅
 
-#### Results
+2. **Object Array Compilation**
+   - Pre-compile object validators at construction time
+   - Compile property validators recursively
+   - Eliminate Result object allocations (40 allocations → 0 for 10-item array)
+   - **Result:** 46k → 70k ops/sec (+49% improvement) ⚠️ Still 1.9x slower than zod
 
-**Array validation (10 items, objects with 3 properties each):**
-- Before optimizations: 23,000 ops/sec
-- After all optimizations: 32,000 ops/sec
-- **Improvement: +39%** (9,000 ops/sec gained)
+3. **Compilation Architecture**
+   - `compileArrayValidator()`: Detects primitive vs object validators
+   - `compileObjectValidator()`: Pre-compiles object shape validation
+   - `compilePropertyValidator()`: Handles primitives, objects, and complex validators
 
-**vs zod comparison:**
-- property-validator: 32k ops/sec
-- zod: 115k ops/sec
-- **Gap: 3.6x slower**
+#### v0.6.0 Results
+
+**Primitive Arrays (string[], 10 items):**
+- property-validator: 888k ops/sec
+- zod: 333k ops/sec
+- **Win: 2.7x faster** ✅
+
+**Object Arrays (UserSchema[], 10 items):**
+- Before v0.6.0: 46k ops/sec
+- After v0.6.0: 70k ops/sec (+49%)
+- zod: 136k ops/sec
+- **Gap: 1.9x slower** ⚠️ (needs further investigation)
 
 ### Architectural Trade-offs
 
-The remaining 3.6-4.3x performance gap with zod is explained by fundamental design differences:
+The remaining 1.9x performance gap with zod for object arrays is likely explained by these factors:
 
 #### What property-validator prioritizes (adds overhead):
 
@@ -642,31 +651,31 @@ for (const user of users) {
 }
 ```
 
-**Note:** Compilation currently only optimizes plain primitives (`v.string()`, `v.number()`, `v.boolean()` without transforms/refinements). Complex validators (objects, arrays) still use the standard validation path.
+**Note:** v0.6.0 implements hybrid compilation for arrays (both primitives and objects), achieving 2.7x faster performance for primitive arrays vs zod.
 
 ### Future Optimization Opportunities
 
-Potential areas for further optimization (not yet implemented):
+Potential areas for further optimization to close the remaining 1.9x gap with zod for object arrays:
 
 1. **Lazy Path Allocation**
    - Only allocate path arrays when validation fails
    - Would improve success-path performance significantly
    - Trade-off: More complex code, harder to maintain
 
-2. **Compiled Object/Array Validators**
-   - Generate optimized validation functions for complex schemas
-   - Similar to what zod's `.parse()` does internally
-   - Trade-off: Increased memory usage, complexity
+2. **Inline Property Expansion** ✅ Partially implemented in v0.6.0
+   - v0.6.0: Compiles object validators to eliminate allocations
+   - Remaining work: Optimize property iteration loops
+   - Trade-off: Increased memory usage for compiled functions
 
 3. **Fast-Path Detection**
    - Skip circular reference detection when schema doesn't have recursion
    - Skip depth checking when maxDepth not specified
    - Trade-off: More branching logic
 
-4. **Validator Caching**
-   - Cache validator instances to avoid recreation
-   - Already implemented for `v.compile()`, could extend to more validators
-   - Trade-off: Memory usage
+4. **Zod-Inspired Optimizations**
+   - Study zod's source code to identify additional optimization techniques
+   - May include specific V8 optimizations or data structure choices
+   - Trade-off: May conflict with our design goals (detailed errors, security limits)
 
 ### Benchmark Reproducibility
 
