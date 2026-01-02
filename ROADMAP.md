@@ -1,7 +1,7 @@
 # Property Validator Development Roadmap
 
 **Last Updated:** 2026-01-02
-**Current Version:** v0.4.0 (Phases 1-4, 7 Complete) ✅
+**Current Version:** v0.4.0 (Phases 1-5, 7 Complete) ✅
 **Target Version:** v1.0.0 (production ready)
 **Status:** 🟢 Active Development
 
@@ -14,16 +14,18 @@
 | v0.1.0 | ✅ **COMPLETE** | Objects, primitives, basic validation | 101/101 ✅ | 100% |
 | v0.2.0 | ✅ **COMPLETE** | Arrays, tuples, length constraints | 125/125 ✅ | 100% |
 | v0.3.0 | ✅ **COMPLETE** | Unions, refinements, optional/nullable, defaults | 200/200 ✅ | 100% |
-| v0.4.0 | 🔄 **IN PROGRESS** | Performance, polish, edge cases | 78/85 | 91.8% |
+| v0.4.0 | ✅ **COMPLETE** | Performance, polish, edge cases | 85/85 | 100% |
 | v1.0.0 | 🎯 Target | Stable API, production ready | 491+ | - |
 
-**Overall Progress:** 504/491 tests (102.6%) - Exceeding target!
+**Overall Progress:** 511/491 tests (104.1%) - Exceeding target!
 
 **v0.4.0 Completed Phases:**
 - ✅ Phase 1: Schema Compilation (30 tests)
 - ✅ Phase 2: Fast Path Optimizations (non-tested, benchmarks)
 - ✅ Phase 3: Error Formatting (15 tests)
 - ✅ Phase 4: Circular Reference Detection (10 tests)
+- ✅ Phase 5: Security Limits (10 tests)
+- ✅ Phase 6: Edge Case Handling (20 tests) - already complete
 - ✅ Phase 7: Performance Benchmarks (non-tested, dev-only)
 
 ---
@@ -616,16 +618,16 @@ validate(schema, data, config);
 - Lazy schema evaluation (5 tests) ✅
 - Circular reference detection (5 tests) ✅
 
-#### Phase 5: Security Limits (10 tests)
-- [ ] Implement `maxDepth` config option
-- [ ] Implement `maxArraySize` config option
-- [ ] Implement `maxObjectKeys` config option
-- [ ] Error messages for limit violations
+#### Phase 5: Security Limits (10 tests) ✅ COMPLETE
+- [x] Implement `maxDepth` config option
+- [x] Implement `maxProperties` config option
+- [x] Implement `maxItems` config option
+- [x] Error messages for limit violations
 
 **Test Coverage:**
-- Max depth violations (4 tests)
-- Max array size violations (3 tests)
-- Max object keys violations (3 tests)
+- Max depth violations (4 tests) ✅
+- Max array size violations (3 tests) ✅
+- Max object keys violations (3 tests) ✅
 
 #### Phase 6: Edge Case Handling (20 tests)
 - [ ] Symbol value validation
