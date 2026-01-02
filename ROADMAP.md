@@ -14,10 +14,10 @@
 | v0.1.0 | ✅ **COMPLETE** | Objects, primitives, basic validation | 101/101 ✅ | 100% |
 | v0.2.0 | ✅ **COMPLETE** | Arrays, tuples, length constraints | 125/125 ✅ | 100% |
 | v0.3.0 | ✅ **COMPLETE** | Unions, refinements, optional/nullable, defaults | 200/200 ✅ | 100% |
-| v0.4.0 | 📋 Planned | Performance, polish, edge cases | 0/85 | 0% |
+| v0.4.0 | 🔄 **IN PROGRESS** | Performance, polish, edge cases | 30/85 | 35.3% |
 | v1.0.0 | 🎯 Target | Stable API, production ready | 491+ | - |
 
-**Overall Progress:** 426/491 tests (86.8%)
+**Overall Progress:** 456/491 tests (92.9%)
 
 ---
 
@@ -564,13 +564,13 @@ validate(schema, data, config);
 
 ### Implementation Tasks
 
-#### Phase 1: Schema Compilation (30 tests)
-- [ ] Implement `v.compile(schema)` function
-- [ ] Generate optimized validation functions
-- [ ] Cache compiled validators
-- [ ] Benchmark: measure speedup vs non-compiled
+#### Phase 1: Schema Compilation (30 tests) ✅ COMPLETE
+- [x] Implement `v.compile(schema)` function
+- [x] Generate optimized validation functions
+- [x] Cache compiled validators (using WeakMap)
+- [x] Benchmark: measure speedup vs non-compiled
 
-**Test Coverage:**
+**Test Coverage:** (30/30 tests passing)
 - Compiled validators for primitives (8 tests)
 - Compiled validators for objects (10 tests)
 - Compiled validators for arrays (8 tests)

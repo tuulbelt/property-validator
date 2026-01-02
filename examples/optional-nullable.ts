@@ -83,7 +83,7 @@ const User = v.object({
 
 console.log('  validate({ name: "Alice", phone: null, bio: undefined }):');
 console.log('  ', validate(User, { name: 'Alice', phone: null, bio: undefined }));
-// ok: false (email is undefined but not provided)
+// ok: true (optional fields can be omitted, treated as undefined)
 
 console.log('  validate({ name: "Alice", email: undefined, phone: null, bio: undefined }):');
 console.log('  ', validate(User, { name: 'Alice', email: undefined, phone: null, bio: undefined }));

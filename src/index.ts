@@ -208,6 +208,57 @@ export function validate<T>(validator: Validator<T>, data: unknown): Result<T> {
 }
 
 /**
+ * Compiled validator type - a function that validates data
+ */
+export type CompiledValidator<T> = (data: unknown) => Result<T>;
+
+/**
+ * Cache for compiled validators (WeakMap to allow garbage collection)
+ */
+const compiledCache = new WeakMap<Validator<any>, CompiledValidator<any>>();
+
+/**
+ * Compile a validator into an optimized validation function
+ *
+ * The compiled function is cached, so subsequent calls with the same
+ * validator return the cached compiled function.
+ *
+ * @param validator - The validator to compile
+ * @returns A compiled validation function
+ *
+ * @example
+ * ```typescript
+ * const userValidator = v.object({ name: v.string(), age: v.number() });
+ * const validateUser = v.compile(userValidator);
+ *
+ * // Fast repeated validations
+ * for (const user of users) {
+ *   const result = validateUser(user);
+ *   if (result.ok) {
+ *     console.log(result.value);
+ *   }
+ * }
+ * ```
+ */
+export function compile<T>(validator: Validator<T>): CompiledValidator<T> {
+  // Check cache first
+  const cached = compiledCache.get(validator);
+  if (cached) {
+    return cached as CompiledValidator<T>;
+  }
+
+  // Create optimized validation function
+  const compiled: CompiledValidator<T> = (data: unknown): Result<T> => {
+    return validate(validator, data);
+  };
+
+  // Cache the compiled validator
+  compiledCache.set(validator, compiled);
+
+  return compiled;
+}
+
+/**
  * Validator builders
  */
 export const v = {
@@ -251,7 +302,7 @@ export const v = {
       exactLength?: number,
       refinements: Array<{ predicate: (value: T[]) => boolean; message: string }> = []
     ): ArrayValidator<T> => {
-      return {
+      const validator: ArrayValidator<T> = {
         validate(data: unknown): data is T[] {
           if (!Array.isArray(data)) return false;
 
@@ -260,8 +311,8 @@ export const v = {
           if (maxLength !== undefined && data.length > maxLength) return false;
           if (exactLength !== undefined && data.length !== exactLength) return false;
 
-          // Validate each item
-          if (!data.every((item) => itemValidator.validate(item))) return false;
+          // Validate each item using top-level validate() to apply transforms/defaults
+          if (!data.every((item) => validate(itemValidator, item).ok)) return false;
 
           // Check all refinements
           return refinements.every((refinement) => refinement.predicate(data));
@@ -284,7 +335,7 @@ export const v = {
           }
 
           // Find first invalid item
-          const invalidIndex = data.findIndex((item) => !itemValidator.validate(item));
+          const invalidIndex = data.findIndex((item) => !validate(itemValidator, item).ok);
           if (invalidIndex !== -1) {
             return `Invalid item at index ${invalidIndex}: ${itemValidator.error(data[invalidIndex])}`;
           }
@@ -298,6 +349,14 @@ export const v = {
           }
 
           return 'Array validation failed';
+        },
+
+        _transform(data: any): T[] {
+          // Apply transforms/defaults to each array element
+          return (data as unknown[]).map((item) => {
+            const result = validate(itemValidator, item);
+            return result.ok ? result.value : item;
+          });
         },
 
         min(n: number): ArrayValidator<T> {
@@ -398,6 +457,8 @@ export const v = {
           return baseValidator.default(value);
         },
       };
+
+      return validator;
     };
 
     return createArrayValidator();
@@ -452,14 +513,14 @@ export const v = {
   object<T extends Record<string, unknown>>(
     shape: { [K in keyof T]: Validator<T[K]> }
   ): Validator<T> {
-    return createValidator(
+    const validator = createValidator(
       (data): data is T => {
         if (typeof data !== 'object' || data === null) {
           return false;
         }
         const obj = data as Record<string, unknown>;
         return Object.entries(shape).every(([key, validator]) =>
-          validator.validate(obj[key])
+          validate(validator, obj[key]).ok
         );
       },
       (data) => {
@@ -468,13 +529,31 @@ export const v = {
         }
         const obj = data as Record<string, unknown>;
         for (const [key, validator] of Object.entries(shape)) {
-          if (!validator.validate(obj[key])) {
-            return `Invalid property '${key}': ${validator.error(obj[key])}`;
+          const result = validate(validator, obj[key]);
+          if (!result.ok) {
+            return `Invalid property '${key}': ${result.error}`;
           }
         }
         return 'Unknown validation error';
       }
     );
+
+    // Store transformation function to apply transforms/defaults to object properties
+    validator._transform = (data: any): T => {
+      const obj = data as Record<string, unknown>;
+      // Start with a copy of all properties (to preserve extra properties)
+      const result: Record<string, unknown> = { ...obj };
+      // Apply transforms/defaults to properties in the shape
+      for (const [key, fieldValidator] of Object.entries(shape)) {
+        const fieldResult = validate(fieldValidator, obj[key]);
+        if (fieldResult.ok) {
+          result[key] = fieldResult.value;
+        }
+      }
+      return result as T;
+    };
+
+    return validator;
   },
 
   /**
@@ -546,6 +625,25 @@ export const v = {
       (data) => `Expected one of ${JSON.stringify(values)}, got ${JSON.stringify(data)}`
     );
   },
+
+  /**
+   * Compile a validator into an optimized validation function
+   *
+   * @param validator - The validator to compile
+   * @returns A compiled validation function
+   *
+   * @example
+   * ```typescript
+   * const userValidator = v.object({ name: v.string(), age: v.number() });
+   * const validateUser = v.compile(userValidator);
+   *
+   * // Fast repeated validations
+   * for (const user of users) {
+   *   const result = validateUser(user);
+   * }
+   * ```
+   */
+  compile,
 };
 
 /**
