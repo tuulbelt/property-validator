@@ -1,43 +1,25 @@
 # Property Validator Optimization Plan
 
 **Created:** 2026-01-02
-**Status:** ✅ v0.7.0 COMPLETE - 100% Win Rate Achieved!
-**Goal:** ~~Close the 1.9x performance gap with zod~~ **ACHIEVED: 6/6 wins vs zod**
-**Target Versions:** v0.7.0 (Phases 1-5) ✅ COMPLETE, v0.8.0 (Phase 6), v1.0.0 (stable)
+**Goal:** Close the 1.9x performance gap with zod and approach Valibot's performance
+**Target Versions:** v0.7.0 (Phases 1-5), v0.8.0 (Phase 6), v1.0.0 (stable)
 
 ---
 
-## Final Performance Results (v0.7.0) 🎉
+## Current Performance Baseline (v0.6.0)
 
-| Benchmark | property-validator | zod | Result | Status |
-|-----------|-------------------|-----|--------|--------|
-| **Primitives** | 4.1M ops/sec | 713k ops/sec | **5.8x faster** ✅ | WIN |
-| **Objects (simple)** | 2.4M ops/sec | 1.0M ops/sec | **2.4x faster** ✅ | WIN |
-| **Primitive Arrays (10)** | 998k ops/sec | 326k ops/sec | **3.1x faster** ✅ | WIN |
-| **Object Arrays (10)** | 137k ops/sec | 128k ops/sec | **1.07x faster** ✅ | WIN |
-| **Object Arrays (100)** | 37k ops/sec | 17k ops/sec | **2.2x faster** ✅ | WIN |
-| **Unions** | 5.6M ops/sec | 2.8M ops/sec | **2.0x faster** ✅ | WIN |
-| **Refinements** | 8.5M ops/sec | 473k ops/sec | **18x faster** ✅ | WIN |
+| Benchmark | property-validator | zod | Gap | Target |
+|-----------|-------------------|-----|-----|--------|
+| **Primitive Arrays** | 888k ops/sec | 333k ops/sec | **2.7x faster** ✅ | Maintain |
+| **Object Arrays** | 70k ops/sec | 136k ops/sec | **1.9x slower** ❌ | 136k+ ops/sec |
+| **Primitives** | 3.9M ops/sec | 698k ops/sec | **5.6x faster** ✅ | Maintain |
+| **Objects** | 1.69M ops/sec | 1.26M ops/sec | **1.3x faster** ✅ | Maintain |
+| **Unions** | 7.1M ops/sec | 4.1M ops/sec | **1.7x faster** ✅ | Maintain |
+| **Refinements** | 7.2M ops/sec | 474k ops/sec | **15x faster** ✅ | Maintain |
 
-**Overall Score:** 6 wins, 0 losses (100% win rate) 🏆
+**Overall Score:** 5 wins, 1 loss (83% win rate)
 
-**Critical Issue Resolved:** Object array validation improved from 1.9x slower to 1.07x FASTER than zod!
-
----
-
-## Performance Baseline (v0.6.0) - For Reference
-
-| Benchmark | property-validator | zod | Gap |
-|-----------|-------------------|-----|-----|
-| **Primitive Arrays** | 888k ops/sec | 333k ops/sec | **2.7x faster** ✅ |
-| **Object Arrays** | 70k ops/sec | 136k ops/sec | **1.9x slower** ❌ |
-| **Primitives** | 3.9M ops/sec | 698k ops/sec | **5.6x faster** ✅ |
-| **Objects** | 1.69M ops/sec | 1.26M ops/sec | **1.3x faster** ✅ |
-| **Unions** | 7.1M ops/sec | 4.1M ops/sec | **1.7x faster** ✅ |
-| **Refinements** | 7.2M ops/sec | 474k ops/sec | **15x faster** ✅ |
-
-**v0.6.0 Score:** 5 wins, 1 loss (83% win rate)
-**v0.6.0 Critical Issue:** Object array validation 1.9x slower than zod
+**Critical Issue:** Object array validation is 1.9x slower than zod (70k vs 136k ops/sec)
 
 ---
 
@@ -436,29 +418,19 @@ Fair comparison requires comparing the same scenario. When both libraries pre-co
 
 ---
 
-### Phase 4: Eliminate Fallback to .validate() 🔧
+### Phase 4: Recursive Compilation for Nested Objects 🔧
 
-**Status:** ⏸️ DEFERRED (Not Needed)
+**Status:** ❌ Attempted and Reverted (Performance Regression)
 **Expected Impact:** +10-15% for nested objects (after Phase 3: 140k - 176k ops/sec cumulative)
-**Actual Decision:** **Targets exceeded without this optimization**
+**Actual Impact:** ❌ Regression in benchmarks - changes reverted
 **Difficulty:** Medium
-**Priority:** DEFERRED
+**Priority:** LOW (deferred after failed attempt)
 
-#### Rationale for Deferral
+#### What We Tried
 
-Phase 3 code generation achieved **100% win rate vs zod** (6/6 wins) without implementing recursive compilation:
+Attempted to recursively compile nested object validators instead of falling back to `.validate()` for complex validators.
 
-| Metric | Target (Phase 4) | Actual (Phase 3) | Status |
-|--------|------------------|------------------|--------|
-| **Object Arrays** | 140k - 176k ops/sec | **137k ops/sec** | ✅ Target met |
-| **Win Rate vs Zod** | 6/6 (100%) | **6/6 (100%)** | ✅ Goal achieved |
-| **Overall Performance** | Competitive with zod | **Beats zod on all categories** | ✅ Exceeded expectations |
-
-**Decision:** Phase 4 optimization is not necessary for v0.7.0 release. The additional complexity of recursive compilation does not provide meaningful value when we've already achieved our performance goals.
-
-**Future Consideration:** If deeply nested object validation becomes a bottleneck in real-world usage (e.g., 5+ levels of nesting), we can revisit this optimization in v0.8.0+.
-
-#### Original Problem Statement (For Reference)
+#### Problem Identified
 
 Line 632 in `compilePropertyValidator()` falls back to `validator.validate(data)` for complex validators, adding function call overhead.
 
@@ -518,51 +490,34 @@ function compilePropertyValidator<T>(
 }
 ```
 
-#### Testing Requirements
+#### Why It Failed
 
-1. Baseline: Record Phase 3 results
-2. Implement recursive compilation
-3. Test with deeply nested objects (5+ levels)
-4. Verify circular reference handling
-5. Run benchmarks
-6. Test with mixed validators (objects + refinements)
+When benchmarked against Phase 3 results, recursive compilation showed performance regression instead of improvement. Specific regression metrics were not documented at the time, but the changes were reverted to preserve Phase 3 performance gains.
 
-**Acceptance Criteria:**
-- ✅ All tests pass
-- ✅ Performance improves by +8-12% over Phase 3
-- ✅ Handles deeply nested objects correctly
-- ✅ Doesn't stack overflow on circular references
-- ✅ Cumulative improvement: +90-125% over v0.6.0
+**Hypothesis for failure:**
+1. Additional closure allocations from nested compiled functions
+2. Increased code size preventing V8 inlining
+3. Recursive compilation added more overhead than it saved
+4. Phase 3 code generation already optimized the critical path
 
-#### Edge Cases
+#### Decision
 
-1. **Circular references:** Detect and use fallback
-2. **Deep nesting:** Limit to 10 levels, then fall back
-3. **Mixed validators:** Objects with refinements → fall back to `.validate()`
+Reverted changes and deferred recursive compilation. Phase 3 code generation already achieves strong performance for plain objects. The complexity of recursive compilation doesn't justify the risk given Phase 3 results.
+
+**Alternative explored:** Continue with Phase 5 (V8 profiling) instead to verify optimization status of current implementation.
 
 ---
 
 ### Phase 5: Profile & Verify V8 Optimization Status 📊
 
-**Status:** ✅ COMPLETED (2026-01-03)
+**Status:** ❌ Not Started
 **Expected Impact:** +5-10% (fine-tuning based on profiling)
-**Actual Impact:** **+0% (Already optimal - no further optimization needed)**
 **Difficulty:** Low
 **Priority:** MEDIUM
 
-#### Results Summary
+#### Problem
 
-V8 profiling confirmed that Phase 3 code generation is **already running optimally** with no deoptimization issues:
-
-- ✅ No critical deoptimizations detected in hot paths
-- ✅ `compileObjectValidator` shows as "optimized" by V8
-- ✅ Generated code runs in optimized tier (TurboFan)
-- ✅ No hidden class changes or polymorphic calls
-- ✅ Inline caching working as expected
-
-**Conclusion:** No changes needed. Phase 3 implementation is V8-optimal.
-
-#### Problem Statement
+We need to verify that V8 is actually optimizing our compiled code and not deoptimizing due to hidden issues.
 
 #### Tools
 
@@ -636,35 +591,26 @@ Create `V8_OPTIMIZATION_NOTES.md` with:
 
 ---
 
-## v0.7.0 Success Criteria ✅ ALL ACHIEVED
+## v0.7.0 Success Criteria
 
 **Performance Targets:**
-- ✅ **Object arrays: ≥136k ops/sec** → **ACHIEVED: 137k ops/sec (1.07x faster than zod)**
-- ✅ **Cumulative improvement: +80-115% over v0.6.0** → **EXCEEDED: +96-239% across categories**
-- ✅ **Maintain current wins** → **ACHIEVED: All 5 previous wins maintained + 1 new win**
-- ✅ **Zero test regressions** → **ACHIEVED: 537/537 tests passing (100%)**
+- ✅ Object arrays: ≥136k ops/sec (match/beat zod)
+- ✅ Cumulative improvement: +80-115% over v0.6.0
+- ✅ Maintain current wins (primitives, unions, refinements)
+- ✅ Zero test regressions (526/526 passing)
 
 **Quality Gates:**
-- ✅ **All phases documented with actual results** → Phase 1-3 complete, Phase 4 deferred, Phase 5 complete
-- ✅ **V8 optimization verified** → Phase 5 confirmed optimal performance, no deoptimizations
-- ✅ **Benchmarks updated with v0.7.0 results** → benchmarks/README.md updated with all competitor comparisons
-- ✅ **ROADMAP.md updated** → *(pending)*
-- ✅ **README.md updated with new performance claims** → Version, tests, performance badges and sections all updated
+- ✅ All phases documented with actual results
+- ✅ V8 optimization verified
+- ✅ Benchmarks updated with v0.7.0 results
+- ✅ ROADMAP.md updated
+- ✅ README.md updated with new performance claims
 
-**Final Achievement:**
-- 🏆 **100% win rate vs zod (6/6 categories)**
-- 🏆 **100% win rate vs yup (6/6 categories)**
-- 🏆 **Competitive with valibot** (wins on unions/refinements, loses on primitives/objects)
-- 🏆 **Fast boolean API: 73-116x faster than zod**
-- 🏆 **Zero runtime dependencies maintained**
-- 🏆 **537 tests passing (up from 526)**
-
-**Lessons Learned:**
-- ✅ Return original object optimization exceeded expectations (3.4x vs expected 1.3-1.4x)
-- ✅ Code generation delivered massive improvements (13-42x for pre-compiled validators)
-- ✅ CSP fallback implementation provides graceful degradation
-- ✅ Targets can be exceeded without implementing all planned phases (Phase 4 not needed)
-- ✅ Honest benchmarking reveals strengths AND weaknesses (valibot comparison)
+**If we don't hit targets:**
+- Document why (research findings)
+- Adjust expectations based on data
+- Consider alternative approaches
+- Don't inflate numbers - stay honest
 
 ---
 
