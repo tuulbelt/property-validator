@@ -1,11 +1,11 @@
 #!/usr/bin/env node --import tsx
 /**
- * Yup - Competitor Benchmark
+ * Yup - Competitor Benchmark (tatami-ng)
  *
  * Benchmarks yup using same scenarios as property-validator for direct comparison.
  */
 
-import { Bench } from 'tinybench';
+import { bench, group, run } from 'tatami-ng';
 import { readFileSync } from 'node:fs';
 import * as yup from 'yup';
 
@@ -48,79 +48,82 @@ const ComplexSchema = yup.object({
 const RefineSchema = yup.number().test('positive', 'Must be positive', n => n! > 0).test('limit', 'Must be less than 100', n => n! < 100);
 
 // ============================================================================
-// Benchmark Suite
+// Prevent Dead Code Elimination
 // ============================================================================
-
-const bench = new Bench({
-  time: 100,
-  warmupIterations: 5,
-  warmupTime: 100,
-});
 
 let result: any;
 
-// Primitives
-bench.add('yup: primitive string (valid)', async () => {
-  result = await yup.string().validate('hello world');
+// ============================================================================
+// Benchmark Suite
+// ============================================================================
+
+console.log('\n🟡 Yup Competitor Benchmark (tatami-ng)\n');
+
+group('Primitives', () => {
+  bench('yup: primitive string (valid)', async () => {
+    result = await yup.string().validate('hello world');
+  });
+
+  bench('yup: primitive number (valid)', async () => {
+    result = await yup.number().validate(42);
+  });
+
+  bench('yup: primitive string (invalid)', async () => {
+    try {
+      result = await yup.string().validate(123);
+    } catch (e) {
+      result = e;
+    }
+  });
 });
 
-bench.add('yup: primitive number (valid)', async () => {
-  result = await yup.number().validate(42);
-});
+group('Objects', () => {
+  bench('yup: object simple (valid)', async () => {
+    result = await UserSchema.validate({ name: 'Alice', age: 30, email: 'alice@example.com' });
+  });
 
-bench.add('yup: primitive string (invalid)', async () => {
-  try {
-    result = await yup.string().validate(123);
-  } catch (e) {
-    result = e;
-  }
-});
+  bench('yup: object simple (invalid)', async () => {
+    try {
+      result = await UserSchema.validate({ name: 'Alice', age: 'thirty', email: 'alice@example.com' });
+    } catch (e) {
+      result = e;
+    }
+  });
 
-// Objects
-bench.add('yup: object simple (valid)', async () => {
-  result = await UserSchema.validate({ name: 'Alice', age: 30, email: 'alice@example.com' });
-});
-
-bench.add('yup: object simple (invalid)', async () => {
-  try {
-    result = await UserSchema.validate({ name: 'Alice', age: 'thirty', email: 'alice@example.com' });
-  } catch (e) {
-    result = e;
-  }
-});
-
-bench.add('yup: object complex nested (valid)', async () => {
-  result = await ComplexSchema.validate({
-    id: 1,
-    name: 'Test',
-    metadata: {
-      tags: ['foo', 'bar'],
-      priority: 'high',
-      createdAt: Date.now(),
-    },
-    settings: {
-      theme: 'dark',
-      notifications: true,
-    },
+  bench('yup: object complex nested (valid)', async () => {
+    result = await ComplexSchema.validate({
+      id: 1,
+      name: 'Test',
+      metadata: {
+        tags: ['foo', 'bar'],
+        priority: 'high',
+        createdAt: Date.now(),
+      },
+      settings: {
+        theme: 'dark',
+        notifications: true,
+      },
+    });
   });
 });
 
 // Arrays - OBJECTS (UserSchema) - APPLES-TO-APPLES comparison
-// Using direct arrays (same as property-validator), not wrapped in { users: [...] }
 const userArraySmall = Array(10).fill({ name: 'Alice', age: 30, email: 'alice@example.com' });
 const userArrayMedium = Array(100).fill({ name: 'Bob', age: 25, email: 'bob@example.com' });
 const userArrayLarge = Array(1000).fill({ name: 'Charlie', age: 35, email: 'charlie@example.com' });
 
-bench.add('yup: array OBJECTS small (10 items)', async () => {
-  result = await yup.array(UserSchema).validate(userArraySmall);
-});
+group('Arrays - Objects', () => {
+  bench('yup: array OBJECTS small (10 items)', async () => {
+    result = await yup.array(UserSchema).validate(userArraySmall);
+  });
 
-bench.add('yup: array OBJECTS medium (100 items)', async () => {
-  result = await yup.array(UserSchema).validate(userArrayMedium);
-});
+  bench('yup: array OBJECTS medium (100 items)', async () => {
+    result = await yup.array(UserSchema).validate(userArrayMedium);
+  });
 
-bench.add('yup: array OBJECTS large (1000 items)', async () => {
-  result = await yup.array(UserSchema).validate(userArrayLarge);
+  bench('yup: array OBJECTS large (1000 items)', async () => {
+    result = await yup.array(UserSchema).validate(userArrayLarge);
+  });
 });
 
 // Union (using oneOf as yup doesn't have direct union support)
@@ -128,56 +131,55 @@ const UnionSchema = yup.mixed().test('union', 'Must be string, number, or boolea
   typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
 );
 
-bench.add('yup: union string match', async () => {
-  result = await UnionSchema.validate('hello');
+group('Unions', () => {
+  bench('yup: union string match', async () => {
+    result = await UnionSchema.validate('hello');
+  });
+
+  bench('yup: union number match', async () => {
+    result = await UnionSchema.validate(42);
+  });
 });
 
-bench.add('yup: union number match', async () => {
-  result = await UnionSchema.validate(42);
+group('Optional/Nullable', () => {
+  bench('yup: optional present', async () => {
+    result = await yup.string().optional().validate('value');
+  });
+
+  bench('yup: optional absent', async () => {
+    result = await yup.string().optional().validate(undefined);
+  });
 });
 
-// Optional/Nullable
-bench.add('yup: optional present', async () => {
-  result = await yup.string().optional().validate('value');
-});
+group('Refinements', () => {
+  bench('yup: refinement pass', async () => {
+    result = await RefineSchema.validate(50);
+  });
 
-bench.add('yup: optional absent', async () => {
-  result = await yup.string().optional().validate(undefined);
-});
-
-// Refinements
-bench.add('yup: refinement pass', async () => {
-  result = await RefineSchema.validate(50);
-});
-
-bench.add('yup: refinement fail', async () => {
-  try {
-    result = await RefineSchema.validate(150);
-  } catch (e) {
-    result = e;
-  }
+  bench('yup: refinement fail', async () => {
+    try {
+      result = await RefineSchema.validate(150);
+    } catch (e) {
+      result = e;
+    }
+  });
 });
 
 // ============================================================================
 // Run
 // ============================================================================
 
-console.log('\n🟡 Yup Competitor Benchmark\n');
-console.log('Running benchmarks...\n');
+await run({
+  units: false,
+  silent: false,
+  json: false,
+  samples: 256,
+  time: 2_000_000_000, // 2 seconds per benchmark
+  warmup: true,
+  latency: true,
+  throughput: true,
+});
 
-await bench.warmup();
-await bench.run();
-
-console.log('\n📊 Results:\n');
-console.table(
-  bench.tasks.map((task) => ({
-    'Benchmark': task.name,
-    'ops/sec': task.result?.hz.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',') || 'N/A',
-    'Average (ns)': task.result?.mean ? (task.result.mean * 1_000_000).toFixed(2) : 'N/A',
-    'Margin': task.result?.rme ? `±${task.result.rme.toFixed(2)}%` : 'N/A',
-  }))
-);
-
-console.log('\n✅ Yup benchmark complete!\n');
+console.log('\n✅ Yup benchmark complete!');
 console.log('⚠️  Note: Yup is async by default, which adds overhead.');
 console.log('   Direct comparison may not be entirely fair.\n');
