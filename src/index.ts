@@ -641,11 +641,72 @@ function compilePropertyValidator<T>(validator: Validator<T>): (data: unknown) =
  * @returns Compiled validator function: (data: unknown) => boolean
  * @internal
  */
+/**
+ * Check if code generation (new Function) is available.
+ * Returns false in CSP-restricted environments.
+ */
+let codeGenerationAvailable: boolean | null = null;
+function canUseCodeGeneration(): boolean {
+  if (codeGenerationAvailable !== null) {
+    return codeGenerationAvailable;
+  }
+
+  try {
+    // Test if new Function() works
+    new Function('return true')();
+    codeGenerationAvailable = true;
+    return true;
+  } catch {
+    // CSP restriction detected
+    codeGenerationAvailable = false;
+    return false;
+  }
+}
+
+/**
+ * Create fallback validator for CSP-restricted environments.
+ * Uses manual property iteration instead of code generation.
+ * Slower than Phase 3, but still optimized for boolean validation.
+ */
+function createFallbackObjectValidator<T extends Record<string, unknown>>(
+  shape: { [K in keyof T]: Validator<T[K]> }
+): (data: unknown) => boolean {
+  // Pre-compile property validators once at construction time
+  const compiledValidators: Array<{ key: string; validator: (value: unknown) => boolean }> = [];
+
+  for (const key in shape) {
+    const validator = shape[key];
+    compiledValidators.push({
+      key,
+      validator: compilePropertyValidator(validator),
+    });
+  }
+
+  // Return optimized validation function (no path tracking, no error details)
+  return (data: unknown): boolean => {
+    if (typeof data !== 'object' || data === null) return false;
+    const obj = data as Record<string, unknown>;
+
+    // Validate each property (early exit on failure)
+    for (let i = 0; i < compiledValidators.length; i++) {
+      const { key, validator } = compiledValidators[i];
+      if (!validator(obj[key])) return false;
+    }
+
+    return true;
+  };
+}
+
 function compileObjectValidator<T extends Record<string, unknown>>(
   shape: { [K in keyof T]: Validator<T[K]> }
 ): (data: unknown) => boolean {
   // PHASE 3 OPTIMIZATION: Generate optimized code with inline property access
   // This allows V8 to optimize direct property access (obj.name vs obj[key])
+
+  // CSP fallback: If code generation is blocked, use manual validation
+  if (!canUseCodeGeneration()) {
+    return createFallbackObjectValidator(shape);
+  }
 
   const checks: string[] = [];
   const validatorClosures: Record<string, (value: unknown) => boolean> = {};
@@ -664,14 +725,19 @@ function compileObjectValidator<T extends Record<string, unknown>>(
     return true;
   `;
 
-  // Create function with validators in closure scope
-  const fn = new Function('validatorClosures', `
-    return function(data) {
-      ${fnBody}
-    }
-  `)(validatorClosures) as (data: unknown) => boolean;
+  try {
+    // Create function with validators in closure scope
+    const fn = new Function('validatorClosures', `
+      return function(data) {
+        ${fnBody}
+      }
+    `)(validatorClosures) as (data: unknown) => boolean;
 
-  return fn;
+    return fn;
+  } catch {
+    // Fallback if code generation fails (CSP restriction)
+    return createFallbackObjectValidator(shape);
+  }
 }
 
 /**
