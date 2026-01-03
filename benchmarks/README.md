@@ -47,7 +47,10 @@ Property-validator provides **two separate validation APIs** for different use c
 
 **Use when:** You don't care WHY validation failed, just true/false (hot paths, performance-critical code)
 
-**Performance:** property-validator is **13-42x faster** using `.validate()` (Phase 3 code generation)
+**Performance:**
+- **Arrays:** property-validator dominates (73-116x vs zod, 15-46x vs valibot) ✅
+- **Objects:** valibot 1.2x faster (valibot 4.1M vs pv 3.5M ops/sec) ⚠️
+- **Overall:** Mixed results - strongest on array validation
 
 **Trade-off:** No error messages (just `true` or `false`)
 
@@ -74,21 +77,37 @@ Property-validator provides **two separate validation APIs** for different use c
 
 ## Performance Summary
 
-### Overall Winner: Mixed Results - Strengths and Weaknesses
+### Overall Winner: Competitive but Behind Valibot
 
-Property-validator delivers **5-15x faster** validation for primitives, unions, and refinements, but **1.9x slower** for object arrays compared to zod.
+Property-validator beats zod in 5/6 categories but trails valibot in most benchmarks. **Valibot wins 5/7 categories** in the main benchmark comparison.
 
-| Category | property-validator | zod | yup | Winner |
-|----------|-------------------|-----|-----|--------|
-| **Primitives** | 3.9M ops/sec | 698k ops/sec | 492k - 514k ops/sec | property-validator (5.6x faster) ✅ |
-| **Objects (simple)** | 1.69M ops/sec | 1.26M ops/sec | 111k ops/sec | property-validator (1.3x faster) ✅ |
-| **Primitive Arrays (string[], 10)** | 888k ops/sec | 333k ops/sec | N/A | property-validator (2.7x faster) ✅ |
-| **Object Arrays (UserSchema[], 10)** | 70k ops/sec | 136k ops/sec | 10.7k ops/sec | **zod** (1.9x faster) ❌ |
-| **Object Arrays (UserSchema[], 100)** | 8k ops/sec | 15k ops/sec | 1.1k ops/sec | **zod** (1.8x faster) ❌ |
-| **Unions** | 7.1M ops/sec | 4.1M ops/sec | 723k - 736k ops/sec | property-validator (1.7x faster) ✅ |
-| **Refinements** | 7.2M ops/sec | 474k ops/sec | 41k - 585k ops/sec | property-validator (15x faster) ✅ |
+**vs Zod (Rich Error API):**
 
-**Final Score: 5 wins, 1 loss (83% win rate)** 📊
+| Category | property-validator | zod | Winner |
+|----------|-------------------|-----|--------|
+| **Primitives** | 3.9M ops/sec | 698k ops/sec | property-validator (5.6x faster) ✅ |
+| **Objects (simple)** | 1.69M ops/sec | 1.26M ops/sec | property-validator (1.3x faster) ✅ |
+| **Primitive Arrays (string[], 10)** | 888k ops/sec | 333k ops/sec | property-validator (2.7x faster) ✅ |
+| **Object Arrays (UserSchema[], 10)** | 70k ops/sec | 136k ops/sec | **zod** (1.9x faster) ❌ |
+| **Object Arrays (UserSchema[], 100)** | 8k ops/sec | 15k ops/sec | **zod** (1.8x faster) ❌ |
+| **Unions** | 7.1M ops/sec | 4.1M ops/sec | property-validator (1.7x faster) ✅ |
+| **Refinements** | 7.2M ops/sec | 474k ops/sec | property-validator (15x faster) ✅ |
+
+**Score vs Zod: 5 wins, 2 losses (71% win rate)** 📊
+
+**vs Valibot (Estimated from Phase 3 benchmarks):**
+
+| Category | property-validator | valibot | Winner |
+|----------|-------------------|---------|--------|
+| **Primitives** | 4.1M ops/sec | 7.6M ops/sec | **valibot** (1.9x faster) ❌ |
+| **Objects (simple)** | 2.4M ops/sec | 4.2M ops/sec | **valibot** (1.8x faster) ❌ |
+| **Object Arrays (10)** | 137k ops/sec | 571k ops/sec | **valibot** (4.2x faster) ❌ |
+| **Object Arrays (100)** | 37k ops/sec | 60k ops/sec | **valibot** (1.6x faster) ❌ |
+| **Primitive Arrays** | 998k ops/sec | 2.9M ops/sec | **valibot** (2.9x faster) ❌ |
+| **Unions** | 7.1M ops/sec | 1.5M ops/sec | property-validator (4.7x faster) ✅ |
+| **Refinements** | 7.2M ops/sec | 5.1M ops/sec | property-validator (1.4x faster) ✅ |
+
+**Score vs Valibot: 2 wins, 5 losses (29% win rate)** ⚠️
 
 **Update (2026-01-02):** v0.6.0 implements hybrid compilation:
 - ✅ **Primitive arrays:** Compiled to inline type checks → **2.7x faster than zod**

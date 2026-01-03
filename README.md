@@ -6,7 +6,7 @@
 ![Dogfooded](https://img.shields.io/badge/dogfooded-🐕-purple)
 ![Tests](https://img.shields.io/badge/tests-526%20passing-success)
 ![Zero Dependencies](https://img.shields.io/badge/dependencies-0-success)
-![Performance](https://img.shields.io/badge/performance-5%2F6%20wins%20vs%20zod-success)
+![Performance](https://img.shields.io/badge/vs%20zod-71%25%20win%20rate-yellow)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Runtime type validation with TypeScript inference.
@@ -406,9 +406,9 @@ Property Validator is built for high-throughput validation with zero runtime dep
 
 ### Benchmarks
 
-Comprehensive benchmarks compare property-validator against zod and yup. See [`benchmarks/README.md`](./benchmarks/README.md) for full results.
+Comprehensive benchmarks compare property-validator against zod, yup, and valibot. See [`benchmarks/README.md`](./benchmarks/README.md) for full results.
 
-**Key Results (v0.6.0):**
+**Key Results (v0.6.0) - vs Zod:**
 
 | Operation | property-validator | zod | Winner |
 |-----------|-------------------|-----|--------|
@@ -419,7 +419,9 @@ Comprehensive benchmarks compare property-validator against zod and yup. See [`b
 | **Unions** | 7.1M ops/sec | 4.1M ops/sec | **property-validator** (1.7x faster) ✅ |
 | **Refinements** | 7.2M ops/sec | 474k ops/sec | **property-validator** (15x faster) ✅ |
 
-**Final Score: 5 wins, 1 loss (83% win rate)** 📊
+**Score vs Zod: 5 wins, 2 losses (71% win rate)** 📊
+
+**vs Valibot:** property-validator trails valibot in most categories (2 wins, 5 losses). Valibot is 1.6-4.2x faster for objects and arrays. Property-validator excels at unions (4.7x faster) and refinements (1.4x faster). See [`benchmarks/README.md`](./benchmarks/README.md) for detailed valibot comparison.
 
 **Why It's Fast:**
 - ✅ Zero dependencies = smaller bundle, faster load
@@ -428,7 +430,9 @@ Comprehensive benchmarks compare property-validator against zod and yup. See [`b
 - ✅ Minimal allocations (eliminated via compilation)
 
 **Trade-offs:**
-- ⚠️ Object array validation: zod is currently 1.9x faster (needs profiling and further optimization)
+- ⚠️ Valibot is faster for most validation scenarios (1.6-4.2x)
+- ⚠️ Zod is faster for object array validation (1.9x)
+- ✅ property-validator provides richer error messages and security limits
 
 ### Compilation
 

@@ -418,14 +418,19 @@ Fair comparison requires comparing the same scenario. When both libraries pre-co
 
 ---
 
-### Phase 4: Eliminate Fallback to .validate() 🔧
+### Phase 4: Recursive Compilation for Nested Objects 🔧
 
-**Status:** ❌ Not Started
+**Status:** ❌ Attempted and Reverted (Performance Regression)
 **Expected Impact:** +10-15% for nested objects (after Phase 3: 140k - 176k ops/sec cumulative)
+**Actual Impact:** ❌ Regression in benchmarks - changes reverted
 **Difficulty:** Medium
-**Priority:** MEDIUM
+**Priority:** LOW (deferred after failed attempt)
 
-#### Problem
+#### What We Tried
+
+Attempted to recursively compile nested object validators instead of falling back to `.validate()` for complex validators.
+
+#### Problem Identified
 
 Line 632 in `compilePropertyValidator()` falls back to `validator.validate(data)` for complex validators, adding function call overhead.
 
@@ -485,27 +490,21 @@ function compilePropertyValidator<T>(
 }
 ```
 
-#### Testing Requirements
+#### Why It Failed
 
-1. Baseline: Record Phase 3 results
-2. Implement recursive compilation
-3. Test with deeply nested objects (5+ levels)
-4. Verify circular reference handling
-5. Run benchmarks
-6. Test with mixed validators (objects + refinements)
+When benchmarked against Phase 3 results, recursive compilation showed performance regression instead of improvement. Specific regression metrics were not documented at the time, but the changes were reverted to preserve Phase 3 performance gains.
 
-**Acceptance Criteria:**
-- ✅ All tests pass
-- ✅ Performance improves by +8-12% over Phase 3
-- ✅ Handles deeply nested objects correctly
-- ✅ Doesn't stack overflow on circular references
-- ✅ Cumulative improvement: +90-125% over v0.6.0
+**Hypothesis for failure:**
+1. Additional closure allocations from nested compiled functions
+2. Increased code size preventing V8 inlining
+3. Recursive compilation added more overhead than it saved
+4. Phase 3 code generation already optimized the critical path
 
-#### Edge Cases
+#### Decision
 
-1. **Circular references:** Detect and use fallback
-2. **Deep nesting:** Limit to 10 levels, then fall back
-3. **Mixed validators:** Objects with refinements → fall back to `.validate()`
+Reverted changes and deferred recursive compilation. Phase 3 code generation already achieves strong performance for plain objects. The complexity of recursive compilation doesn't justify the risk given Phase 3 results.
+
+**Alternative explored:** Continue with Phase 5 (V8 profiling) instead to verify optimization status of current implementation.
 
 ---
 
