@@ -591,6 +591,632 @@ Create `V8_OPTIMIZATION_NOTES.md` with:
 
 ---
 
+## v0.7.5: Profiling-Driven Optimizations
+
+**Status:** 🚧 In Progress (Research Complete)
+**Created:** 2026-01-03
+**Goal:** Close the 1.6-4.2x performance gap with valibot based on verified profiling data
+**Target:** 10-30% cumulative improvement across all scenarios
+
+### Research Summary (2026-01-03)
+
+**Profiling Methodology:**
+- V8 CPU profiler (`node --prof` + `--prof-process`)
+- 4 scenarios profiled (object arrays, primitive arrays, objects, primitives)
+- Both Normal API and Fast API profiled
+- See `profiling/ANALYSIS.md` for complete findings
+
+**Verified Bottlenecks (in order of impact):**
+
+1. **`validator._validateWithPath` overhead** - 4.3% CPU (Line 1221)
+   - Hot path for Normal API
+   - Wraps validation with error path tracking
+   - Extra function call layer + path string building
+
+2. **`validateWithPath` function overhead** - 2.5-3.7% CPU (Line 235)
+   - Core validation entry point
+   - WeakSet checks, depth counting, Result allocation
+   - Affects Normal API only
+
+3. **Primitive validator closures** - 1.4-3.4% CPU (Lines 744, 752, etc.)
+   - Type-checking anonymous functions
+   - Not inlined by V8 (closure overhead)
+   - Affects both APIs
+
+4. **Fast API refinement loop** - 1.6-2.3% CPU (Line 145)
+   - `refinements.every(...)` even when array is empty
+   - Affects Fast API only
+
+**NOT Verified (deferred):**
+- WeakSet operations (didn't appear in profiling)
+- Depth/property counting (too fast to measure)
+
+**New Findings:**
+- Result object allocation overhead (hypothesis based on valibot comparison)
+- Compiled array validators showing up in profiling (7.7% CPU) - but this is actual work being done, not overhead
+
+---
+
+### Phase 1: Skip Empty Refinement Loop ⚡
+
+**Status:** ❌ Not Started
+**Expected Impact:** +5-10% for Fast API (validation without refinements)
+**Difficulty:** Trivial
+**Priority:** HIGH (quick win, low risk)
+
+#### Problem
+
+Line 145 in `dist/index.js` (line 145 in `src/index.ts`):
+```typescript
+validate(data) {
+  if (!validateFn(data)) {
+    return false;
+  }
+  return refinements.every((refinement) => refinement.predicate(data));
+}
+```
+
+**Issue:** `refinements.every()` is called even when `refinements.length === 0`. Array iteration has overhead even for empty arrays.
+
+**Profiling Evidence:**
+- `validate` (Fast API) shows 1.6-2.3% CPU in primitives/objects profiles
+- Most validators have zero refinements in production use
+
+#### Implementation
+
+**Location:** `src/index.ts:145-152`
+
+**BEFORE:**
+```typescript
+validate(data) {
+  if (!validateFn(data)) {
+    return false;
+  }
+  // Then check all refinements
+  return refinements.every((refinement) => refinement.predicate(data));
+},
+```
+
+**AFTER:**
+```typescript
+validate(data) {
+  if (!validateFn(data)) {
+    return false;
+  }
+  // Skip refinement loop if no refinements exist
+  if (refinements.length === 0) {
+    return true;
+  }
+  return refinements.every((refinement) => refinement.predicate(data));
+},
+```
+
+#### Testing Requirements
+
+1. All 511 tests must pass (no regression)
+2. Fast API benchmarks for primitives and objects should improve 5-10%
+3. Normal API benchmarks should not regress
+
+#### Acceptance Criteria
+
+- ✅ `primitives.bench.ts` shows +5-10% improvement for Fast API
+- ✅ `objects.bench.ts` shows +5-10% improvement for Fast API
+- ✅ 511/511 tests passing
+- ✅ No regression in other benchmarks
+
+---
+
+### Phase 2: Eliminate Fast API Result Allocation 🚀
+
+**Status:** ❌ Not Started
+**Expected Impact:** +10-15% for Fast API (all scenarios)
+**Difficulty:** Medium
+**Priority:** HIGH (significant impact)
+
+#### Problem
+
+Lines 327-355 in `dist/index.js` (`validateFast` and `validate` functions):
+
+**Current flow:**
+1. Fast API calls `validateFast(schema, data)` (line 327)
+2. `validateFast` calls `validate(schema, data, ...)` (line 356)
+3. `validate` returns `Result<T>` object `{ ok: true, value: T }` or `{ ok: false, error: ... }`
+4. `validateFast` extracts `.ok` boolean
+
+**Issue:** We're allocating a Result object just to extract the boolean. Valibot avoids this with exception-based errors (zero-cost happy path).
+
+**Profiling Evidence:**
+- `validate` (Normal API, line 356) shows 4.1% CPU in primitives profile
+- Every validation allocates a Result object, even when caller only wants boolean
+
+#### Implementation
+
+**Location:** `src/index.ts:327-356`
+
+**Current Code:**
+```typescript
+export function validateFast<T>(schema: Validator<T>, data: unknown): boolean {
+  const result = validate(schema, data, { fast: true });
+  return result.ok;
+}
+
+export function validate<T>(
+  schema: Validator<T>,
+  data: unknown,
+  options?: ValidationOptions
+): ValidationResult<T> {
+  // ... returns Result object
+}
+```
+
+**Proposed Solution Option A (add internal boolean path):**
+```typescript
+// Internal function that returns boolean directly
+function validateBoolean<T>(
+  schema: Validator<T>,
+  data: unknown
+): boolean {
+  // Direct boolean return, no Result allocation
+  return schema.validate(data);
+}
+
+export function validateFast<T>(schema: Validator<T>, data: unknown): boolean {
+  // Use boolean path instead of Result path
+  return validateBoolean(schema, data);
+}
+
+export function validate<T>(
+  schema: Validator<T>,
+  data: unknown,
+  options?: ValidationOptions
+): ValidationResult<T> {
+  // Keep existing Result-based implementation
+}
+```
+
+**Proposed Solution Option B (optimize Result allocation):**
+```typescript
+// Reuse Result objects for success case
+const SUCCESS_RESULT = Object.freeze({ ok: true as const, value: undefined });
+
+export function validate<T>(...): ValidationResult<T> {
+  if (schema.validate(data)) {
+    // For simple types, reuse singleton
+    if (isPrimitive(data)) {
+      return { ...SUCCESS_RESULT, value: data };
+    }
+    return { ok: true, value: data };
+  }
+  // ...
+}
+```
+
+#### Decision Criteria
+
+- **Option A** if we need clean separation of concerns
+- **Option B** if we want minimal code duplication
+- **Benchmark both** and pick winner
+
+#### Testing Requirements
+
+1. All 511 tests must pass
+2. Fast API benchmarks should improve 10-15% across all scenarios
+3. Normal API behavior unchanged (still returns Result)
+
+#### Acceptance Criteria
+
+- ✅ All Fast API benchmarks show +10-15% improvement
+- ✅ Normal API benchmarks unchanged or improved
+- ✅ 511/511 tests passing
+- ✅ No API breaking changes
+
+---
+
+### Phase 3: Inline Primitive Validation (Skip validateWithPath) 🎯
+
+**Status:** ❌ Not Started
+**Expected Impact:** +15-20% for primitives in Normal API
+**Difficulty:** Medium
+**Priority:** MEDIUM (Normal API optimization)
+
+#### Problem
+
+For simple primitive validators (string, number, boolean), the Normal API calls:
+1. `validate(schema, data)` (line 356)
+2. → `validateWithPath(schema, data)` (line 235)
+3. → `validator._validateWithPath(data, options)` (line 1221)
+4. → `validateWithPath` again recursively
+5. → Finally checks type
+
+**Profiling Evidence:**
+- `validateWithPath` shows 3.7% CPU (primitive arrays)
+- `validator._validateWithPath` shows 4.3% CPU (objects)
+- For primitives, all this overhead just to check `typeof data === 'string'`
+
+#### Implementation
+
+**Location:** `src/index.ts:356` (validate function)
+
+**BEFORE:**
+```typescript
+export function validate<T>(
+  schema: Validator<T>,
+  data: unknown,
+  options?: ValidationOptions
+): ValidationResult<T> {
+  return validateWithPath(schema, data, ...);
+}
+```
+
+**AFTER:**
+```typescript
+export function validate<T>(
+  schema: Validator<T>,
+  data: unknown,
+  options?: ValidationOptions
+): ValidationResult<T> {
+  // Fast path for primitives (no path tracking needed)
+  if (schema._type && isPrimitiveType(schema._type)) {
+    const valid = schema.validate(data);
+    if (valid) {
+      return { ok: true, value: data as T };
+    }
+    return { ok: false, error: schema.error(data, []) };
+  }
+
+  // Full path for complex validators
+  return validateWithPath(schema, data, ...);
+}
+
+function isPrimitiveType(type: string): boolean {
+  return type === 'string' || type === 'number' || type === 'boolean';
+}
+```
+
+#### Testing Requirements
+
+1. All 511 tests must pass
+2. Primitive benchmarks (Normal API) should improve 15-20%
+3. Complex validators (objects, arrays) should not regress
+
+#### Acceptance Criteria
+
+- ✅ `primitives.bench.ts` shows +15-20% improvement for Normal API
+- ✅ Object and array benchmarks unchanged
+- ✅ 511/511 tests passing
+- ✅ Error messages still include correct paths
+
+---
+
+### Phase 4: Lazy Path Building (String → Array) 🔧
+
+**Status:** ❌ Not Started
+**Expected Impact:** +10-15% for Normal API (all complex validators)
+**Difficulty:** High
+**Priority:** MEDIUM (complex refactoring)
+
+#### Problem
+
+Line 235 in `src/index.ts` (`validateWithPath` function):
+
+**Current:** Path is built as string on every call:
+```typescript
+function validateWithPath<T>(
+  validator: Validator<T>,
+  data: unknown,
+  path: string = '',  // String concatenation on every call
+  // ...
+) {
+  // ...
+  validateWithPath(itemValidator, data[i], `${path}[${i}]`, ...);
+  //                                         ^^^^^^^^^^^^^^^^ String allocation!
+}
+```
+
+**Issue:**
+- String concatenation allocates new strings on every recursion
+- For deeply nested objects/arrays, this compounds
+- Valibot only builds paths when errors occur (lazy evaluation)
+
+**Profiling Evidence:**
+- `validateWithPath` shows 2.5-3.7% CPU
+- Path building happens even when validation succeeds (wasted work)
+
+#### Implementation
+
+**Location:** `src/index.ts:235-326`
+
+**BEFORE:**
+```typescript
+function validateWithPath<T>(
+  validator: Validator<T>,
+  data: unknown,
+  path: string = '',
+  seen?: WeakSet<object>,
+  ...
+) {
+  // Build path as string: "user.address.city"
+  const result = validator._validateWithPath(data, { path, seen, ... });
+  // ...
+}
+```
+
+**AFTER:**
+```typescript
+function validateWithPath<T>(
+  validator: Validator<T>,
+  data: unknown,
+  pathArray: (string | number)[] = [],  // Array of keys
+  seen?: WeakSet<object>,
+  ...
+) {
+  // Only stringify path when error occurs
+  const result = validator._validateWithPath(data, { pathArray, seen, ... });
+
+  if (!result.ok && result.error) {
+    // Build string only now: pathArray.join('.')
+    result.error.path = pathArrayToString(pathArray);
+  }
+
+  // Recurse with array (cheap to copy)
+  for (let i = 0; i < array.length; i++) {
+    validateWithPath(itemValidator, array[i], [...pathArray, i], ...);
+  }
+}
+
+function pathArrayToString(arr: (string | number)[]): string {
+  return arr.map((key, i) =>
+    typeof key === 'number' ? `[${key}]` : (i === 0 ? key : `.${key}`)
+  ).join('');
+}
+```
+
+#### Testing Requirements
+
+1. All 511 tests must pass (especially error path tests)
+2. Normal API benchmarks should improve 10-15% for objects/arrays
+3. Error messages must still show correct paths
+
+#### Acceptance Criteria
+
+- ✅ `objects.bench.ts` shows +10-15% improvement for Normal API
+- ✅ `object-arrays.bench.ts` shows +10-15% improvement
+- ✅ All error path tests pass (validate path strings are correct)
+- ✅ 511/511 tests passing
+
+---
+
+### Phase 5: Optimize Primitive Validator Closures 🔬
+
+**Status:** ❌ Not Started
+**Expected Impact:** +5-10% for primitives (both APIs)
+**Difficulty:** Low
+**Priority:** LOW (incremental gain)
+
+#### Problem
+
+Lines 744, 752, etc. in `dist/index.js` (primitive validators):
+
+**Current:**
+```typescript
+number() {
+  const validator = createValidator(
+    (data) => typeof data === 'number' && !Number.isNaN(data),
+    //  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Closure allocated
+    (data) => `Expected number, got ${getTypeName(data)}`
+  );
+  validator._type = 'number';
+  return validator;
+}
+```
+
+**Issue:**
+- Anonymous closure allocations for every primitive validator
+- V8 not inlining these simple functions
+- Profiling shows 1.4-3.4% CPU for these closures
+
+**Profiling Evidence:**
+- Number validator function shows 1.6% CPU
+- Boolean validator function shows 3.4% CPU
+- Should be too fast to measure, but they're showing up!
+
+#### Implementation
+
+**Location:** `src/index.ts:733-770` (v object methods)
+
+**BEFORE:**
+```typescript
+export const v = {
+  string() {
+    return createValidator(
+      (data) => typeof data === 'string',
+      (data) => `Expected string, got ${getTypeName(data)}`
+    );
+  },
+  // ...
+};
+```
+
+**AFTER (Option A: Shared validator functions):**
+```typescript
+// Shared functions (V8 can optimize and inline better)
+function validateString(data: unknown): boolean {
+  return typeof data === 'string';
+}
+
+function validateNumber(data: unknown): boolean {
+  return typeof data === 'number' && !Number.isNaN(data);
+}
+
+function validateBoolean(data: unknown): boolean {
+  return typeof data === 'boolean';
+}
+
+export const v = {
+  string() {
+    const validator = createValidator(
+      validateString,  // Function reference, not closure
+      (data) => `Expected string, got ${getTypeName(data)}`
+    );
+    validator._type = 'string';
+    return validator;
+  },
+  // ...
+};
+```
+
+**AFTER (Option B: V8 optimization hints):**
+```typescript
+export const v = {
+  string() {
+    // Hint to V8 that this function is monomorphic (always string input)
+    const validateFn = (data: unknown): data is string => typeof data === 'string';
+    return createValidator(validateFn, ...);
+  },
+};
+```
+
+#### Decision Criteria
+
+- **Option A** if shared functions show performance gain
+- **Option B** if type guards help V8 optimize
+- **Benchmark both** and document results
+
+#### Testing Requirements
+
+1. All 511 tests must pass
+2. Primitive benchmarks should improve 5-10%
+3. No regression in other benchmarks
+
+#### Acceptance Criteria
+
+- ✅ `primitives.bench.ts` shows +5-10% improvement
+- ✅ 511/511 tests passing
+- ✅ V8 profiling shows inlining of primitive validators
+
+---
+
+### Phase 6: Inline validateWithPath for Plain Objects 🏗️
+
+**Status:** ❌ Not Started
+**Expected Impact:** +10-15% for simple objects (Normal API)
+**Difficulty:** High
+**Priority:** LOW (complex, deferred after other phases)
+
+#### Problem
+
+For plain objects (no refinements, no transforms, no defaults), we can skip the full `validateWithPath` machinery and directly call the compiled validator.
+
+**Current flow:**
+1. `validate(schema, data)` → `validateWithPath` → `validator._validateWithPath` → compiled validator
+
+**Proposed flow:**
+1. `validate(schema, data)` → compiled validator (direct)
+
+**Profiling Evidence:**
+- `validator._validateWithPath` shows 4.3% CPU for objects
+- For plain objects with known shape, this overhead is unnecessary
+
+#### Implementation
+
+**Location:** `src/index.ts:356` (validate function)
+
+**Similar to Phase 3 (primitive fast path), but for plain objects:**
+
+```typescript
+export function validate<T>(
+  schema: Validator<T>,
+  data: unknown,
+  options?: ValidationOptions
+): ValidationResult<T> {
+  // Fast path for primitives (Phase 3)
+  if (schema._type && isPrimitiveType(schema._type)) {
+    // ...
+  }
+
+  // Fast path for plain objects (Phase 6)
+  if (schema._type === 'object' && isPlainObject(schema)) {
+    const shape = (schema as any)._shape;
+    const compiledValidator = compileObjectValidator(shape);
+    const valid = compiledValidator(data);
+
+    if (valid) {
+      return { ok: true, value: data as T };
+    }
+
+    // On error, fall back to full validation for detailed error
+    return validateWithPath(schema, data, ...);
+  }
+
+  // Full path for complex validators
+  return validateWithPath(schema, data, ...);
+}
+
+function isPlainObject(validator: Validator<any>): boolean {
+  return !validator._hasRefinements &&
+         !validator._transform &&
+         !validator._default;
+}
+```
+
+#### Complexity Warning
+
+This phase is **complex** because:
+1. Requires detecting "plain object" vs "complex object"
+2. Compiled validators don't produce detailed errors
+3. Need fallback to validateWithPath for error details
+4. Risk of incorrect fast path detection
+
+**Defer** until Phases 1-5 are complete and benchmarked. May not be worth the complexity.
+
+---
+
+### Phase 7-8: Reserved for Profiling Insights 🔮
+
+**Status:** ❌ Not Defined
+**Priority:** TBD
+
+After completing Phases 1-6:
+1. Re-run profiling to identify remaining bottlenecks
+2. Check if new hotspots emerged from optimizations
+3. Design Phase 7-8 based on data
+
+**Potential targets:**
+- WeakSet optimization (if circular refs become hot path)
+- maxDepth/maxProperties optimization (if validated)
+- Array validator optimizations (if compiled validators show overhead)
+
+---
+
+## v0.7.5 Success Criteria
+
+**Performance Targets:**
+- ✅ Cumulative improvement: +10-30% across all scenarios (from v0.7.0 baseline)
+- ✅ Close gap with valibot: 1.6-4.2x → 1.2-3.0x (25-40% reduction in gap)
+- ✅ No test regressions: 511/511 tests passing
+
+**Quality Gates:**
+- ✅ Each phase benchmarked independently (Phase X → test → bench → commit)
+- ✅ Profiling analysis documented in `profiling/ANALYSIS.md`
+- ✅ All phases have actual results (not estimates)
+- ✅ V8 profiling re-run after Phase 6 to verify optimization status
+
+**Workflow per Phase:**
+1. Baseline benchmark (before changes)
+2. Implement single optimization
+3. Run all tests (511/511 passing)
+4. Benchmark (after changes)
+5. Compare results (document in this file)
+6. Commit: `perf(v0.7.5): complete Phase X - <actual improvement>`
+
+**If targets not met:**
+- Document actual vs expected (honest reporting)
+- Investigate why (profiling, code review)
+- Adjust expectations or try alternative approach
+- Don't inflate numbers to meet arbitrary targets
+
+---
+
 ## v0.7.0 Success Criteria
 
 **Performance Targets:**

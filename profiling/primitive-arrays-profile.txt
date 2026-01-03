@@ -1,0 +1,302 @@
+Statistical profiling result from isolate-0x6aec000-8074-v8.log, (110 ticks, 27 unaccounted, 0 excluded).
+
+ [Shared libraries]:
+   ticks  total  nonlib   name
+      5    4.5%          /usr/lib/x86_64-linux-gnu/libc.so.6
+      1    0.9%          /opt/node22/bin/node
+
+ [JavaScript]:
+   ticks  total  nonlib   name
+      2    1.8%    1.9%  Builtin: LoadIC
+      2    1.8%    1.9%  Builtin: KeyedLoadIC
+      1    0.9%    1.0%  JS: ~i file:///home/user/tuulbelt/tools/property-validator/dist/index.js:617:20
+      1    0.9%    1.0%  JS: ^checkListener node:events:275:23
+      1    0.9%    1.0%  Builtin: StrictEqual_Baseline
+      1    0.9%    1.0%  Builtin: JSEntryTrampoline
+      1    0.9%    1.0%  Builtin: InterpreterEntryTrampoline
+
+ [C++]:
+   ticks  total  nonlib   name
+     38   34.5%   36.5%  __write@@GLIBC_2.2.5
+     13   11.8%   12.5%  _IO_fwrite@@GLIBC_2.2.5
+      4    3.6%    3.8%  std::basic_ostream<char, std::char_traits<char> >& std::__ostream_insert<char, std::char_traits<char> >(std::basic_ostream<char, std::char_traits<char> >&, char const*, long)@@GLIBCXX_3.4.9
+      4    3.6%    3.8%  _IO_file_xsputn@@GLIBC_2.2.5
+      2    1.8%    1.9%  syscall@@GLIBC_2.2.5
+      2    1.8%    1.9%  std::ostream::sentry::sentry(std::ostream&)@@GLIBCXX_3.4
+      1    0.9%    1.0%  pthread_sigmask@GLIBC_2.2.5
+      1    0.9%    1.0%  getuid@@GLIBC_2.2.5
+      1    0.9%    1.0%  getgid@@GLIBC_2.2.5
+      1    0.9%    1.0%  __munmap@@GLIBC_PRIVATE
+      1    0.9%    1.0%  __libc_malloc@@GLIBC_2.2.5
+
+ [Summary]:
+   ticks  total  nonlib   name
+      9    8.2%    8.7%  JavaScript
+     68   61.8%   65.4%  C++
+      3    2.7%    2.9%  GC
+      6    5.5%          Shared libraries
+     27   24.5%          Unaccounted
+
+ [C++ entry points]:
+   ticks    cpp   total   name
+     21   44.7%   19.1%  __write@@GLIBC_2.2.5
+     13   27.7%   11.8%  _IO_fwrite@@GLIBC_2.2.5
+      4    8.5%    3.6%  std::basic_ostream<char, std::char_traits<char> >& std::__ostream_insert<char, std::char_traits<char> >(std::basic_ostream<char, std::char_traits<char> >&, char const*, long)@@GLIBCXX_3.4.9
+      4    8.5%    3.6%  _IO_file_xsputn@@GLIBC_2.2.5
+      2    4.3%    1.8%  syscall@@GLIBC_2.2.5
+      2    4.3%    1.8%  std::ostream::sentry::sentry(std::ostream&)@@GLIBCXX_3.4
+      1    2.1%    0.9%  getuid@@GLIBC_2.2.5
+
+ [Bottom up (heavy) profile]:
+  Note: percentage shows a share of a particular caller in the total
+  amount of its parent calls.
+  Callers occupying less than 1.0% are not shown.
+
+   ticks parent  name
+     38   34.5%  __write@@GLIBC_2.2.5
+      6   15.8%    JS: ^compileForInternalLoader node:internal/bootstrap/realm:385:27
+      6  100.0%      JS: ^requireBuiltin node:internal/bootstrap/realm:422:24
+      2   33.3%        JS: ~<anonymous> node:stream:1:1
+      2  100.0%          JS: ^compileForInternalLoader node:internal/bootstrap/realm:385:27
+      2  100.0%            JS: ^requireBuiltin node:internal/bootstrap/realm:422:24
+      1   16.7%        JS: ~<anonymous> node:net:1:1
+      1  100.0%          JS: ^compileForInternalLoader node:internal/bootstrap/realm:385:27
+      1  100.0%            JS: ^requireBuiltin node:internal/bootstrap/realm:422:24
+      1   16.7%        JS: ~<anonymous> node:internal/streams/readable:1:1
+      1  100.0%          JS: ^compileForInternalLoader node:internal/bootstrap/realm:385:27
+      1  100.0%            JS: ^requireBuiltin node:internal/bootstrap/realm:422:24
+      1   16.7%        JS: ~<anonymous> node:internal/streams/duplex:1:1
+      1  100.0%          JS: ^compileForInternalLoader node:internal/bootstrap/realm:385:27
+      1  100.0%            JS: ^requireBuiltin node:internal/bootstrap/realm:422:24
+      1   16.7%        JS: ~<anonymous> node:internal/main/run_main_module:1:1
+      3    7.9%    JS: ~finalizeResolution node:internal/modules/esm/resolve:228:28
+      3  100.0%      JS: ~moduleResolve node:internal/modules/esm/resolve:826:23
+      3  100.0%        JS: ~defaultResolve node:internal/modules/esm/resolve:938:24
+      3  100.0%          JS: ~#cachedDefaultResolve node:internal/modules/esm/loader:723:24
+      3  100.0%            JS: ~resolve node:internal/modules/esm/loader:699:10
+      2    5.3%    JS: ~<anonymous> node:internal/main/run_main_module:1:1
+      1    2.6%    JS: ~moduleResolve node:internal/modules/esm/resolve:826:23
+      1  100.0%      JS: ~defaultResolve node:internal/modules/esm/resolve:938:24
+      1  100.0%        JS: ~#cachedDefaultResolve node:internal/modules/esm/loader:723:24
+      1  100.0%          JS: ~resolve node:internal/modules/esm/loader:699:10
+      1  100.0%            JS: ~getModuleJobForImport node:internal/modules/esm/loader:309:30
+      1    2.6%    JS: ~getOrInitializeCascadedLoader node:internal/modules/esm/loader:1013:39
+      1  100.0%      JS: ~<anonymous> node:internal/main/run_main_module:1:1
+      1    2.6%    JS: ~getHighWaterMark node:internal/streams/state:33:26
+      1  100.0%      JS: ~ReadableState node:internal/streams/readable:262:23
+      1  100.0%        JS: ~Duplex node:internal/streams/duplex:64:16
+      1  100.0%          JS: ~Socket node:net:362:16
+      1  100.0%            Builtin: CallApiCallbackGeneric
+      1    2.6%    JS: ~defaultResolve node:internal/modules/esm/resolve:938:24
+      1  100.0%      JS: ~#cachedDefaultResolve node:internal/modules/esm/loader:723:24
+      1  100.0%        JS: ~resolve node:internal/modules/esm/loader:699:10
+      1  100.0%          JS: ~getModuleJobForImport node:internal/modules/esm/loader:309:30
+      1  100.0%            JS: ~onImport.tracePromise.__proto__ node:internal/modules/esm/loader:663:34
+      1    2.6%    JS: ~array file:///home/user/tuulbelt/tools/property-validator/dist/index.js:759:10
+      1  100.0%      Script: ~<anonymous> file:///home/user/tuulbelt/tools/property-validator/profiling/profile-primitive-arrays.js:1:1
+      1  100.0%        Builtin: GeneratorPrototypeNext
+      1  100.0%          Builtin: CallApiCallbackGeneric
+      1  100.0%            JS: ~run node:internal/modules/esm/module_job:332:12
+      1    2.6%    JS: ~_instantiate node:internal/modules/esm/module_job:206:21
+      1  100.0%      JS: ~instantiate node:internal/modules/esm/module_job:199:14
+      1  100.0%        JS: ~run node:internal/modules/esm/module_job:332:12
+      1  100.0%          JS: ~onImport.tracePromise.__proto__ node:internal/modules/esm/loader:663:34
+      1  100.0%            Builtin: AsyncFunctionAwaitResolveClosure
+      1    2.6%    JS: ~Writable.write node:internal/streams/writable:504:36
+      1  100.0%      Builtin: CallApiCallbackGeneric
+      1  100.0%        JS: ^<anonymous> file:///home/user/tuulbelt/tools/property-validator/profiling/profile-primitive-arrays.js:1:1
+      1  100.0%          Builtin: GeneratorPrototypeNext
+      1  100.0%            Builtin: CallApiCallbackGeneric
+      1    2.6%    JS: ~<anonymous> node:internal/fs/promises:1:1
+      1  100.0%      JS: ^compileForInternalLoader node:internal/bootstrap/realm:385:27
+      1  100.0%        JS: ^requireBuiltin node:internal/bootstrap/realm:422:24
+      1  100.0%          JS: ~<anonymous> node:internal/fs/streams:1:1
+      1  100.0%            JS: ^compileForInternalLoader node:internal/bootstrap/realm:385:27
+      1    2.6%    JS: ~#cachedDefaultResolve node:internal/modules/esm/loader:723:24
+      1  100.0%      JS: ~resolve node:internal/modules/esm/loader:699:10
+      1  100.0%        JS: ~getModuleJobForImport node:internal/modules/esm/loader:309:30
+      1  100.0%          JS: ~onImport.tracePromise.__proto__ node:internal/modules/esm/loader:663:34
+      1  100.0%            JS: ~import node:internal/modules/esm/loader:662:15
+      1    2.6%    Builtin: CallApiCallbackGeneric
+      1  100.0%      JS: ^<anonymous> file:///home/user/tuulbelt/tools/property-validator/profiling/profile-primitive-arrays.js:1:1
+      1  100.0%        Builtin: GeneratorPrototypeNext
+      1  100.0%          Builtin: CallApiCallbackGeneric
+      1  100.0%            JS: ~run node:internal/modules/esm/module_job:332:12
+
+     27   24.5%  UNKNOWN
+      8   29.6%    JS: ^compileForInternalLoader node:internal/bootstrap/realm:385:27
+      8  100.0%      JS: ^requireBuiltin node:internal/bootstrap/realm:422:24
+      2   25.0%        JS: ~<anonymous> node:internal/fs/promises:1:1
+      2  100.0%          JS: ^compileForInternalLoader node:internal/bootstrap/realm:385:27
+      2  100.0%            JS: ^requireBuiltin node:internal/bootstrap/realm:422:24
+      1   12.5%        JS: ~<anonymous> node:stream:1:1
+      1  100.0%          JS: ^compileForInternalLoader node:internal/bootstrap/realm:385:27
+      1  100.0%            JS: ^requireBuiltin node:internal/bootstrap/realm:422:24
+      1   12.5%        JS: ~<anonymous> node:internal/streams/compose:1:1
+      1  100.0%          JS: ^compileForInternalLoader node:internal/bootstrap/realm:385:27
+      1  100.0%            JS: ^requireBuiltin node:internal/bootstrap/realm:422:24
+      1   12.5%        JS: ~<anonymous> node:internal/readline/interface:1:1
+      1  100.0%          JS: ^compileForInternalLoader node:internal/bootstrap/realm:385:27
+      1  100.0%            JS: ^requireBuiltin node:internal/bootstrap/realm:422:24
+      1   12.5%        JS: ~<anonymous> node:internal/perf/observe:1:1
+      1  100.0%          JS: ^compileForInternalLoader node:internal/bootstrap/realm:385:27
+      1  100.0%            JS: ^requireBuiltin node:internal/bootstrap/realm:422:24
+      1   12.5%        JS: ~<anonymous> node:internal/fs/streams:1:1
+      1  100.0%          JS: ^compileForInternalLoader node:internal/bootstrap/realm:385:27
+      1  100.0%            JS: ^requireBuiltin node:internal/bootstrap/realm:422:24
+      1   12.5%        Builtin: CallApiCallbackGeneric
+      1  100.0%          JS: ^<anonymous> file:///home/user/tuulbelt/tools/property-validator/profiling/profile-primitive-arrays.js:1:1
+      1  100.0%            Builtin: GeneratorPrototypeNext
+      4   14.8%    JS: ~moduleStrategy node:internal/modules/esm/translators:101:50
+      4  100.0%      JS: ~#translate node:internal/modules/esm/loader:538:13
+      4  100.0%        JS: ~afterLoad node:internal/modules/esm/loader:595:23
+      4  100.0%          JS: ~loadAndTranslate node:internal/modules/esm/loader:593:19
+      4  100.0%            JS: ~#createModuleJob node:internal/modules/esm/loader:616:19
+      1    3.7%    JS: ~validateWithPath file:///home/user/tuulbelt/tools/property-validator/dist/index.js:235:33
+      1  100.0%      JS: ~validateFast file:///home/user/tuulbelt/tools/property-validator/dist/index.js:327:22
+      1  100.0%        JS: ~validate file:///home/user/tuulbelt/tools/property-validator/dist/index.js:356:25
+      1  100.0%          JS: ^<anonymous> file:///home/user/tuulbelt/tools/property-validator/profiling/profile-primitive-arrays.js:1:1
+      1  100.0%            Builtin: GeneratorPrototypeNext
+      1    3.7%    JS: ~finalizeResolution node:internal/modules/esm/resolve:228:28
+      1  100.0%      JS: ~moduleResolve node:internal/modules/esm/resolve:826:23
+      1  100.0%        JS: ~defaultResolve node:internal/modules/esm/resolve:938:24
+      1  100.0%          JS: ~#cachedDefaultResolve node:internal/modules/esm/loader:723:24
+      1  100.0%            JS: ~resolve node:internal/modules/esm/loader:699:10
+      1    3.7%    JS: ~ModuleLoader node:internal/modules/esm/loader:147:20
+      1  100.0%      JS: ~ModuleLoader node:internal/modules/esm/loader:187:14
+      1  100.0%        JS: ~createModuleLoader node:internal/modules/esm/loader:953:28
+      1  100.0%          JS: ~getOrInitializeCascadedLoader node:internal/modules/esm/loader:1013:39
+      1  100.0%            JS: ~<anonymous> node:internal/main/run_main_module:1:1
+      1    3.7%    JS: ~<anonymous> node:internal/modules/esm/load:1:1
+      1  100.0%      JS: ^compileForInternalLoader node:internal/bootstrap/realm:385:27
+      1  100.0%        JS: ^requireBuiltin node:internal/bootstrap/realm:422:24
+      1  100.0%          JS: ~load node:internal/modules/esm/loader:805:7
+      1  100.0%            JS: ~loadAndTranslate node:internal/modules/esm/loader:593:19
+      1    3.7%    Builtin: CallApiCallbackGeneric
+      1  100.0%      Builtin: CallApiCallbackGeneric
+      1  100.0%        JS: ^<anonymous> file:///home/user/tuulbelt/tools/property-validator/profiling/profile-primitive-arrays.js:1:1
+      1  100.0%          Builtin: GeneratorPrototypeNext
+      1  100.0%            Builtin: CallApiCallbackGeneric
+
+     13   11.8%  _IO_fwrite@@GLIBC_2.2.5
+      7   53.8%    JS: ^compileForInternalLoader node:internal/bootstrap/realm:385:27
+      7  100.0%      JS: ^requireBuiltin node:internal/bootstrap/realm:422:24
+      2   28.6%        JS: ~<anonymous> node:internal/streams/duplex:1:1
+      2  100.0%          JS: ^compileForInternalLoader node:internal/bootstrap/realm:385:27
+      2  100.0%            JS: ^requireBuiltin node:internal/bootstrap/realm:422:24
+      1   14.3%        JS: ~<anonymous> node:internal/streams/operators:1:1
+      1  100.0%          JS: ^compileForInternalLoader node:internal/bootstrap/realm:385:27
+      1  100.0%            JS: ^requireBuiltin node:internal/bootstrap/realm:422:24
+      1   14.3%        JS: ~<anonymous> node:internal/main/run_main_module:1:1
+      1   14.3%        JS: ~<anonymous> node:internal/fs/promises:1:1
+      1  100.0%          JS: ^compileForInternalLoader node:internal/bootstrap/realm:385:27
+      1  100.0%            JS: ^requireBuiltin node:internal/bootstrap/realm:422:24
+      1   14.3%        JS: ~#createModuleJob node:internal/modules/esm/loader:616:19
+      1  100.0%          JS: ~#getJobFromResolveResult node:internal/modules/esm/loader:337:27
+      1  100.0%            JS: ~getModuleJobForImport node:internal/modules/esm/loader:309:30
+      1   14.3%        Builtin: CallApiCallbackGeneric
+      1  100.0%          JS: ^<anonymous> file:///home/user/tuulbelt/tools/property-validator/profiling/profile-primitive-arrays.js:1:1
+      1  100.0%            Builtin: GeneratorPrototypeNext
+      3   23.1%    JS: ~finalizeResolution node:internal/modules/esm/resolve:228:28
+      3  100.0%      JS: ~moduleResolve node:internal/modules/esm/resolve:826:23
+      3  100.0%        JS: ~defaultResolve node:internal/modules/esm/resolve:938:24
+      3  100.0%          JS: ~#cachedDefaultResolve node:internal/modules/esm/loader:723:24
+      3  100.0%            JS: ~resolve node:internal/modules/esm/loader:699:10
+      1    7.7%    JS: ~i file:///home/user/tuulbelt/tools/property-validator/dist/index.js:617:20
+      1  100.0%      JS: ~validate file:///home/user/tuulbelt/tools/property-validator/dist/index.js:766:25
+      1  100.0%        JS: ^<anonymous> file:///home/user/tuulbelt/tools/property-validator/profiling/profile-primitive-arrays.js:1:1
+      1  100.0%          Builtin: GeneratorPrototypeNext
+      1  100.0%            Builtin: CallApiCallbackGeneric
+      1    7.7%    JS: ~<anonymous> node:internal/main/run_main_module:1:1
+      1    7.7%    Builtin: CallApiCallbackGeneric
+      1  100.0%      Builtin: CallApiCallbackGeneric
+      1  100.0%        JS: ^<anonymous> file:///home/user/tuulbelt/tools/property-validator/profiling/profile-primitive-arrays.js:1:1
+      1  100.0%          Builtin: GeneratorPrototypeNext
+      1  100.0%            Builtin: CallApiCallbackGeneric
+
+      5    4.5%  /usr/lib/x86_64-linux-gnu/libc.so.6
+      3   60.0%    JS: ^compileForInternalLoader node:internal/bootstrap/realm:385:27
+      3  100.0%      JS: ^requireBuiltin node:internal/bootstrap/realm:422:24
+      1   33.3%        JS: ~<anonymous> node:internal/fs/promises:1:1
+      1  100.0%          JS: ^compileForInternalLoader node:internal/bootstrap/realm:385:27
+      1  100.0%            JS: ^requireBuiltin node:internal/bootstrap/realm:422:24
+      1   33.3%        JS: ~#cachedDefaultResolve node:internal/modules/esm/loader:723:24
+      1  100.0%          JS: ~resolve node:internal/modules/esm/loader:699:10
+      1  100.0%            JS: ~getModuleJobForImport node:internal/modules/esm/loader:309:30
+      1   33.3%        Builtin: CallApiCallbackGeneric
+      1  100.0%          JS: ^<anonymous> file:///home/user/tuulbelt/tools/property-validator/profiling/profile-primitive-arrays.js:1:1
+      1  100.0%            Builtin: GeneratorPrototypeNext
+
+      4    3.6%  std::basic_ostream<char, std::char_traits<char> >& std::__ostream_insert<char, std::char_traits<char> >(std::basic_ostream<char, std::char_traits<char> >&, char const*, long)@@GLIBCXX_3.4.9
+      3   75.0%    JS: ^compileForInternalLoader node:internal/bootstrap/realm:385:27
+      3  100.0%      JS: ^requireBuiltin node:internal/bootstrap/realm:422:24
+      1   33.3%        JS: ~<anonymous> node:internal/streams/operators:1:1
+      1  100.0%          JS: ^compileForInternalLoader node:internal/bootstrap/realm:385:27
+      1  100.0%            JS: ^requireBuiltin node:internal/bootstrap/realm:422:24
+      1   33.3%        JS: ~<anonymous> node:internal/streams/duplex:1:1
+      1  100.0%          JS: ^compileForInternalLoader node:internal/bootstrap/realm:385:27
+      1  100.0%            JS: ^requireBuiltin node:internal/bootstrap/realm:422:24
+      1   33.3%        JS: ~<anonymous> node:internal/fs/streams:1:1
+      1  100.0%          JS: ^compileForInternalLoader node:internal/bootstrap/realm:385:27
+      1  100.0%            JS: ^requireBuiltin node:internal/bootstrap/realm:422:24
+      1   25.0%    JS: ~<anonymous> node:internal/main/run_main_module:1:1
+
+      4    3.6%  _IO_file_xsputn@@GLIBC_2.2.5
+      2   50.0%    JS: ^compileForInternalLoader node:internal/bootstrap/realm:385:27
+      2  100.0%      JS: ^requireBuiltin node:internal/bootstrap/realm:422:24
+      1   50.0%        JS: ~#cachedDefaultResolve node:internal/modules/esm/loader:723:24
+      1  100.0%          JS: ~resolve node:internal/modules/esm/loader:699:10
+      1  100.0%            JS: ~getModuleJobForImport node:internal/modules/esm/loader:309:30
+      1   50.0%        Builtin: CallApiCallbackGeneric
+      1  100.0%          JS: ^<anonymous> file:///home/user/tuulbelt/tools/property-validator/profiling/profile-primitive-arrays.js:1:1
+      1  100.0%            Builtin: GeneratorPrototypeNext
+      1   25.0%    JS: ~finalizeResolution node:internal/modules/esm/resolve:228:28
+      1  100.0%      JS: ~moduleResolve node:internal/modules/esm/resolve:826:23
+      1  100.0%        JS: ~defaultResolve node:internal/modules/esm/resolve:938:24
+      1  100.0%          JS: ~#cachedDefaultResolve node:internal/modules/esm/loader:723:24
+      1  100.0%            JS: ~resolve node:internal/modules/esm/loader:699:10
+      1   25.0%    Builtin: CallApiCallbackGeneric
+      1  100.0%      Builtin: CallApiCallbackGeneric
+      1  100.0%        JS: ^<anonymous> file:///home/user/tuulbelt/tools/property-validator/profiling/profile-primitive-arrays.js:1:1
+      1  100.0%          Builtin: GeneratorPrototypeNext
+      1  100.0%            Builtin: CallApiCallbackGeneric
+
+      2    1.8%  syscall@@GLIBC_2.2.5
+      1   50.0%    JS: ~<anonymous> node:internal/main/run_main_module:1:1
+      1   50.0%    JS: ^realpathSync node:fs:2710:22
+      1  100.0%      Script: ~<anonymous> file:///home/user/tuulbelt/tools/property-validator/dist/index.js:1:1
+      1  100.0%        Builtin: GeneratorPrototypeNext
+      1  100.0%          Builtin: CallApiCallbackGeneric
+      1  100.0%            JS: ~run node:internal/modules/esm/module_job:332:12
+
+      2    1.8%  std::ostream::sentry::sentry(std::ostream&)@@GLIBCXX_3.4
+      1   50.0%    JS: ^compileForInternalLoader node:internal/bootstrap/realm:385:27
+      1  100.0%      JS: ^requireBuiltin node:internal/bootstrap/realm:422:24
+      1  100.0%        JS: ~<anonymous> node:internal/fs/streams:1:1
+      1  100.0%          JS: ^compileForInternalLoader node:internal/bootstrap/realm:385:27
+      1  100.0%            JS: ^requireBuiltin node:internal/bootstrap/realm:422:24
+      1   50.0%    Builtin: CallApiCallbackGeneric
+      1  100.0%      Builtin: CallApiCallbackGeneric
+      1  100.0%        JS: ^<anonymous> file:///home/user/tuulbelt/tools/property-validator/profiling/profile-primitive-arrays.js:1:1
+      1  100.0%          Builtin: GeneratorPrototypeNext
+      1  100.0%            Builtin: CallApiCallbackGeneric
+
+      2    1.8%  Builtin: LoadIC
+      2  100.0%    JS: ^validateWithPath file:///home/user/tuulbelt/tools/property-validator/dist/index.js:235:33
+      2  100.0%      JS: ^validateFast file:///home/user/tuulbelt/tools/property-validator/dist/index.js:327:22
+      2  100.0%        JS: ^validate file:///home/user/tuulbelt/tools/property-validator/dist/index.js:356:25
+      2  100.0%          JS: ^<anonymous> file:///home/user/tuulbelt/tools/property-validator/profiling/profile-primitive-arrays.js:1:1
+      2  100.0%            Builtin: GeneratorPrototypeNext
+
+      2    1.8%  Builtin: KeyedLoadIC
+      1   50.0%    JS: ^validateWithPath file:///home/user/tuulbelt/tools/property-validator/dist/index.js:235:33
+      1  100.0%      JS: ^validateFast file:///home/user/tuulbelt/tools/property-validator/dist/index.js:327:22
+      1  100.0%        JS: ^validate file:///home/user/tuulbelt/tools/property-validator/dist/index.js:356:25
+      1  100.0%          JS: ^<anonymous> file:///home/user/tuulbelt/tools/property-validator/profiling/profile-primitive-arrays.js:1:1
+      1  100.0%            Builtin: GeneratorPrototypeNext
+      1   50.0%    JS: ^_validateWithPath file:///home/user/tuulbelt/tools/property-validator/dist/index.js:885:34
+      1  100.0%      JS: ^validateWithPath file:///home/user/tuulbelt/tools/property-validator/dist/index.js:235:33
+      1  100.0%        JS: ^validateFast file:///home/user/tuulbelt/tools/property-validator/dist/index.js:327:22
+      1  100.0%          JS: ^validate file:///home/user/tuulbelt/tools/property-validator/dist/index.js:356:25
+      1  100.0%            JS: ^<anonymous> file:///home/user/tuulbelt/tools/property-validator/profiling/profile-primitive-arrays.js:1:1
+
