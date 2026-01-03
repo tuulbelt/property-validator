@@ -1,163 +1,196 @@
-# Performance Baseline - v0.7.0
+# property-validator v0.7.0 Baseline (tatami-ng)
 
 **Date:** 2026-01-03
-**Version:** v0.7.0 (after Phase 1-3 optimizations, before v0.7.5)
-**Purpose:** Baseline for v0.7.5 micro-optimization research
-**Hardware:** Standard benchmark environment
-**Node.js:** v20.x
+**Version:** v0.7.0
+**Tool:** tatami-ng v0.8.18
+**Runtime:** Node.js v22.21.1
+**Platform:** Linux (x86_64)
+
+**Configuration:**
+- Samples: 256 per benchmark
+- Duration: 2 seconds per benchmark
+- Warm-up: Enabled (JIT optimization)
+- Outlier detection: Automatic
+- Target variance: <5%
 
 ---
 
-## 🎯 Purpose
-
-This baseline establishes performance metrics AFTER v0.7.0 Phase 1-3 optimizations. All v0.7.5 micro-optimizations must be compared against these numbers to ensure:
-
-1. ✅ **Zero regression** in any category
-2. ✅ **Targeted improvements** based on profiling data
-3. ✅ **Net positive** impact across all benchmark categories
-
-**Abort Trigger:** >5% regression in any category without compensating gains elsewhere
-
----
-
-## 📊 Baseline Performance (property-validator v0.7.0)
+## Benchmark Results Summary
 
 ### Primitives
 
-| Benchmark | ops/sec | Average (ns) | Margin | Status |
-|-----------|---------|--------------|--------|--------|
-| string (valid) | **2,933,305** | 340.91 | ±18.33% | 🟢 Baseline |
-| number (valid) | **3,605,943** | 277.32 | ±2.77% | 🟢 Baseline |
-| boolean (valid) | **3,543,817** | 282.18 | ±3.08% | 🟢 Baseline |
-| string (invalid) | **3,799,580** | 263.19 | ±2.45% | 🟢 Baseline |
+| Benchmark | time/iter | ops/sec | Variance | p50 | p75 | p99 |
+|-----------|-----------|---------|----------|-----|-----|-----|
+| string (valid) | 210.25 ns | 5.98M | ±1.11% | 146 ns | 235 ns | 585 ns |
+| number (valid) | 218.19 ns | 5.91M | ±0.94% | 145 ns | 237 ns | 664 ns |
+| boolean (valid) | 207.35 ns | 6.16M | ±0.90% | 141 ns | 226 ns | 625 ns |
+| string (invalid) | 235.42 ns | 5.37M | ±0.83% | 159 ns | 277 ns | 636 ns |
 
-**Average primitive performance:** ~3.5M ops/sec
+**Key Metrics:**
+- **Average variance:** ±0.95% (13.1x better than tinybench's ±19.4%)
+- **Fastest:** boolean (valid) at 6.16M ops/sec
+- **Relative performance:** boolean ~1.04x faster than string (valid)
 
 ### Objects
 
-| Benchmark | ops/sec | Average (ns) | Margin | Status |
-|-----------|---------|--------------|--------|--------|
-| simple (valid) | **1,794,721** | 557.19 | ±2.42% | 🟢 Baseline |
-| simple (invalid - missing) | **1,696,229** | 589.54 | ±1.65% | 🟢 Baseline |
-| simple (invalid - wrong type) | **1,767,436** | 565.79 | ±1.68% | 🟢 Baseline |
-| complex nested (valid) | **243,158** | 4112.54 | ±2.80% | 🟢 Baseline |
-| complex nested (invalid) | **445,756** | 2243.38 | ±2.56% | 🟢 Baseline |
+| Benchmark | time/iter | ops/sec | Variance | p50 | p75 | p99 |
+|-----------|-----------|---------|----------|-----|-----|-----|
+| simple (valid) | 386.67 ns | 3.06M | ±1.03% | 289 ns | 400 ns | 928 ns |
+| simple (invalid - missing) | 537.53 ns | 2.18M | ±0.74% | 403 ns | 570 ns | 1.26 µs |
+| simple (invalid - wrong type) | 469.74 ns | 2.52M | ±0.81% | 346 ns | 476 ns | 1.17 µs |
+| complex nested (valid) | 3.14 µs | 343K | ±0.37% | 2.83 µs | 3.13 µs | 5.94 µs |
+| complex nested (invalid - deep) | 2.19 µs | 504K | ±0.59% | 1.86 µs | 2.07 µs | 4.11 µs |
 
-**Valid simple object performance:** 1.79M ops/sec
+**Key Metrics:**
+- **Average variance:** ±0.71%
+- **Simple object validation:** 3.06M ops/sec
+- **Complex nested validation:** 343K ops/sec
+- **Early rejection advantage:** Invalid (deep) is ~1.43x faster than valid (deep)
 
 ### Arrays
 
-#### Object Arrays (Compiled)
+| Benchmark | time/iter | ops/sec | Variance | p50 | p75 | p99 |
+|-----------|-----------|---------|----------|-----|-----|-----|
+| **Compiled (object arrays)** |
+| small (10 items) | 5.63 µs | 194K | ±0.42% | 4.90 µs | 5.35 µs | 11.95 µs |
+| medium (100 items) | 52.49 µs | 20.5K | ±0.49% | 45.92 µs | 50.47 µs | 194.21 µs |
+| large (1000 items) | 505.74 µs | 2.03K | ±0.61% | 472.09 µs | 499.27 µs | 892.75 µs |
+| **Mixed arrays** |
+| small (10 items) | 3.18 µs | 344K | ±0.43% | 2.83 µs | 3.16 µs | 6.27 µs |
+| medium (100 items) | 19.46 µs | 55.7K | ±0.45% | 17.30 µs | 18.97 µs | 40.21 µs |
+| large (1000 items) | 176.95 µs | 5.93K | ±0.54% | 162.09 µs | 178.91 µs | 395.73 µs |
+| **Optimized (primitive arrays)** |
+| string[] small (10 items) | 1.10 µs | 1.02M | ±0.68% | 946 ns | 1.13 µs | 2.12 µs |
+| string[] medium (100 items) | 2.93 µs | 370K | ±0.39% | 2.57 µs | 2.82 µs | 5.70 µs |
+| string[] large (1000 items) | 17.54 µs | 60.2K | ±0.41% | 16.06 µs | 16.85 µs | 31.87 µs |
+| number[] small (10 items) | 1.03 µs | 1.07M | ±0.71% | 901 ns | 1.03 µs | 1.83 µs |
+| boolean[] small (10 items) | 1.04 µs | 1.06M | ±0.69% | 906 ns | 1.05 µs | 1.89 µs |
+| **Invalid arrays** |
+| early rejection | 1.18 µs | 932K | ±0.70% | 1.03 µs | 1.19 µs | 2.16 µs |
+| late rejection | 3.14 µs | 352K | ±0.40% | 2.71 µs | 3.01 µs | 6.38 µs |
 
-| Benchmark | ops/sec | Average (ns) | Margin | Status |
-|-----------|---------|--------------|--------|--------|
-| small (10 items) | **133,913** | 7467.54 | ±5.70% | 🟢 Baseline |
-| medium (100 items) | **33,268** | 30058.83 | ±2.70% | 🟢 Baseline |
-| large (1000 items) | **3,412** | 293097.30 | ±3.86% | 🟢 Baseline |
-
-#### Mixed Arrays
-
-| Benchmark | ops/sec | Average (ns) | Margin | Status |
-|-----------|---------|--------------|--------|--------|
-| small (10 items) | **169,033** | 5916.00 | ±3.02% | 🟢 Baseline |
-| medium (100 items) | **18,469** | 54143.33 | ±3.17% | 🟢 Baseline |
-| large (1000 items) | **1,938** | 515958.58 | ±2.89% | 🟢 Baseline |
-
-#### Primitive Arrays (Optimized)
-
-| Benchmark | ops/sec | Average (ns) | Margin | Status |
-|-----------|---------|--------------|--------|--------|
-| string[] small (10) | **876,638** | 1140.72 | ±1.97% | 🟢 Baseline |
-| string[] medium (100) | **737,696** | 1355.57 | ±1.74% | 🟢 Baseline |
-| string[] large (1000) | **312,930** | 3195.61 | ±6.27% | 🟢 Baseline |
-| number[] small (10) | **852,901** | 1172.47 | ±2.18% | 🟢 Baseline |
-| boolean[] small (10) | **769,171** | 1300.10 | ±9.61% | 🟢 Baseline |
-
-#### Array Edge Cases
-
-| Benchmark | ops/sec | Average (ns) | Margin | Status |
-|-----------|---------|--------------|--------|--------|
-| invalid (early rejection) | **1,631,353** | 612.99 | ±6.98% | 🟢 Baseline |
-| invalid (late rejection) | **302,584** | 3304.87 | ±2.89% | 🟢 Baseline |
+**Key Metrics:**
+- **Average variance:** ±0.53%
+- **Optimized arrays:** 5.2-5.7x faster than compiled object arrays
+- **Primitive arrays:** 1M+ ops/sec for small arrays
+- **Scaling:** Linear (10x items → ~10x time)
 
 ### Unions
 
-| Benchmark | ops/sec | Average (ns) | Margin | Status |
-|-----------|---------|--------------|--------|--------|
-| string match (1st) | **7,277,880** | 137.40 | ±0.53% | 🟢 Baseline |
-| number match (2nd) | **5,874,456** | 170.23 | ±2.05% | 🟢 Baseline |
-| boolean match (3rd) | **5,781,090** | 172.98 | ±2.10% | 🟢 Baseline |
-| no match (all fail) | **1,994,382** | 501.41 | ±2.43% | 🟢 Baseline |
+| Benchmark | time/iter | ops/sec | Variance | p50 | p75 | p99 |
+|-----------|-----------|---------|----------|-----|-----|-----|
+| string (1st option) | 113.50 ns | 10.36M | ±1.31% | 90 ns | 95 ns | 367 ns |
+| number (2nd option) | 132.79 ns | 9.07M | ±1.24% | 100 ns | 107 ns | 436 ns |
+| boolean (3rd option) | 142.60 ns | 8.51M | ±1.42% | 106 ns | 115 ns | 455 ns |
+| no match (all fail) | 453.57 ns | 2.54M | ±0.83% | 352 ns | 457 ns | 1.04 µs |
 
-**Average union performance:** ~6.2M ops/sec
+**Key Metrics:**
+- **Average variance:** ±1.20%
+- **Position matters:** 1st option is 1.26x faster than 3rd
+- **Fastest union:** 10.36M ops/sec (1st option match)
+- **All-fail overhead:** 4.00x slower than 1st option
 
-### Optional & Nullable
+### Optional/Nullable
 
-| Benchmark | ops/sec | Average (ns) | Margin | Status |
-|-----------|---------|--------------|--------|--------|
-| optional: present | **2,404,536** | 415.88 | ±1.78% | 🟢 Baseline |
-| optional: absent | **3,281,237** | 304.76 | ±0.32% | 🟢 Baseline |
-| nullable: non-null | **2,694,238** | 371.16 | ±1.10% | 🟢 Baseline |
-| nullable: null | **2,957,321** | 338.14 | ±0.79% | 🟢 Baseline |
+| Benchmark | time/iter | ops/sec | Variance | p50 | p75 | p99 |
+|-----------|-----------|---------|----------|-----|-----|-----|
+| optional: present | 379.06 ns | 3.33M | ±0.77% | 308 ns | 405 ns | 938 ns |
+| optional: absent | 370.93 ns | 3.46M | ±0.81% | 300 ns | 402 ns | 933 ns |
+| nullable: non-null | 395.18 ns | 3.27M | ±0.85% | 312 ns | 434 ns | 1.01 µs |
+| nullable: null | 368.18 ns | 3.59M | ±0.84% | 300 ns | 408 ns | 948 ns |
+
+**Key Metrics:**
+- **Average variance:** ±0.82%
+- **Absent values faster:** ~1.04x faster than present values
+- **Null values faster:** ~1.07x faster than optional present
 
 ### Refinements
 
-| Benchmark | ops/sec | Average (ns) | Margin | Status |
-|-----------|---------|--------------|--------|--------|
-| pass (single) | **3,617,409** | 276.44 | ±3.03% | 🟢 Baseline |
-| fail (single) | **2,772,938** | 360.63 | ±3.11% | 🟢 Baseline |
-| pass (chained) | **8,855,249** | 112.93 | ±2.96% | 🟢 Baseline |
-| fail (chained - 1st) | **6,436,913** | 155.35 | ±30.74% | ⚠️ High variance |
-| fail (chained - 2nd) | **7,021,390** | 142.42 | ±0.84% | 🟢 Baseline |
+| Benchmark | time/iter | ops/sec | Variance | p50 | p75 | p99 |
+|-----------|-----------|---------|----------|-----|-----|-----|
+| pass (single) | 232.11 ns | 5.46M | ±1.04% | 158 ns | 247 ns | 662 ns |
+| fail (single) | 273.32 ns | 4.58M | ±0.89% | 188 ns | 290 ns | 753 ns |
+| pass (chained) | 92.58 ns | 12.59M | ±1.32% | 75 ns | 80 ns | 259 ns |
+| fail (chained - 1st) | 105.68 ns | 11.42M | ±1.29% | 83 ns | 87 ns | 390 ns |
+| fail (chained - 2nd) | 108.09 ns | 10.66M | ±1.37% | 87 ns | 97 ns | 288 ns |
 
-**Average refinement performance:** ~5.7M ops/sec
+**Key Metrics:**
+- **Average variance:** ±1.18%
+- **Chained faster:** 2.51x faster than single refinement
+- **Fast path optimization:** Chained refinements benefit from early exits
 
----
+### Compiled
 
-## 📈 Performance Summary
+| Benchmark | time/iter | ops/sec | Variance | p50 | p75 | p99 |
+|-----------|-----------|---------|----------|-----|-----|-----|
+| simple object (valid) | 416.20 ns | 2.92M | ±1.09% | 295 ns | 465 ns | 1.02 µs |
+| simple object (invalid) | 484.68 ns | 2.43M | ±0.69% | 363 ns | 489 ns | 1.14 µs |
 
-**Strengths (vs v0.4.0):**
-- ✅ Objects: 1.79M ops/sec (was 1.47M in v0.4.0) - **+22% improvement**
-- ✅ Arrays: 134k ops/sec for object arrays (was ~48k in v0.4.0) - **+179% improvement**
-- ✅ Primitives: 3.5M ops/sec average
-- ✅ Unions: 6.2M ops/sec average
-- ✅ Refinements: 5.7M ops/sec average
-
-**v0.7.0 Optimizations Applied:**
-- Phase 1: Fast API design (pre-validated schemas)
-- Phase 2: Array compilation (pre-compiled validation functions)
-- Phase 3: CSP fallback (Content Security Policy compatibility)
-
-**Target for v0.7.5:**
-- +10-30% cumulative improvement via profiling-identified micro-optimizations
-- Focus on closing gap with valibot while maintaining zero-dependency principle
+**Key Metrics:**
+- **Average variance:** ±0.89%
+- **Compilation advantage:** Compiled validators ~4.5% slower than optimized (2.92M vs 3.06M)
 
 ---
 
-## 🔬 Profiling Insights (for v0.7.5)
+## Overall Statistics
 
-**Verified Bottlenecks (via V8 profiling):**
-1. validator._validateWithPath overhead - 4.3% CPU
-2. validateWithPath function overhead - 2.5-3.7% CPU
-3. Primitive validator closures - 1.4-3.4% CPU
-4. Fast API refinement loop - 1.6-2.3% CPU
+**Variance Analysis:**
+- **Average variance across all benchmarks:** ±0.86%
+- **Maximum variance:** ±1.42% (union: boolean match 3rd option)
+- **Minimum variance:** ±0.37% (object: complex nested valid)
+- **Target variance:** <5% ✅ ACHIEVED (13.1x better than tinybench's ±19.4%)
 
-**NOT Bottlenecks:**
-- WeakSet circular reference checks - 0% CPU
-- Depth/property counting - 0% CPU
+**Performance Tiers:**
+1. **Refinements (chained pass):** 12.59M ops/sec
+2. **Unions (1st match):** 10.36M ops/sec
+3. **Primitives (boolean):** 6.16M ops/sec
+4. **Objects (simple):** 3.06M ops/sec
+5. **Arrays (primitive, small):** 1.07M ops/sec
+6. **Arrays (object, small):** 194K ops/sec
+7. **Objects (complex nested):** 343K ops/sec
 
-See `profiling/ANALYSIS.md` for complete V8 profiling data.
+**Optimization Opportunities (for v0.7.5):**
+Based on this baseline, the following areas show potential for optimization:
+1. **Refinement loop overhead** - Empty refinement checks still iterate (Phase 1)
+2. **Fast API Result allocation** - Object creation on every validation (Phase 2)
+3. **Primitive validator closures** - Function call overhead (Phase 3)
+4. **Path building** - String concatenation overhead (Phase 4)
+
+**Stability Achievement:**
+- ✅ All benchmarks within target variance (<5%)
+- ✅ 13.1x more stable than tinybench
+- ✅ Ready for reliable optimization work
 
 ---
 
-## 📝 Version History
+## Comparison vs Competitors
 
-- **v0.4.0** (2026-01-02): Initial baseline before hybrid compilation
-- **v0.7.0** (2026-01-03): After Phase 1-3 optimizations (+179% array performance)
-- **v0.7.5** (In Progress): Micro-optimizations based on V8 profiling
+**See:** `BASELINE_COMPARISON.md` for complete head-to-head comparison with zod, yup, and valibot.
+
+**Quick Summary:**
+- **vs valibot:** 2.1x slower on primitives (optimization target), 4.3x faster on unions
+- **vs zod:** 5.9x faster on primitives, 1.9x faster on objects
+- **vs yup:** 7.2x faster on primitives, 16.4x faster on objects
+
+**v0.7.5 Goal:** Close the 1.6-3.1x performance gap with valibot while maintaining significant lead over zod/yup.
 
 ---
 
-**Last Updated:** 2026-01-03
-**Captured From:** `/tmp/v0.7.0-baseline.txt`
-**Next Update:** After v0.7.5 optimizations are finalized
+## Baseline Usage
+
+This baseline serves as the reference point for:
+1. **v0.7.5 optimization work** - Measure improvements against these numbers
+2. **Regression testing** - Ensure future changes don't degrade performance
+3. **Competitor comparison** - Documented in `BASELINE_COMPARISON.md`
+
+**Next Steps:**
+1. Implement v0.7.5 Phase 1: Skip empty refinement loop
+2. Benchmark after Phase 1 and compare to this baseline
+3. Document improvements in OPTIMIZATION_PLAN.md
+4. Iterate through remaining phases
+
+---
+
+**Generated:** 2026-01-03
+**Benchmark command:** `npm run bench`
+**Raw output:** `/tmp/pv-v0.7.0-complete-comparison.txt`
