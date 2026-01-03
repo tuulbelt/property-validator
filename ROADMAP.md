@@ -1,9 +1,9 @@
 # Property Validator Development Roadmap
 
 **Last Updated:** 2026-01-03
-**Current Version:** v0.7.0 (Code Generation Optimizations) 🎉
+**Current Version:** v0.7.5 (Profiling & Optimization Planning) 🔬
 **Target Version:** v1.0.0 (production ready)
-**Status:** 🟢 Active Development - **100% Win Rate vs Zod Achieved!** 🏆
+**Status:** 🟢 Active Development - **v0.7.5 Research Complete!** 📊
 
 ---
 
@@ -18,6 +18,7 @@
 | v0.5.0 | 📋 Planned | Built-in validators (email, url, date, etc.) | 0/70 | 0% |
 | v0.6.0 | ✅ **COMPLETE** | Hybrid compilation (23.5x array speedup!) | 511/511 ✅ | 100% |
 | v0.7.0 | ✅ **COMPLETE** | **Code generation (100% win rate vs zod!)** | 537/537 ✅ | 100% 🎉 |
+| v0.7.5 | 🔬 **RESEARCH COMPLETE** | **Profiling & optimization planning** | 537/537 ✅ | Planning |
 | v1.0.0 | 🎯 Target | Stable API, production ready, industry-leading | 581+ | - |
 
 **Overall Progress:** 537/537 tests (100%) - All phases complete!
@@ -1135,6 +1136,127 @@ Implement Phases 1-5 of the optimization plan to achieve competitive performance
 - [ ] Verify improvements in real-world workloads
 - [ ] Collect community feedback
 - [ ] Prepare v0.8.0 planning
+
+---
+
+## 🔬 v0.7.5 - Profiling & Optimization Planning
+
+**Status:** ✅ **RESEARCH COMPLETE** (2026-01-03)
+**Goal:** Profile validation performance and plan micro-optimizations to close remaining gaps with valibot
+**Tests:** 537/537 passing (no code changes, research only)
+**Breaking Changes:** None (planning phase)
+**Target Performance:** 10-30% cumulative improvement across phases
+
+### Overview
+
+While v0.7.0 achieved **100% win rate vs zod** (6/6 categories), valibot still outperforms in some areas:
+- **Primitives:** valibot 5-15x faster (26-44M vs 4M ops/sec)
+- **Objects (simple):** valibot 3-5x faster (5.5M vs 1.7M ops/sec)
+- **Object Arrays:** valibot 2-5x faster (220k vs 137k ops/sec for 10 items, 100k vs 16k for 100 items)
+
+**Research Questions:**
+1. What are the verified bottlenecks? (via V8 CPU profiling)
+2. What optimizations will have highest impact? (data-driven prioritization)
+3. Can we close the gap without sacrificing error quality?
+
+### Research Completed ✅
+
+#### Task 1: Competitive Implementation Research ✅
+- **Status:** COMPLETE (previous session)
+- **Findings:**
+  - **Valibot:** Exception-based errors (zero-cost happy path), modular design, functional composition
+  - **Zod v4:** Return original object (2x speedup), minimal allocations, type instantiation reduction
+  - **Decision:** Focus on matching/beating valibot performance while maintaining rich error messages
+
+#### Task 2: Profiling Scripts Created ✅
+- **Status:** COMPLETE (current session)
+- **Created Files:**
+  - `profiling/run-all-profiling.sh` - Automated profiling runner
+  - `profiling/profile-object-arrays.{ts,js}` - Worst case scenario (4.2x slower than valibot)
+  - `profiling/profile-primitive-arrays.{ts,js}` - Primitive arrays (2.9x slower)
+  - `profiling/profile-objects.{ts,js}` - Simple objects (1.8x slower)
+  - `profiling/profile-primitives.{ts,js}` - Primitives (1.9x slower)
+
+#### Task 3: V8 CPU Profiling Executed ✅
+- **Status:** COMPLETE (current session)
+- **Method:** `node --prof` + `node --prof-process`
+- **Generated Reports:**
+  - `profiling/object-arrays-profile.txt` (25KB)
+  - `profiling/primitive-arrays-profile.txt` (22KB)
+  - `profiling/objects-profile.txt` (25KB)
+  - `profiling/primitives-profile.txt` (22KB)
+
+#### Task 4: Bottleneck Analysis Complete ✅
+- **Status:** COMPLETE (current session)
+- **Document:** `profiling/ANALYSIS.md` (480 lines)
+
+**Verified Bottlenecks (via profiling):**
+1. ✅ `validator._validateWithPath` overhead - 4.3% CPU (Line 1221)
+2. ✅ `validateWithPath` function overhead - 2.5-3.7% CPU (Line 235)
+3. ✅ Primitive validator closures - 1.4-3.4% CPU (Lines 744, 752)
+4. ✅ Fast API refinement loop - 1.6-2.3% CPU (Line 145)
+
+**NOT Verified (did not appear in profiling):**
+- ❌ WeakSet circular reference checks - 0% CPU (too fast or not on critical path)
+- ❌ Depth/property counting - 0% CPU (too fast to measure)
+
+**Key Insight:** Most profiling time was in console.log (57-62% CPU) and C++ code. JavaScript validation only 8-15% of CPU, suggesting bottlenecks are **overhead per validation call**, not algorithmic complexity.
+
+#### Task 5: v0.7.5 Optimization Plan Designed ✅
+- **Status:** COMPLETE (current session)
+- **Document:** `OPTIMIZATION_PLAN.md` (+625 lines)
+
+**6 Micro-Optimization Phases Planned:**
+
+**High Priority (Quick Wins):**
+1. **Phase 1:** Skip empty refinement loop - Expected +5-10% (trivial, low risk)
+2. **Phase 2:** Eliminate Fast API Result allocation - Expected +10-15% (medium complexity)
+3. **Phase 3:** Inline primitive validation - Expected +15-20% (medium complexity)
+
+**Medium Priority (Complex):**
+4. **Phase 4:** Lazy path building (only on error) - Expected +10-15% (high complexity)
+5. **Phase 5:** Optimize primitive validator closures - Expected +5-10% (low impact)
+6. **Phase 6:** Inline validateWithPath for plain objects - Expected +10-15% (high complexity)
+
+**Overall Target:** 10-30% cumulative improvement to close gap with valibot from 1.6-4.2x to 1.2-3.0x
+
+**Principle:** One change → test → benchmark → commit (never batch changes)
+
+### Deliverables ✅
+
+- ✅ `profiling/ANALYSIS.md` - Comprehensive profiling analysis (480 lines)
+- ✅ `OPTIMIZATION_PLAN.md` - Updated with v0.7.5 phases (+625 lines)
+- ✅ 4 profiling scripts (TypeScript + JavaScript versions)
+- ✅ 4 V8 CPU profiling reports (~94KB total)
+- ✅ `profiling/run-all-profiling.sh` - Automated profiling runner
+
+### Acceptance Criteria ✅
+
+- [x] Competitive implementations researched (valibot, zod)
+- [x] Profiling scripts created and executed
+- [x] V8 CPU profiling completed for all 4 scenarios
+- [x] Bottlenecks verified with profiling data (not hypotheses)
+- [x] Optimization phases designed with clear targets
+- [x] `OPTIMIZATION_PLAN.md` updated with v0.7.5 plan
+- [x] All 537 tests still passing (no code changes)
+
+### Next Steps (v0.7.5 Implementation)
+
+**Phase 1-3: High Priority (Quick Wins)**
+- Execute Phases 1-3 in sequence (skip refinement loop, eliminate Result allocation, inline primitives)
+- Expected cumulative improvement: 30-45%
+- After Phase 3: Re-benchmark and decide if Phases 4-6 are needed
+
+**Phase 4-6: Medium Priority (Complex)**
+- Only execute if Phases 1-3 don't achieve 10-30% target
+- Phases 4-6 have higher complexity and risk
+
+**Phases 7-8: Reserved for New Insights**
+- If profiling reveals new bottlenecks after early phases
+- Adaptive planning based on actual results
+
+**Completion Date:** 2026-01-03 (Research complete, implementation TBD)
+**Commit:** c0f9392
 
 ---
 
