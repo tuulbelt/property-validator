@@ -644,30 +644,62 @@ function compilePropertyValidator<T>(validator: Validator<T>): (data: unknown) =
 function compileObjectValidator<T extends Record<string, unknown>>(
   shape: { [K in keyof T]: Validator<T[K]> }
 ): (data: unknown) => boolean {
-  // PHASE 2 OPTIMIZATION: Use parallel arrays instead of array of objects
-  const keys: string[] = [];
-  const validators: Array<(value: unknown) => boolean> = [];
+  // PHASE 3 OPTIMIZATION: Generate optimized code with inline property access
+  // This allows V8 to optimize direct property access (obj.name vs obj[key])
 
-  // PHASE 2: Use for...in instead of Object.entries()
+  const checks: string[] = [];
+  const validatorClosures: Record<string, (value: unknown) => boolean> = {};
+
   for (const key in shape) {
-    keys.push(key);
-    validators.push(compilePropertyValidator(shape[key]));
+    const validator = shape[key];
+    const checkCode = generatePropertyCheck(key, validator, validatorClosures);
+    checks.push(checkCode);
   }
 
-  // Return compiled validation function (ZERO allocations at runtime)
-  return (data: unknown): boolean => {
-    // Type check
+  // Generate optimized function with inline checks
+  const fnBody = `
     if (typeof data !== 'object' || data === null) return false;
-
-    const obj = data as Record<string, unknown>;
-
-    // PHASE 2: Direct array access, no destructuring
-    for (let i = 0; i < keys.length; i++) {
-      if (!validators[i](obj[keys[i]])) return false;
-    }
-
+    const obj = data;
+    ${checks.join('\n    ')}
     return true;
-  };
+  `;
+
+  // Create function with validators in closure scope
+  const fn = new Function('validatorClosures', `
+    return function(data) {
+      ${fnBody}
+    }
+  `)(validatorClosures) as (data: unknown) => boolean;
+
+  return fn;
+}
+
+/**
+ * Generate inline property check code for Phase 3 optimization.
+ * For primitives: inline type checks
+ * For complex types: use closure validator
+ */
+function generatePropertyCheck(
+  key: string,
+  validator: Validator<any>,
+  validatorClosures: Record<string, (value: unknown) => boolean>
+): string {
+  const type = validator._type;
+  const safeName = key.replace(/[^a-zA-Z0-9_]/g, '_'); // Sanitize for closure names
+
+  // Inline primitive checks (fastest - V8 optimizes these)
+  if (type === 'string') {
+    return `if (typeof obj.${key} !== 'string') return false;`;
+  } else if (type === 'number') {
+    return `if (typeof obj.${key} !== 'number' || Number.isNaN(obj.${key})) return false;`;
+  } else if (type === 'boolean') {
+    return `if (typeof obj.${key} !== 'boolean') return false;`;
+  }
+
+  // For complex validators, use closure (compiled validator function)
+  const compiledValidator = compilePropertyValidator(validator);
+  validatorClosures[`v_${safeName}`] = compiledValidator;
+  return `if (!validatorClosures.v_${safeName}(obj.${key})) return false;`;
 }
 
 /**
