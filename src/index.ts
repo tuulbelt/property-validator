@@ -24,13 +24,13 @@ export class ValidationError {
 
   constructor(options: {
     message: string;
-    path?: string[];
+    path?: readonly string[] | string[];
     value?: unknown;
     expected?: string;
     code?: string;
   }) {
     this.message = options.message;
-    this.path = options.path || [];
+    this.path = options.path ? [...options.path] : []; // Convert readonly to mutable copy
     this.value = options.value;
     this.expected = options.expected || '';
     this.code = options.code || 'VALIDATION_ERROR';
@@ -203,7 +203,7 @@ export interface Validator<T> {
   _default?: T | (() => T);  // Internal: default value or function
   _type?: string;  // Internal: validator type for optimizations
   _hasRefinements?: boolean;  // Internal: whether validator has refinements
-  _validateWithPath?: (data: unknown, path: string[], seen: WeakSet<object>, depth: number, options: ValidationOptions) => Result<T>;  // Internal: path-aware validation
+  _validateWithPath?: (data: unknown, path: readonly string[] | string[], seen: WeakSet<object>, depth: number, options: ValidationOptions) => Result<T>;  // Internal: path-aware validation
 }
 
 /**
@@ -317,7 +317,7 @@ function createValidator<T>(
       );
 
       // Delegate path-aware validation to wrapped validator
-      optionalValidator._validateWithPath = (data: unknown, path: string[], seen: WeakSet<object>, depth: number, options: ValidationOptions): Result<T | undefined> => {
+      optionalValidator._validateWithPath = (data: unknown, path: readonly string[] | string[], seen: WeakSet<object>, depth: number, options: ValidationOptions): Result<T | undefined> => {
         if (data === undefined) {
           return { ok: true, value: undefined as T | undefined };
         }
@@ -335,7 +335,7 @@ function createValidator<T>(
       );
 
       // Delegate path-aware validation to wrapped validator
-      nullableValidator._validateWithPath = (data: unknown, path: string[], seen: WeakSet<object>, depth: number, options: ValidationOptions): Result<T | null> => {
+      nullableValidator._validateWithPath = (data: unknown, path: readonly string[] | string[], seen: WeakSet<object>, depth: number, options: ValidationOptions): Result<T | null> => {
         if (data === null) {
           return { ok: true, value: null as T | null };
         }
@@ -354,7 +354,7 @@ function createValidator<T>(
       );
 
       // Delegate path-aware validation to wrapped validator
-      nullishValidator._validateWithPath = (data: unknown, path: string[], seen: WeakSet<object>, depth: number, options: ValidationOptions): Result<T | undefined | null> => {
+      nullishValidator._validateWithPath = (data: unknown, path: readonly string[] | string[], seen: WeakSet<object>, depth: number, options: ValidationOptions): Result<T | undefined | null> => {
         if (data === undefined || data === null) {
           return { ok: true, value: data as T | undefined | null };
         }
@@ -388,7 +388,7 @@ function createValidator<T>(
 export function validateWithPath<T>(
   validator: Validator<T>,
   data: unknown,
-  path: string[] = [],
+  path: readonly string[] | string[] = [],
   seen: WeakSet<object> = new WeakSet(),
   depth: number = 0,
   options: ValidationOptions = {}
@@ -714,7 +714,7 @@ function createFallbackObjectValidator<T extends Record<string, unknown>>(
 
     // Validate each property (early exit on failure)
     for (let i = 0; i < compiledValidators.length; i++) {
-      const { key, validator } = compiledValidators[i];
+      const { key, validator } = compiledValidators[i]!; // Non-null assertion: i is always valid due to loop bounds
       if (!validator(obj[key])) return false;
     }
 
@@ -1145,7 +1145,7 @@ export const v = {
           return baseValidator.default(value);
         },
 
-        _validateWithPath(data: unknown, path: string[], seen: WeakSet<object>, depth: number, options: ValidationOptions): Result<T[]> {
+        _validateWithPath(data: unknown, path: readonly string[] | string[], seen: WeakSet<object>, depth: number, options: ValidationOptions): Result<T[]> {
           if (!Array.isArray(data)) {
             const details = new ValidationError({
               message: `Expected array, got ${getTypeName(data)}`,
@@ -1381,7 +1381,7 @@ export const v = {
     );
 
     // Path-aware validation for tuple elements
-    validator._validateWithPath = (data: unknown, path: string[], seen: WeakSet<object>, depth: number, options: ValidationOptions): Result<TupleType<T>> => {
+    validator._validateWithPath = (data: unknown, path: readonly string[] | string[], seen: WeakSet<object>, depth: number, options: ValidationOptions): Result<TupleType<T>> => {
       if (!Array.isArray(data)) {
         const details = new ValidationError({
           message: `Expected tuple (array), got ${getTypeName(data)}`,
@@ -1534,7 +1534,7 @@ export const v = {
     // If no transforms, leave _transform undefined → compileArrayTransform uses optimized path
 
     // Path-aware validation for nested errors
-    validator._validateWithPath = (data: unknown, path: string[], seen: WeakSet<object>, depth: number, options: ValidationOptions): Result<T> => {
+    validator._validateWithPath = (data: unknown, path: readonly string[] | string[], seen: WeakSet<object>, depth: number, options: ValidationOptions): Result<T> => {
       if (typeof data !== 'object' || data === null) {
         const details = new ValidationError({
           message: `Expected object, got ${getTypeName(data)}`,
@@ -1755,7 +1755,7 @@ export const v = {
     );
 
     // Delegate path-aware validation to the wrapped validator
-    lazyValidator._validateWithPath = (data: unknown, path: string[], seen: WeakSet<object>, depth: number, options: ValidationOptions): Result<T> => {
+    lazyValidator._validateWithPath = (data: unknown, path: readonly string[] | string[], seen: WeakSet<object>, depth: number, options: ValidationOptions): Result<T> => {
       const validator = getValidator();
       return validateWithPath(validator, data, path, seen, depth, options);
     };
