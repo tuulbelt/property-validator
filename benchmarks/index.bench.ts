@@ -1,12 +1,19 @@
 #!/usr/bin/env node --import tsx
 /**
- * Property Validator - Main Benchmark Suite
+ * Property Validator - Main Benchmark Suite (tatami-ng)
  *
- * Benchmarks core validation operations using tinybench.
+ * Benchmarks core validation operations using tatami-ng for statistical rigor.
  * Run: npm run bench
+ *
+ * Why tatami-ng over tinybench:
+ * - Statistical significance testing (p-values, confidence intervals)
+ * - Automatic outlier detection and removal
+ * - Variance, standard deviation, error margin built-in
+ * - Designed for <5% variance (vs tinybench's ±19.4% variance)
+ * - See docs/BENCHMARKING_MIGRATION.md for details
  */
 
-import { Bench } from 'tinybench';
+import { bench, baseline, group, run } from 'tatami-ng';
 import { readFileSync } from 'node:fs';
 import { v, validate, compile } from '../src/index.ts';
 
@@ -49,268 +56,263 @@ const ComplexSchema = v.object({
 const RefineSchema = v.number().refine(n => n > 0, 'Must be positive').refine(n => n < 100, 'Must be less than 100');
 
 // ============================================================================
-// Benchmark Suite
+// Benchmark Groups
 // ============================================================================
 
-const bench = new Bench({
-  time: 100, // Minimum 100ms per benchmark
-  warmupIterations: 5,
-  warmupTime: 100,
-});
+let result: any; // Prevent dead code elimination
 
 // ----------------------------------------------------------------------------
-// Primitive Validation
+// Group: Primitive Validation
 // ----------------------------------------------------------------------------
 
-let result: any; // Prevent DCE
-
-bench.add('primitive: string (valid)', () => {
-  result = validate(v.string(), 'hello world');
-});
-
-bench.add('primitive: number (valid)', () => {
-  result = validate(v.number(), 42);
-});
-
-bench.add('primitive: boolean (valid)', () => {
-  result = validate(v.boolean(), true);
-});
-
-bench.add('primitive: string (invalid)', () => {
-  result = validate(v.string(), 123);
-});
-
-// ----------------------------------------------------------------------------
-// Object Validation
-// ----------------------------------------------------------------------------
-
-bench.add('object: simple (valid)', () => {
-  result = validate(UserSchema, { name: 'Alice', age: 30, email: 'alice@example.com' });
-});
-
-bench.add('object: simple (invalid - missing field)', () => {
-  result = validate(UserSchema, { name: 'Alice', age: 30 });
-});
-
-bench.add('object: simple (invalid - wrong type)', () => {
-  result = validate(UserSchema, { name: 'Alice', age: 'thirty', email: 'alice@example.com' });
-});
-
-bench.add('object: complex nested (valid)', () => {
-  result = validate(ComplexSchema, {
-    id: 1,
-    name: 'Test',
-    metadata: {
-      tags: ['foo', 'bar'],
-      priority: 'high',
-      createdAt: Date.now(),
-    },
-    settings: {
-      theme: 'dark',
-      notifications: true,
-    },
+group('Primitives', () => {
+  baseline('primitive: string (valid)', () => {
+    result = validate(v.string(), 'hello world');
   });
-});
 
-bench.add('object: complex nested (invalid - deep)', () => {
-  result = validate(ComplexSchema, {
-    id: 1,
-    name: 'Test',
-    metadata: {
-      tags: ['foo', 'bar'],
-      priority: 'invalid',
-      createdAt: Date.now(),
-    },
+  bench('primitive: number (valid)', () => {
+    result = validate(v.number(), 42);
+  });
+
+  bench('primitive: boolean (valid)', () => {
+    result = validate(v.boolean(), true);
+  });
+
+  bench('primitive: string (invalid)', () => {
+    result = validate(v.string(), 123);
   });
 });
 
 // ----------------------------------------------------------------------------
-// Array Validation
+// Group: Object Validation
 // ----------------------------------------------------------------------------
 
-// OBJECT ARRAYS (direct array of objects - tests compilation)
-const userArraySmall = Array(10).fill({ name: 'Alice', age: 30, email: 'alice@example.com' });
-const userArrayMedium = Array(100).fill({ name: 'Bob', age: 25, email: 'bob@example.com' });
-const userArrayLarge = Array(1000).fill({ name: 'Charlie', age: 35, email: 'charlie@example.com' });
+group('Objects', () => {
+  baseline('object: simple (valid)', () => {
+    result = validate(UserSchema, { name: 'Alice', age: 30, email: 'alice@example.com' });
+  });
 
-bench.add('array: OBJECTS small (10 items) - COMPILED', () => {
-  result = validate(v.array(UserSchema), userArraySmall);
-});
+  bench('object: simple (invalid - missing field)', () => {
+    result = validate(UserSchema, { name: 'Alice', age: 30 });
+  });
 
-bench.add('array: OBJECTS medium (100 items) - COMPILED', () => {
-  result = validate(v.array(UserSchema), userArrayMedium);
-});
+  bench('object: simple (invalid - wrong type)', () => {
+    result = validate(UserSchema, { name: 'Alice', age: 'thirty', email: 'alice@example.com' });
+  });
 
-bench.add('array: OBJECTS large (1000 items) - COMPILED', () => {
-  result = validate(v.array(UserSchema), userArrayLarge);
-});
+  bench('object: complex nested (valid)', () => {
+    result = validate(ComplexSchema, {
+      id: 1,
+      name: 'Test',
+      metadata: {
+        tags: ['tag1', 'tag2'],
+        priority: 'high',
+        createdAt: Date.now(),
+      },
+      settings: {
+        theme: 'dark',
+        notifications: true,
+      },
+    });
+  });
 
-// Legacy benchmark (object wrapping array)
-bench.add('array: small (10 items)', () => {
-  result = validate(UsersListSchema, small);
-});
-
-bench.add('array: medium (100 items)', () => {
-  result = validate(UsersListSchema, medium);
-});
-
-bench.add('array: large (1000 items)', () => {
-  result = validate(UsersListSchema, large);
-});
-
-// Primitive array benchmarks (test hybrid compilation optimization)
-const stringArraySmall = Array(10).fill('test');
-const stringArrayMedium = Array(100).fill('test');
-const stringArrayLarge = Array(1000).fill('test');
-const numberArraySmall = Array(10).fill(42);
-const booleanArraySmall = Array(10).fill(true);
-
-bench.add('array: string[] small (10 items) - OPTIMIZED', () => {
-  result = validate(v.array(v.string()), stringArraySmall);
-});
-
-bench.add('array: string[] medium (100 items) - OPTIMIZED', () => {
-  result = validate(v.array(v.string()), stringArrayMedium);
-});
-
-bench.add('array: string[] large (1000 items) - OPTIMIZED', () => {
-  result = validate(v.array(v.string()), stringArrayLarge);
-});
-
-bench.add('array: number[] small (10 items) - OPTIMIZED', () => {
-  result = validate(v.array(v.number()), numberArraySmall);
-});
-
-bench.add('array: boolean[] small (10 items) - OPTIMIZED', () => {
-  result = validate(v.array(v.boolean()), booleanArraySmall);
-});
-
-bench.add('array: invalid (early rejection)', () => {
-  const invalidData = {
-    users: [
-      null, // Invalid at index 0
-      ...small.users,
-    ],
-  };
-  result = validate(UsersListSchema, invalidData);
-});
-
-bench.add('array: invalid (late rejection)', () => {
-  const invalidData = {
-    users: [
-      ...small.users.slice(0, 9),
-      { name: 'Invalid', age: 'not a number', email: 'invalid@example.com' }, // Invalid at index 9
-    ],
-  };
-  result = validate(UsersListSchema, invalidData);
+  bench('object: complex nested (invalid - deep)', () => {
+    result = validate(ComplexSchema, {
+      id: 1,
+      name: 'Test',
+      metadata: {
+        tags: ['tag1', 'tag2'],
+        priority: 'invalid', // Wrong literal value
+        createdAt: Date.now(),
+      },
+    });
+  });
 });
 
 // ----------------------------------------------------------------------------
-// Union Validation
+// Group: Array Validation
 // ----------------------------------------------------------------------------
 
-const UnionSchema = v.union([v.string(), v.number(), v.boolean()]);
+group('Arrays', () => {
+  baseline('array: OBJECTS small (10 items) - COMPILED', () => {
+    result = validate(UsersListSchema, small);
+  });
 
-bench.add('union: string match (1st option)', () => {
-  result = validate(UnionSchema, 'hello');
-});
+  bench('array: OBJECTS medium (100 items) - COMPILED', () => {
+    result = validate(UsersListSchema, medium);
+  });
 
-bench.add('union: number match (2nd option)', () => {
-  result = validate(UnionSchema, 42);
-});
+  bench('array: OBJECTS large (1000 items) - COMPILED', () => {
+    result = validate(UsersListSchema, large);
+  });
 
-bench.add('union: boolean match (3rd option)', () => {
-  result = validate(UnionSchema, true);
-});
+  bench('array: small (10 items)', () => {
+    result = validate(v.array(v.union([v.string(), v.number(), v.boolean()])), [
+      'a', 1, 'b', 2, 'c', 3, 'd', 4, 'e', 5
+    ]);
+  });
 
-bench.add('union: no match (all options fail)', () => {
-  result = validate(UnionSchema, null);
+  bench('array: medium (100 items)', () => {
+    const data = Array(100).fill(null).map((_, i) => i % 3 === 0 ? `str${i}` : i % 3 === 1 ? i : true);
+    result = validate(v.array(v.union([v.string(), v.number(), v.boolean()])), data);
+  });
+
+  bench('array: large (1000 items)', () => {
+    const data = Array(1000).fill(null).map((_, i) => i % 3 === 0 ? `str${i}` : i % 3 === 1 ? i : true);
+    result = validate(v.array(v.union([v.string(), v.number(), v.boolean()])), data);
+  });
+
+  bench('array: string[] small (10 items) - OPTIMIZED', () => {
+    result = validate(v.array(v.string()), ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j']);
+  });
+
+  bench('array: string[] medium (100 items) - OPTIMIZED', () => {
+    const data = Array(100).fill(null).map((_, i) => `str${i}`);
+    result = validate(v.array(v.string()), data);
+  });
+
+  bench('array: string[] large (1000 items) - OPTIMIZED', () => {
+    const data = Array(1000).fill(null).map((_, i) => `str${i}`);
+    result = validate(v.array(v.string()), data);
+  });
+
+  bench('array: number[] small (10 items) - OPTIMIZED', () => {
+    result = validate(v.array(v.number()), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+  });
+
+  bench('array: boolean[] small (10 items) - OPTIMIZED', () => {
+    result = validate(v.array(v.boolean()), [true, false, true, false, true, false, true, false, true, false]);
+  });
+
+  bench('array: invalid (early rejection)', () => {
+    result = validate(v.array(v.string()), ['valid', 'valid', 123, 'more']); // Fail at index 2
+  });
+
+  bench('array: invalid (late rejection)', () => {
+    const invalidData = {
+      users: [
+        ...small.users.slice(0, 9),
+        { name: 'Invalid', age: 'not a number', email: 'invalid@example.com' }, // Invalid at index 9
+      ],
+    };
+    result = validate(UsersListSchema, invalidData);
+  });
 });
 
 // ----------------------------------------------------------------------------
-// Optional / Nullable
+// Group: Union Validation
 // ----------------------------------------------------------------------------
 
-bench.add('optional: present', () => {
-  result = validate(v.optional(v.string()), 'value');
-});
+group('Unions', () => {
+  const UnionSchema = v.union([v.string(), v.number(), v.boolean()]);
 
-bench.add('optional: absent', () => {
-  result = validate(v.optional(v.string()), undefined);
-});
+  baseline('union: string match (1st option)', () => {
+    result = validate(UnionSchema, 'hello');
+  });
 
-bench.add('nullable: non-null', () => {
-  result = validate(v.nullable(v.number()), 42);
-});
+  bench('union: number match (2nd option)', () => {
+    result = validate(UnionSchema, 42);
+  });
 
-bench.add('nullable: null', () => {
-  result = validate(v.nullable(v.number()), null);
-});
+  bench('union: boolean match (3rd option)', () => {
+    result = validate(UnionSchema, true);
+  });
 
-// ----------------------------------------------------------------------------
-// Refinements
-// ----------------------------------------------------------------------------
-
-bench.add('refinement: pass (single)', () => {
-  const schema = v.number().refine(n => n > 0, 'Must be positive');
-  result = validate(schema, 42);
-});
-
-bench.add('refinement: fail (single)', () => {
-  const schema = v.number().refine(n => n > 0, 'Must be positive');
-  result = validate(schema, -5);
-});
-
-bench.add('refinement: pass (chained)', () => {
-  result = validate(RefineSchema, 50);
-});
-
-bench.add('refinement: fail (chained - 1st)', () => {
-  result = validate(RefineSchema, -10);
-});
-
-bench.add('refinement: fail (chained - 2nd)', () => {
-  result = validate(RefineSchema, 150);
+  bench('union: no match (all options fail)', () => {
+    result = validate(UnionSchema, null);
+  });
 });
 
 // ----------------------------------------------------------------------------
-// Schema Compilation (v0.4.0 optimization)
+// Group: Optional / Nullable
 // ----------------------------------------------------------------------------
 
-const compiledSchema = compile(UserSchema);
+group('Optional/Nullable', () => {
+  baseline('optional: present', () => {
+    result = validate(v.optional(v.string()), 'value');
+  });
 
-bench.add('compiled: simple object (valid)', () => {
-  result = validate(compiledSchema, { name: 'Alice', age: 30, email: 'alice@example.com' });
+  bench('optional: absent', () => {
+    result = validate(v.optional(v.string()), undefined);
+  });
+
+  bench('nullable: non-null', () => {
+    result = validate(v.nullable(v.number()), 42);
+  });
+
+  bench('nullable: null', () => {
+    result = validate(v.nullable(v.number()), null);
+  });
 });
 
-bench.add('compiled: simple object (invalid)', () => {
-  result = validate(compiledSchema, { name: 'Alice', age: 'thirty', email: 'alice@example.com' });
+// ----------------------------------------------------------------------------
+// Group: Refinements
+// ----------------------------------------------------------------------------
+
+group('Refinements', () => {
+  baseline('refinement: pass (single)', () => {
+    const schema = v.number().refine(n => n > 0, 'Must be positive');
+    result = validate(schema, 42);
+  });
+
+  bench('refinement: fail (single)', () => {
+    const schema = v.number().refine(n => n > 0, 'Must be positive');
+    result = validate(schema, -5);
+  });
+
+  bench('refinement: pass (chained)', () => {
+    result = validate(RefineSchema, 50);
+  });
+
+  bench('refinement: fail (chained - 1st)', () => {
+    result = validate(RefineSchema, -10);
+  });
+
+  bench('refinement: fail (chained - 2nd)', () => {
+    result = validate(RefineSchema, 150);
+  });
+});
+
+// ----------------------------------------------------------------------------
+// Group: Schema Compilation (v0.4.0 optimization)
+// ----------------------------------------------------------------------------
+
+group('Compiled', () => {
+  const compiledSchema = compile(UserSchema);
+
+  baseline('compiled: simple object (valid)', () => {
+    result = compiledSchema({ name: 'Alice', age: 30, email: 'alice@example.com' });
+  });
+
+  bench('compiled: simple object (invalid)', () => {
+    result = compiledSchema({ name: 'Alice', age: 'thirty', email: 'alice@example.com' });
+  });
 });
 
 // ============================================================================
 // Run Benchmarks
 // ============================================================================
 
-console.log('🔥 Property Validator Benchmarks\n');
-console.log('Running benchmarks (this may take a minute)...\n');
+console.log('🔥 Property Validator Benchmarks (tatami-ng)\n');
+console.log('Running benchmarks with statistical rigor...\n');
+console.log('Configuration:');
+console.log('  - Samples: 256 (vs tinybench: ~70-90k)');
+console.log('  - Time: 2 seconds per benchmark (vs tinybench: 100ms)');
+console.log('  - Warm-up: Enabled (JIT optimization)');
+console.log('  - Outlier detection: Automatic');
+console.log('  - Statistics: p-values, variance, std dev, error margin\n');
 
-await bench.warmup();
-await bench.run();
-
-// ============================================================================
-// Results
-// ============================================================================
-
-console.log('\n📊 Results:\n');
-console.table(
-  bench.tasks.map((task) => ({
-    'Benchmark': task.name,
-    'ops/sec': task.result?.hz ? task.result.hz.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',') : 'N/A',
-    'Average (ns)': task.result?.mean ? (task.result.mean * 1_000_000).toFixed(2) : 'N/A',
-    'Margin': task.result?.rme ? `±${task.result.rme.toFixed(2)}%` : 'N/A',
-    'Samples': task.result?.samples?.length || 'N/A',
-  }))
-);
+await run({
+  units: false,       // Don't show unit reference (ops/sec is clear enough)
+  silent: false,      // Show progress
+  json: false,        // Human-readable output
+  samples: 256,       // More samples = more stable results
+  time: 2_000_000_000, // 2 seconds per benchmark (vs 100ms)
+  warmup: true,       // Enable warm-up iterations for JIT
+  latency: true,      // Show time per iteration
+  throughput: true,   // Show operations per second
+});
 
 console.log('\n✅ Benchmark complete!');
-console.log('\nℹ️  Run `npm run bench:compare` to compare against zod and yup.\n');
+console.log('\nℹ️  Variance should be <5% with tatami-ng (vs ±19.4% with tinybench)');
+console.log('ℹ️  Run `npm run bench:compare` to compare against zod and yup.\n');
