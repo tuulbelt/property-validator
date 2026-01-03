@@ -1,0 +1,19 @@
+{
+  "name": "property-validator-benchmarks",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Performance benchmarks for property-validator",
+  "scripts": {
+    "bench": "node --import tsx index.bench.ts",
+    "bench:compare": "node --import tsx index.bench.ts && echo '\n--- Competitor Comparison ---\n' && node --import tsx competitors/zod.bench.ts && node --import tsx competitors/yup.bench.ts && node --import tsx competitors/valibot.bench.ts",
+    "bench:fast": "node --import tsx fast-boolean-api.bench.ts"
+  },
+  "devDependencies": {
+    "tatami-ng": "^0.8.18",
+    "tsx": "^4.19.2",
+    "valibot": "^0.42.1",
+    "yup": "^1.6.0",
+    "zod": "^3.24.1"
+  }
+}

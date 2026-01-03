@@ -27,3 +27,5 @@ coverage/
 tmp/
 temp/
 *.tmp
+demo-files/
+benchmarks/v8-trace-output.txt

@@ -49,9 +49,9 @@ demo_commands() {
   cat demo-files/valid-user.json
   sleep 1
   echo ""
-  echo "$ propval < demo-files/valid-user.json"
+  echo "$ propval \"\$(cat demo-files/valid-user.json)\""
   sleep 0.5
-  propval < demo-files/valid-user.json
+  propval "$(cat demo-files/valid-user.json)"
   sleep 2
 
   echo ""
@@ -61,9 +61,9 @@ demo_commands() {
   cat demo-files/invalid-user.json
   sleep 1
   echo ""
-  echo "$ propval < demo-files/invalid-user.json"
+  echo "$ propval \"\$(cat demo-files/invalid-user.json)\""
   sleep 0.5
-  propval < demo-files/invalid-user.json || true
+  propval "$(cat demo-files/invalid-user.json)" || true
   sleep 2
 
   echo ""
