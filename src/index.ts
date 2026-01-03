@@ -263,8 +263,8 @@ function createValidator<T>(
         return false;
       }
 
-      // Phase 1 Optimization: Skip refinement loop via short-circuit OR
-      return refinements.length === 0 || refinements.every((refinement) => refinement.predicate(data));
+      // Then check all refinements
+      return refinements.every((refinement) => refinement.predicate(data));
     },
 
     error(data: unknown): string {
@@ -1005,8 +1005,8 @@ export const v = {
           // RUNTIME: Use pre-compiled validator (ZERO conditionals!)
           if (!compiledValidate(data)) return false;
 
-          // Phase 1 Optimization: Skip refinement loop via short-circuit OR
-          return refinements.length === 0 || refinements.every((refinement) => refinement.predicate(data));
+          // Check all refinements
+          return refinements.every((refinement) => refinement.predicate(data));
         },
 
         error(data: unknown): string {
