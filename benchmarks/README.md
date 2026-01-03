@@ -69,11 +69,17 @@ Property-validator provides **two separate validation APIs** for different use c
 
 ## Benchmark Environment
 
-- **Tool:** tinybench v2.9.0
+- **Tool:** tatami-ng v0.8.18 (migrated from tinybench for statistical rigor)
 - **Runtime:** Node.js v22.21.1
-- **Warmup:** 5 iterations, 100ms
-- **Minimum time:** 100ms per benchmark
+- **Configuration:**
+  - 256 samples per benchmark
+  - 2 seconds per benchmark (vs tinybench's 100ms)
+  - Automatic warmup for JIT optimization
+  - Automatic outlier detection and removal
+  - Target variance: <5% (achieved: ±1.54% maximum)
 - **Platform:** Linux (x86_64)
+
+> **Migration Note:** Previously used tinybench v2.9.0 which showed ±19.4% variance for unions, making optimization work unreliable. Migrated to tatami-ng for criterion-equivalent statistical rigor. See [BENCHMARKING_MIGRATION.md](./docs/BENCHMARKING_MIGRATION.md) for details.
 
 ## Performance Summary
 
@@ -306,13 +312,14 @@ When adding new features to property-validator:
 
 ## References
 
+- [BENCHMARKING_MIGRATION.md](./docs/BENCHMARKING_MIGRATION.md) - Why we migrated from tinybench to tatami-ng
 - [BENCHMARKING_STANDARDS.md](../../docs/BENCHMARKING_STANDARDS.md) - Universal Tuulbelt benchmarking framework
-- [tinybench Documentation](https://github.com/tinylibs/tinybench)
+- [tatami-ng Documentation](https://github.com/poolifier/tatami-ng) - Criterion-equivalent benchmarking for Node.js
 - [Zod Performance](https://zod.dev)
 - [Yup Documentation](https://github.com/jquense/yup)
 
 ---
 
-**Last Updated:** 2026-01-02
-**Benchmark Version:** v0.6.0
-**property-validator Version:** v0.6.0
+**Last Updated:** 2026-01-03 (migrated to tatami-ng)
+**Benchmark Tool:** tatami-ng v0.8.18
+**property-validator Version:** v0.7.5 (in development)
