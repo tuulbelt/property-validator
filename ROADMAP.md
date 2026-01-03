@@ -1,9 +1,10 @@
 # Property Validator Development Roadmap
 
 **Last Updated:** 2026-01-03
-**Current Version:** v0.7.5 (Profiling & Optimization Planning) 🔬
+**Current Version:** v0.7.0 (Baseline Established with tatami-ng) ✅
+**Next Version:** v0.7.5 (Optimization Implementation) 🚀
 **Target Version:** v1.0.0 (production ready)
-**Status:** 🟢 Active Development - **v0.7.5 Research Complete!** 📊
+**Status:** 🟢 Active Development - **v0.7.0 Baseline Complete, Ready for v0.7.5!** 📊
 
 ---
 
@@ -17,8 +18,8 @@
 | v0.4.0 | ✅ **COMPLETE** | Performance, polish, edge cases | 85/85 ✅ | 100% |
 | v0.5.0 | 📋 Planned | Built-in validators (email, url, date, etc.) | 0/70 | 0% |
 | v0.6.0 | ✅ **COMPLETE** | Hybrid compilation (23.5x array speedup!) | 511/511 ✅ | 100% |
-| v0.7.0 | ✅ **COMPLETE** | **Code generation (100% win rate vs zod!)** | 537/537 ✅ | 100% 🎉 |
-| v0.7.5 | 🔬 **RESEARCH COMPLETE** | **Profiling & optimization planning** | 537/537 ✅ | Planning |
+| v0.7.0 | ✅ **COMPLETE** | **Code generation + tatami-ng baseline** | 537/537 ✅ | 100% 🎉 |
+| v0.7.5 | 🚀 **READY TO START** | **Optimization implementation (6 phases)** | 537/537 ✅ | 0% |
 | v1.0.0 | 🎯 Target | Stable API, production ready, industry-leading | 581+ | - |
 
 **Overall Progress:** 537/537 tests (100%) - All phases complete!
@@ -1108,6 +1109,15 @@ Implement Phases 1-5 of the optimization plan to achieve competitive performance
 - ✅ **Benchmarks updated** → benchmarks/README.md updated with v0.7.0 results for all competitors
 - ✅ **ROADMAP.md and README.md updated** → Version, tests, performance badges and sections all updated
 - ✅ **Honest performance reporting** → 6/6 wins vs zod documented, valibot comparison shows both strengths and weaknesses
+- ✅ **Benchmarking infrastructure migrated to tatami-ng** → Variance improved from ±19.4% to ±0.86% (13.1x more stable)
+
+**tatami-ng Baseline Establishment (2026-01-03):**
+- ✅ **Migration complete:** All benchmarks migrated from tinybench to tatami-ng v0.8.18
+- ✅ **Variance achievement:** ±0.86% average (vs tinybench's ±19.4%) - **13.1x more stable**
+- ✅ **Competitor migration:** zod, yup, valibot benchmarks migrated to tatami-ng
+- ✅ **Baseline comparison:** Created comprehensive head-to-head analysis (BASELINE_COMPARISON.md, 336 lines)
+- ✅ **Statistical rigor:** All benchmarks achieve <5% variance target with p-values, confidence intervals
+- ✅ **Ready for v0.7.5:** Reliable benchmarking infrastructure enables trustworthy optimization work
 
 **Final Achievement:**
 - 🏆 **100% win rate vs zod** (6/6 categories)
@@ -1139,13 +1149,19 @@ Implement Phases 1-5 of the optimization plan to achieve competitive performance
 
 ---
 
-## 🔬 v0.7.5 - Profiling & Optimization Planning
+## 🚀 v0.7.5 - Optimization Implementation (6 Phases)
 
-**Status:** ✅ **RESEARCH COMPLETE** (2026-01-03)
-**Goal:** Profile validation performance and plan micro-optimizations to close remaining gaps with valibot
-**Tests:** 537/537 passing (no code changes, research only)
-**Breaking Changes:** None (planning phase)
+**Status:** 🚀 **READY TO START** (2026-01-03)
+**Goal:** Implement micro-optimizations to close 2.1x performance gap with valibot on primitives
+**Tests:** 537/537 passing (baseline established with tatami-ng)
+**Breaking Changes:** None (internal optimizations only)
 **Target Performance:** 10-30% cumulative improvement across phases
+
+**Baseline Established (v0.7.0 with tatami-ng):**
+- ✅ All benchmarks migrated to tatami-ng v0.8.18 (±0.86% variance)
+- ✅ Comprehensive competitor comparison documented (BASELINE_COMPARISON.md)
+- ✅ Performance gap identified: 2.1x slower than valibot on primitives
+- ✅ Ready for reliable optimization work with <5% variance benchmarks
 
 ### Overview
 

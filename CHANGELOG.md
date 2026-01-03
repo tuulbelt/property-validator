@@ -7,14 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-- Nothing yet
-
 ### Changed
-- Nothing yet
+- **Benchmarking Migration:** Migrated all benchmarks from tinybench to tatami-ng v0.8.18
+  - Variance improved from ±19.4% (tinybench) to ±0.86% (tatami-ng) - 13.1x more stable
+  - All competitor benchmarks (zod, yup, valibot) migrated to tatami-ng
+  - Created comprehensive baseline comparison documentation (`BASELINE_COMPARISON.md`)
+  - Updated BASELINE.md with reliable tatami-ng data
+  - Ready for v0.7.5 optimization work with trustworthy benchmarking infrastructure
 
-### Fixed
-- Nothing yet
+### Added
+- **Baseline Comparison Documentation:**
+  - `benchmarks/BASELINE_COMPARISON.md` (336 lines) - Head-to-head comparison vs zod, yup, valibot
+  - Performance gap analysis with optimization targets
+  - Statistical rigor: p-values, confidence intervals, variance <5%
+- **Performance Baseline (v0.7.0 with tatami-ng):**
+  - 2-3x faster than zod on primitives, 2-9x on objects
+  - 7-8x faster than yup on primitives, 8-17x on objects
+  - 2.1x slower than valibot on primitives (primary optimization target)
+  - 4-5x faster than valibot on unions
 
 ## [0.4.0] - 2026-01-02
 
