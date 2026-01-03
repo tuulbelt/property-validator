@@ -644,16 +644,14 @@ function compilePropertyValidator<T>(validator: Validator<T>): (data: unknown) =
 function compileObjectValidator<T extends Record<string, unknown>>(
   shape: { [K in keyof T]: Validator<T[K]> }
 ): (data: unknown) => boolean {
-  // Pre-compile property validators at construction time (ONCE!)
-  const compiledProperties: Array<{
-    key: string;
-    validator: (value: unknown) => boolean;
-  }> = [];
+  // PHASE 2 OPTIMIZATION: Use parallel arrays instead of array of objects
+  const keys: string[] = [];
+  const validators: Array<(value: unknown) => boolean> = [];
 
-  for (const [key, fieldValidator] of Object.entries(shape)) {
-    // Recursively compile each property validator
-    const compiledValidator = compilePropertyValidator(fieldValidator);
-    compiledProperties.push({ key, validator: compiledValidator });
+  // PHASE 2: Use for...in instead of Object.entries()
+  for (const key in shape) {
+    keys.push(key);
+    validators.push(compilePropertyValidator(shape[key]));
   }
 
   // Return compiled validation function (ZERO allocations at runtime)
@@ -663,10 +661,9 @@ function compileObjectValidator<T extends Record<string, unknown>>(
 
     const obj = data as Record<string, unknown>;
 
-    // Validate each property with inline checks (no Result allocation)
-    for (let i = 0; i < compiledProperties.length; i++) {
-      const { key, validator } = compiledProperties[i];
-      if (!validator(obj[key])) return false;
+    // PHASE 2: Direct array access, no destructuring
+    for (let i = 0; i < keys.length; i++) {
+      if (!validators[i](obj[keys[i]])) return false;
     }
 
     return true;
