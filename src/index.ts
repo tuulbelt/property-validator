@@ -263,6 +263,11 @@ function createValidator<T>(
         return false;
       }
 
+      // Phase 1 Optimization: Skip refinement loop if no refinements exist
+      if (refinements.length === 0) {
+        return true;
+      }
+
       // Then check all refinements
       return refinements.every((refinement) => refinement.predicate(data));
     },
@@ -1004,6 +1009,11 @@ export const v = {
 
           // RUNTIME: Use pre-compiled validator (ZERO conditionals!)
           if (!compiledValidate(data)) return false;
+
+          // Phase 1 Optimization: Skip refinement loop if no refinements exist
+          if (refinements.length === 0) {
+            return true;
+          }
 
           // Check all refinements
           return refinements.every((refinement) => refinement.predicate(data));
