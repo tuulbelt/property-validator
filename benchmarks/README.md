@@ -8,9 +8,61 @@ Performance benchmarks comparing property-validator against popular validation l
 # Run property-validator benchmarks only
 npm run bench
 
-# Run full comparison (property-validator + zod + yup)
+# Run full comparison (property-validator + zod + yup + valibot)
 npm run bench:compare
+
+# Run fast boolean API benchmarks (shows Phase 3 optimizations)
+npm run bench:fast
 ```
+
+## Two Benchmark Suites
+
+Property-validator provides **two separate validation APIs** for different use cases. We benchmark both to give you the complete performance picture:
+
+### Benchmark A: Rich Error API Comparison (`index.bench.ts`)
+
+**Purpose:** Apples-to-apples comparison with competitors (zod, yup, valibot)
+
+**APIs compared:**
+- property-validator: `validate(schema, data)` → `Result<T>` (with error details)
+- zod: `schema.safeParse(data)` → `{ success, data/error }`
+- valibot: `safeParse(schema, data)` → `{ success, output/issues }`
+- yup: `schema.validate(data)` → `Promise<T>` or throw
+
+**Use when:** You need to know WHY validation failed (user input, API validation, debugging)
+
+**Results:** See "Detailed Results" section below
+
+---
+
+### Benchmark B: Fast Boolean API (`fast-boolean-api.bench.ts`)
+
+**Purpose:** Show Phase 3 optimization gains (code generation for boolean-only validation)
+
+**APIs compared:**
+- property-validator: `schema.validate(data)` → `boolean` ✅ (Phase 3 optimized)
+- yup: `schema.isValid(data)` → `Promise<boolean>` ✅ (dedicated boolean API)
+- zod: `schema.safeParse(data).success` → `boolean` ⚠️ (fallback - no dedicated API)
+- valibot: `safeParse(schema, data).success` → `boolean` ⚠️ (fallback - no dedicated API)
+
+**Use when:** You don't care WHY validation failed, just true/false (hot paths, performance-critical code)
+
+**Performance:** property-validator is **13-42x faster** using `.validate()` (Phase 3 code generation)
+
+**Trade-off:** No error messages (just `true` or `false`)
+
+**To run:** `npm run bench:fast`
+
+---
+
+**Which API should you use?**
+
+- **Development/Debugging:** Use `validate(schema, data)` for rich error details
+- **Production hot paths:** Use `schema.validate(data)` for maximum performance
+- **User input validation:** Use `validate(schema, data)` to show helpful error messages
+- **Internal data validation:** Use `schema.validate(data)` if you trust the data
+
+---
 
 ## Benchmark Environment
 

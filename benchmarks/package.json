@@ -6,7 +6,8 @@
   "description": "Performance benchmarks for property-validator",
   "scripts": {
     "bench": "node --import tsx index.bench.ts",
-    "bench:compare": "node --import tsx index.bench.ts && echo '\n--- Competitor Comparison ---\n' && node --import tsx competitors/zod.bench.ts && node --import tsx competitors/yup.bench.ts && node --import tsx competitors/valibot.bench.ts"
+    "bench:compare": "node --import tsx index.bench.ts && echo '\n--- Competitor Comparison ---\n' && node --import tsx competitors/zod.bench.ts && node --import tsx competitors/yup.bench.ts && node --import tsx competitors/valibot.bench.ts",
+    "bench:fast": "node --import tsx fast-boolean-api.bench.ts"
   },
   "dependencies": {},
   "devDependencies": {
