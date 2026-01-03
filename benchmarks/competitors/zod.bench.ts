@@ -97,17 +97,22 @@ bench.add('zod: object complex nested (valid)', () => {
   });
 });
 
-// Arrays - OBJECTS (UserSchema)
+// Arrays - OBJECTS (UserSchema) - APPLES-TO-APPLES comparison
+// Using direct arrays (same as property-validator), not wrapped in { users: [...] }
+const userArraySmall = Array(10).fill({ name: 'Alice', age: 30, email: 'alice@example.com' });
+const userArrayMedium = Array(100).fill({ name: 'Bob', age: 25, email: 'bob@example.com' });
+const userArrayLarge = Array(1000).fill({ name: 'Charlie', age: 35, email: 'charlie@example.com' });
+
 bench.add('zod: array OBJECTS small (10 items)', () => {
-  result = UsersListSchema.safeParse(small);
+  result = z.array(UserSchema).safeParse(userArraySmall);
 });
 
 bench.add('zod: array OBJECTS medium (100 items)', () => {
-  result = UsersListSchema.safeParse(medium);
+  result = z.array(UserSchema).safeParse(userArrayMedium);
 });
 
 bench.add('zod: array OBJECTS large (1000 items)', () => {
-  result = UsersListSchema.safeParse(large);
+  result = z.array(UserSchema).safeParse(userArrayLarge);
 });
 
 // Arrays - PRIMITIVES (string[])

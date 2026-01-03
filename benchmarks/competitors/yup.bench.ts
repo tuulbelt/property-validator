@@ -105,17 +105,22 @@ bench.add('yup: object complex nested (valid)', async () => {
   });
 });
 
-// Arrays
-bench.add('yup: array small (10 items)', async () => {
-  result = await UsersListSchema.validate(small);
+// Arrays - OBJECTS (UserSchema) - APPLES-TO-APPLES comparison
+// Using direct arrays (same as property-validator), not wrapped in { users: [...] }
+const userArraySmall = Array(10).fill({ name: 'Alice', age: 30, email: 'alice@example.com' });
+const userArrayMedium = Array(100).fill({ name: 'Bob', age: 25, email: 'bob@example.com' });
+const userArrayLarge = Array(1000).fill({ name: 'Charlie', age: 35, email: 'charlie@example.com' });
+
+bench.add('yup: array OBJECTS small (10 items)', async () => {
+  result = await yup.array(UserSchema).validate(userArraySmall);
 });
 
-bench.add('yup: array medium (100 items)', async () => {
-  result = await UsersListSchema.validate(medium);
+bench.add('yup: array OBJECTS medium (100 items)', async () => {
+  result = await yup.array(UserSchema).validate(userArrayMedium);
 });
 
-bench.add('yup: array large (1000 items)', async () => {
-  result = await UsersListSchema.validate(large);
+bench.add('yup: array OBJECTS large (1000 items)', async () => {
+  result = await yup.array(UserSchema).validate(userArrayLarge);
 });
 
 // Union (using oneOf as yup doesn't have direct union support)
