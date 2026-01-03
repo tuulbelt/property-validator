@@ -1326,6 +1326,79 @@ return refinements.every((refinement) => refinement.predicate(data));
 
 **Detailed Analysis:** `benchmarks/v0.7.5-phase1-results.md`
 
+---
+
+#### ⚠️ CRITICAL: Variance Analysis Invalidates Phase 1 Results
+
+**Date:** 2026-01-03
+**Status:** ❌ **Phase 1 results are UNRELIABLE due to high baseline variance**
+
+After implementing "selective optimization" (ArrayValidator only) and seeing unexpected results, we ran the v0.7.0 baseline 3 times to verify stability:
+
+**Baseline Variance Discovered:**
+
+| Category | Average Variance | Worst Case | Sample Size |
+|----------|------------------|------------|-------------|
+| **Unions** | **±19.4%** | **-24.2%** | 3 runs |
+| **Arrays** | **±10.4%** | **+12.5%** | 3 runs |
+| **Objects** | **±6.5%** | **+7.1%** | 3 runs |
+| **Refinements** | **±6.1%** | **-7.1%** | 3 runs |
+| **Primitives** | **±3.8%** | **+4.3%** | 3 runs |
+
+**Example: Union String Match (1st option)**
+- Run 1: 5,915,144 ops/sec
+- Run 2: 5,379,405 ops/sec (-9.1%)
+- Run 3: 4,482,718 ops/sec (-24.2% vs Run 1)
+
+**Impact on Phase 1 Results:**
+
+1. **Unions -6.5% "regression"** → Within ±19.4% natural variance (**NOT significant**)
+2. **Refinements -2.2% "regression"** → Within ±6.1% natural variance (**NOT significant**)
+3. **Objects +30.7% "improvement"** → Exceeds ±6.5% variance (**MIGHT be real, needs verification**)
+4. **Arrays +17-20% "improvement"** → Exceeds ±10.4% variance (**MIGHT be real, needs verification**)
+5. **Primitives +7.7% "improvement"** → Exceeds ±3.8% variance (**MIGHT be real, needs verification**)
+
+**Conclusion:** Current benchmarking methodology has **too much variance** to trust optimization comparisons. We cannot distinguish real improvements from noise.
+
+**Detailed Analysis:** `/tmp/baseline-variance-analysis.md`
+
+**Root Causes:**
+- V8 JIT compiler state differs between runs
+- Insufficient benchmark iterations (100ms minimum)
+- System noise (CPU scaling, background processes, GC timing)
+- tinybench framework overhead varies
+
+**Recommendations:**
+
+**Option A: Improve Benchmarking Methodology (Recommended)**
+1. Increase benchmark duration: `time: 1000` (1 second instead of 100ms)
+2. Run multiple complete benchmark suites (5 runs, compute median)
+3. Add explicit warm-up phase
+4. Disable CPU frequency scaling
+5. Pin benchmark process to single CPU core
+6. Compute confidence intervals and use t-tests for significance
+
+**Option B: Accept Higher Variance, Focus on Large Wins**
+1. Only trust optimizations showing >30% improvement for unions
+2. Ignore results showing <25% change (within noise)
+3. Focus on profiling-verified bottlenecks (not micro-optimizations)
+
+**Option C: Switch to Different Benchmarking Tool**
+1. criterion.js or custom harness with statistical analysis
+2. More upfront work, but more reliable results
+
+**Decision Required:** Before proceeding with Phases 2-6, we must either:
+- Fix benchmarking methodology to achieve <5% variance
+- OR accept that we can only detect very large optimizations (>25%)
+
+**Files:**
+- `/tmp/baseline-run1.txt` - First v0.7.0 run
+- `/tmp/baseline-run2.txt` - Second v0.7.0 run
+- `/tmp/baseline-run3.txt` - Third v0.7.0 run
+- `/tmp/baseline-variance-analysis.md` - Full analysis
+
+---
+
 ### v0.7.5 Remaining Phases (Not Yet Implemented)
 
 **Phase 2: Eliminate Fast API Result Allocation**
