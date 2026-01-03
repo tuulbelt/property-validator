@@ -591,6 +591,63 @@ Create `V8_OPTIMIZATION_NOTES.md` with:
 
 ---
 
+## v0.7.0 Baseline (tatami-ng)
+
+**Established:** 2026-01-03
+**Tool:** tatami-ng v0.8.18 (migrated from tinybench for statistical rigor)
+**Baseline Document:** `benchmarks/baselines/v0.7.0-tatami-ng-baseline.md`
+
+### Migration Rationale
+
+Previous benchmarks used tinybench v2.9.0, which showed **±19.4% variance** for unions and **±10.4% for arrays**. This variance was LARGER than the optimization effects we were trying to measure, making performance work unreliable.
+
+**tatami-ng provides:**
+- ✅ **±0.86% average variance** (12.5x more stable)
+- ✅ **Criterion-equivalent statistics** (p-values, confidence intervals, outlier detection)
+- ✅ **2-second benchmarks** (vs tinybench's 100ms) for stable averages
+- ✅ **Zero dependencies** (aligns with Tuulbelt principles)
+
+See `docs/BENCHMARKING_MIGRATION.md` for complete analysis.
+
+### Baseline Performance Summary
+
+| Category | Best Performance | Variance | Operations/sec |
+|----------|-----------------|----------|----------------|
+| **Primitives** | number (valid) | ±1.28% | 6.41M ops/sec |
+| **Objects (simple)** | valid | ±0.94% | 3.15M ops/sec |
+| **Objects (complex)** | valid | ±0.34% | 366K ops/sec |
+| **Arrays (primitive)** | number[] small | ±0.76% | 1.08M ops/sec |
+| **Arrays (object)** | small (10 items) | ±0.41% | 190K ops/sec |
+| **Unions** | 1st option match | ±1.37% | 10.23M ops/sec |
+| **Refinements** | chained pass | ±1.53% | 12.42M ops/sec |
+
+**Key Achievements:**
+- ✅ All benchmarks within target variance (<5%)
+- ✅ 12.5x more stable than tinybench
+- ✅ **Ready for reliable optimization work**
+
+**Performance Tiers:**
+1. Refinements (chained): **12.42M ops/sec** - fastest
+2. Unions (1st match): **10.23M ops/sec**
+3. Primitives (number): **6.41M ops/sec**
+4. Objects (simple): **3.15M ops/sec**
+5. Arrays (primitive, small): **1.08M ops/sec**
+6. Objects (complex): **366K ops/sec**
+7. Arrays (object, small): **190K ops/sec**
+
+**Optimization Opportunities Identified:**
+1. Refinement loop overhead (empty refinements still iterate)
+2. Fast API Result allocation (object creation on every validation)
+3. Primitive validator closures (function call overhead)
+4. Path building (string concatenation overhead)
+
+**Comparison vs Competitors:**
+- Competitor benchmarks still use tinybench and need migration to tatami-ng
+- Once migrated, we'll establish relative performance baselines
+- See `benchmarks/competitors/` for current competitor code
+
+---
+
 ## v0.7.5: Profiling-Driven Optimizations
 
 **Status:** 🚧 In Progress (Research Complete)
