@@ -642,9 +642,14 @@ See `docs/BENCHMARKING_MIGRATION.md` for complete analysis.
 4. Path building (string concatenation overhead)
 
 **Comparison vs Competitors:**
-- Competitor benchmarks still use tinybench and need migration to tatami-ng
-- Once migrated, we'll establish relative performance baselines
-- See `benchmarks/competitors/` for current competitor code
+- ✅ All competitor benchmarks migrated to tatami-ng (v0.8.18)
+- ✅ Baseline comparison complete - see `benchmarks/BASELINE_COMPARISON.md`
+- **Key Findings:**
+  - 2-3x faster than zod and yup on primitives
+  - 2-16x faster than zod and yup on objects
+  - 2.1x slower than valibot on primitives (optimization target)
+  - 4-5x faster than valibot on unions
+- Full head-to-head comparison data in `benchmarks/BASELINE_COMPARISON.md`
 
 ---
 
@@ -691,6 +696,38 @@ See `docs/BENCHMARKING_MIGRATION.md` for complete analysis.
 **New Findings:**
 - Result object allocation overhead (hypothesis based on valibot comparison)
 - Compiled array validators showing up in profiling (7.7% CPU) - but this is actual work being done, not overhead
+
+---
+
+### Performance Gap Analysis (vs Baseline v0.7.0)
+
+**Baseline Source:** `benchmarks/BASELINE_COMPARISON.md`
+
+**Current State (pv v0.7.0 vs Competitors):**
+
+| Scenario | vs valibot | vs zod | vs yup | Target for v0.7.5 |
+|----------|------------|--------|--------|-------------------|
+| Primitives (string) | 2.1x slower ⚠️ | 5.9x faster ✅ | 7.2x faster ✅ | Close gap to 1.0-1.2x |
+| Simple objects | 1.8x slower ⚠️ | 1.9x faster ✅ | 16.4x faster ✅ | Close gap to 1.0-1.3x |
+| Complex objects | 2.9x slower ⚠️ | 1.3x faster ✅ | 8.7x faster ✅ | Close gap to 1.5-2.0x |
+| Arrays (objects, 10) | 3.1x slower ⚠️ | 1.5x faster ✅ | 17.0x faster ✅ | Close gap to 1.8-2.2x |
+| Arrays (primitives, 100) | 1.6x slower ⚠️ | 2.6x faster ✅ | N/A | Close gap to 1.0-1.2x |
+| Unions (string match) | 4.3x faster ✅ | 1.9x faster ✅ | 12.3x faster ✅ | Maintain lead |
+| Refinements (single) | 2.2x slower ⚠️ | 9.0x faster ✅ | 6.8x faster ✅ | Close gap to 1.0-1.5x |
+| Refinements (chained) | 1.4x faster ✅ | N/A | N/A | Maintain lead |
+
+**Primary Optimization Target:** Close the 1.6-3.1x performance gap with valibot while maintaining significant lead over zod/yup.
+
+**Architectural Difference:**
+- **valibot:** Modular validation pipelines, optimized for primitives and arrays
+- **pv v0.7.0:** Compiled validators, optimized for unions and refinements
+- **Opportunity:** Adopt valibot's primitive validation techniques while maintaining compiled validator strengths
+
+**Realistic v0.7.5 Goals:**
+- Primitives: 2.1x → 1.2x (75% gap closure)
+- Objects: 1.8-2.9x → 1.3-2.0x (50% gap closure)
+- Arrays: 1.6-3.1x → 1.2-2.2x (60% gap closure)
+- **Cumulative:** 10-30% improvement across all scenarios
 
 ---
 
