@@ -1420,6 +1420,21 @@ export const v = {
         },
       };
 
+      // v0.8.0 OPTIMIZATION: Expose compiled validator for validateFast() bypass
+      // For plain arrays (no length constraints, no refinements, no item transforms), validateFast() can
+      // call _compiled directly without going through validateWithPath machinery (2x speedup)
+      // Note: Must also check item validator doesn't have transforms since bypass skips _transform
+      const hasItemTransform = itemValidator._transform !== undefined;
+      const isPlainArray = minLength === undefined && maxLength === undefined &&
+                           exactLength === undefined && refinements.length === 0 &&
+                           !hasItemTransform;
+      if (isPlainArray) {
+        // Create wrapper that includes Array.isArray check + item validation
+        validator._compiled = (data: unknown): boolean => {
+          return Array.isArray(data) && compiledValidate(data);
+        };
+      }
+
       return validator;
     };
 
