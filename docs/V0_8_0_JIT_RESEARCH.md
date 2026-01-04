@@ -267,13 +267,67 @@ Current closure-based validators also allocate:
 
 ---
 
+## Phase 8 Implementation Results (v0.8.0)
+
+**Date:** 2026-01-04
+**Status:** ✅ COMPLETE - Massive improvement!
+
+### Key Finding
+
+JIT object validators **already existed** in v0.7.5 via `compileObjectValidator()`. The bottleneck was **wrapper overhead** in the validation path, not the JIT compilation itself.
+
+### Phase 8.2: validateFast() Bypass
+
+**Implementation:** Added direct `_compiled` validator bypass in `validateFast()`:
+
+```typescript
+// v0.8.0 OPTIMIZATION: Direct JIT bypass for plain objects
+if (validator._compiled && !validator._hasRefinements) {
+  if (validator._compiled(data)) {
+    return { ok: true, value: data as T };
+  }
+  // Fall through to validateWithPath for detailed errors
+}
+```
+
+**Changes:**
+1. Added `_compiled?: (data: unknown) => boolean` to Validator interface
+2. Exposed `compiledValidator` as `validator._compiled` for plain objects in `v.object()`
+3. Added fast path in `validateFast()` to call `_compiled` directly
+4. Bypass only activates when `!validator._hasRefinements` (runtime check for .refine())
+
+### Benchmark Results
+
+**vs v0.7.5 Baseline:**
+
+| Category | v0.7.5 | v0.8.0 | Improvement |
+|----------|--------|--------|-------------|
+| simple object (valid) | 332.10 ns | 62.59 ns | **5.3x faster** ✅ |
+| `validate()` API call | 37.20 ns | 9.13 ns | **4.1x faster** ✅ |
+
+**vs Valibot:**
+
+| Category | propval v0.8.0 | valibot | Winner |
+|----------|----------------|---------|--------|
+| simple object | 62.59 ns | 212.92 ns | **propval 3.4x faster** ✅ |
+| primitives | ~60 ns | ~98 ns | **propval 1.6x faster** ✅ |
+| deeply nested | 177.89 ns | 1.08 µs | **propval 6.1x faster** ✅ |
+| unions | ~100 ns | 467 ns | **propval 4.7x faster** ✅ |
+
+### Competitive Position Reversal
+
+**Before (v0.7.5):** 1.5x SLOWER than valibot on objects
+**After (v0.8.0):** 3.4x FASTER than valibot on objects!
+
+**All 537 tests passing.**
+
+---
+
 ## Next Steps
 
-1. **Create feature branch** for v0.8.0 implementation
-2. **Implement Phase 8** (JIT object validators) first
-3. **Benchmark against valibot** to verify improvements
-4. **Implement Phase 9** (JIT arrays) if Phase 8 successful
-5. **Skip Phase 7** (primitives) - confirmed not beneficial
+1. ✅ **Phase 8 COMPLETE** - JIT bypass implemented
+2. 📋 **Phase 9: JIT arrays** - Consider similar bypass pattern
+3. ❌ **Skip Phase 7** (primitives) - confirmed not beneficial
 
 ---
 
