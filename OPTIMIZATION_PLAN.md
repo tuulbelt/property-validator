@@ -1643,18 +1643,275 @@ After implementing "selective optimization" (ArrayValidator only) and seeing une
 - **Difficulty:** Complex
 - **Priority:** MEDIUM (optional)
 
-**Decision Point:** Phases 1, 2, 4 achieved significant improvements (+10-30%). Phase 3 rejected (union regression). Phase 5 complete but no runtime benefit. Phase 6 optional.
+**v0.7.5 Final Status:** All 6 phases addressed (5 implemented, 1 rejected).
+
+| Phase | Status | Actual Impact |
+|-------|--------|---------------|
+| Phase 1: Skip empty refinement loop | ✅ COMPLETE | +8-20% |
+| Phase 2: Eliminate Fast API Result allocation | ✅ COMPLETE | +12-22% |
+| Phase 3: Inline primitive validation | ❌ REJECTED | -24% union regression |
+| Phase 4: Lazy path building | ✅ COMPLETE | +24-30% |
+| Phase 5: Shared primitive validator functions | ✅ COMPLETE | No runtime benefit |
+| Phase 6: Inline validateWithPath for plain objects | ✅ COMPLETE | **+214% (+3.1x)** |
+
+**v0.7.5 vs Valibot (Updated):**
+- Simple objects: **1.7x FASTER** (120 ns vs 207 ns)
+- Unions: **4.5x FASTER** (107 ns vs 450 ns)
+- Primitives: 1.8x slower (180 ns vs 101 ns)
+- Complex nested: 2.4x slower (2.5 µs vs 1.05 µs)
 
 ---
 
-## v0.8.0: Modular Design (Phase 6)
+## v0.8.0: JIT Compilation (Performance Optimization)
+
+**Status:** ❌ Not Started (Planning Complete)
+**Goal:** Close performance gaps with Valibot on primitives and complex objects
+**Target:** Match or beat Valibot in 4/6 categories (currently 2/6)
+
+### Competitor Landscape Analysis
+
+Based on comprehensive research of the fastest TypeScript validation libraries:
+
+| Library | Ops/sec | Approach | DX Trade-off |
+|---------|---------|----------|--------------|
+| **Typia** | 9.6M | AOT (TypeScript transformer) | Requires build step, complex setup |
+| **TypeBox** | 16.5M | JIT (`new Function()`) | JSON Schema only, no transforms |
+| **ArkType** | ~10M | JIT (`new Function()`) | Different API paradigm |
+| **Valibot** | 4.1M | Closure-based | Good DX, modular design |
+| **Zod** | 2.0M | Closure-based | Best DX, slowest |
+| **property-validator** | ~5M | Closure-based | Zod-like DX |
+
+**Sources:**
+- [moltar/typescript-runtime-type-benchmarks](https://github.com/moltar/typescript-runtime-type-benchmarks)
+- [Typia 15,000x faster article](https://dev.to/samchon/typia-15000x-faster-validator-and-its-histories-1fmg)
+- [Valibot Comparison Guide](https://valibot.dev/guides/comparison/)
+- [TypeBox vs Zod Guide](https://betterstack.com/community/guides/scaling-nodejs/typebox-vs-zod/)
+
+### Why JIT Compilation is Faster
+
+**AOT (Typia):**
+- Analyzes TypeScript types at compile time
+- Generates optimal validation code before runtime
+- V8 can fully optimize the generated code
+- **Trade-off:** Requires TypeScript transformer, complex build setup
+
+**JIT (TypeBox/ArkType):**
+- Generates validation code at schema definition time using `new Function()`
+- Code is a string that gets compiled once by V8
+- Better V8 optimization than closure-based validators
+- **Trade-off:** No build step required, can work at runtime
+
+**Why JIT beats closures:**
+1. V8 optimization priority: AOT > static code > JIT (`new Function()`) > closures
+2. JIT-generated code is monomorphic (same shape every time)
+3. No closure lookup overhead
+4. Inlining opportunities are clearer to V8
+
+**Reference:** [V8 Function Optimization](https://erdem.pl/2019/08/v-8-function-optimization/)
+
+### Phase 7: JIT Primitive Validators 🔥
+
+**Expected Impact:** +50-100% on primitives (close 1.8x gap with Valibot)
+**Difficulty:** High
+**Priority:** HIGHEST
+
+#### Problem
+
+Current primitive validators use closures:
+```typescript
+// Current (closure-based)
+const stringValidator = () => {
+  return (value: unknown): value is string => typeof value === 'string';
+};
+```
+
+Each closure has overhead:
+1. Function object allocation
+2. Scope chain lookup
+3. Non-monomorphic call sites (multiple validator shapes)
+
+#### Solution: JIT-Compiled Primitives
+
+```typescript
+// JIT approach (like TypeBox)
+function compileStringValidator(): (value: unknown) => boolean {
+  // Generate code string at schema definition time
+  const code = `return typeof value === 'string'`;
+  return new Function('value', code) as (value: unknown) => boolean;
+}
+```
+
+**Benefits:**
+- Code is parsed and compiled once
+- V8 sees it as static code (better optimization)
+- No closure scope lookup
+- Monomorphic call site
+
+#### Implementation Plan
+
+1. Create `src/jit/primitives.ts` with JIT primitive validators
+2. Replace closure-based primitives in `compilePropertyValidator()`
+3. Benchmark before/after
+4. Fall back to closure-based if JIT disabled (`process.env.NO_JIT=1`)
+
+#### V8 Optimization Considerations
+
+From research on [V8 hidden classes](https://dev.to/maxprilutskiy/hidden-classes-the-javascript-performance-secret-that-changed-everything-3p6c):
+
+- Keep validators **monomorphic** (same object shape always)
+- Avoid creating new object shapes in hot paths
+- Initialize all object members in constructors
+- Never use `delete` on validator objects
+
+### Phase 8: JIT Object Validators 🔥
+
+**Expected Impact:** +30-50% on complex objects (close 2.4x gap with Valibot)
+**Difficulty:** Very High
+**Priority:** HIGH
+
+#### Problem
+
+Current object validation iterates through properties:
+```typescript
+// Current approach
+for (let i = 0; i < keys.length; i++) {
+  if (!validators[i](obj[keys[i]])) return false;
+}
+```
+
+This has overhead:
+1. Array access for keys and validators
+2. Dynamic property lookup (`obj[keys[i]]`)
+3. Multiple function calls
+
+#### Solution: Generate Custom Validation Code
+
+```typescript
+// JIT approach (like ArkType)
+function compileObjectValidator(shape: Record<string, Validator>) {
+  const checks: string[] = [];
+
+  for (const key in shape) {
+    const validatorRef = `v_${key}`;
+    checks.push(`if (!${validatorRef}(obj.${key})) return false;`);
+  }
+
+  const code = `return function(obj) {
+    if (typeof obj !== 'object' || obj === null) return false;
+    ${checks.join('\n')}
+    return true;
+  }`;
+
+  // Create function with validator references in scope
+  return new Function(...validatorRefs, code)(...validators);
+}
+```
+
+**Generated code for `{name: string, age: number}`:**
+```javascript
+return function(obj) {
+  if (typeof obj !== 'object' || obj === null) return false;
+  if (!v_name(obj.name)) return false;
+  if (!v_age(obj.age)) return false;
+  return true;
+}
+```
+
+**Benefits:**
+- Direct property access (no dynamic lookup)
+- Inlined checks (no array iteration)
+- V8 can optimize the entire function
+
+### Phase 9: JIT Array Validators
+
+**Expected Impact:** +20-40% on primitive arrays (close 3.8x gap)
+**Difficulty:** High
+**Priority:** MEDIUM
+
+#### Problem
+
+Primitive array validation still iterates:
+```typescript
+for (let i = 0; i < data.length; i++) {
+  if (!itemValidator(data[i])) return false;
+}
+```
+
+#### Solution: Unrolled Loops for Small Arrays
+
+```typescript
+// JIT with loop unrolling for small arrays
+function compileArrayValidator(itemValidator, maxUnroll = 8) {
+  const unrolledCode = `
+    const len = arr.length;
+    if (len <= ${maxUnroll}) {
+      // Unrolled checks for small arrays
+      ${Array.from({length: maxUnroll}, (_, i) =>
+        `if (len > ${i} && !validate(arr[${i}])) return false;`
+      ).join('\n')}
+      return true;
+    }
+    // Fall back to loop for large arrays
+    for (let i = 0; i < len; i++) {
+      if (!validate(arr[i])) return false;
+    }
+    return true;
+  `;
+  return new Function('arr', 'validate', unrolledCode);
+}
+```
+
+### v0.8.0 Target Performance
+
+| Category | v0.7.5 | v0.8.0 Target | vs Valibot Target |
+|----------|--------|---------------|-------------------|
+| Primitives | 180 ns | 100 ns | Match (1.0x) |
+| Simple objects | 120 ns | 100 ns | Beat (1.5x faster) |
+| Complex nested | 2.5 µs | 1.5 µs | Match (1.0x) |
+| Primitive arrays | 1.12 µs | 400 ns | Beat (1.3x faster) |
+| Unions | 107 ns | 100 ns | Maintain (4.5x faster) |
+| Object arrays | 5.0 µs | 4.5 µs | Maintain lead |
+
+**v0.8.0 Victory Condition:** 4/6 categories competitive with Valibot (vs current 2/6)
+
+### v0.8.0 Implementation Risks
+
+**Risk 1: JIT Security Concerns**
+- `new Function()` is essentially `eval()`
+- Mitigation: Never interpolate user input, only static schema definitions
+- CSP (Content Security Policy) may block `new Function()` in browsers
+
+**Risk 2: Debugging Complexity**
+- JIT code is harder to debug (no source maps)
+- Mitigation: Provide `NO_JIT=1` fallback mode for debugging
+
+**Risk 3: Bundle Size**
+- JIT code generation adds bytes
+- Mitigation: Accept trade-off (performance > bundle size for v0.8.0)
+
+**Risk 4: Edge Cases**
+- Some environments don't allow `new Function()` (CSP, strict mode)
+- Mitigation: Feature detection + graceful fallback
+
+### v0.8.0 Research Tasks Before Implementation
+
+1. [ ] Profile current primitive validators with `node --prof`
+2. [ ] Benchmark `new Function()` vs closure in isolation
+3. [ ] Study TypeBox's TypeCompiler source code
+4. [ ] Study ArkType's shift-reduce parser approach
+5. [ ] Test JIT approach in browsers with CSP
+6. [ ] Measure memory impact of JIT code strings
+
+---
+
+## v0.9.0: Modular Design (Bundle Size Optimization)
 
 **Status:** ❌ Not Started (Future)
-**Expected Impact:** Bundle size reduction (not runtime performance)
+**Expected Impact:** Bundle size reduction (13.5 kB → 1-2 kB)
 **Difficulty:** High
-**Priority:** LOW (defer to v0.8.0)
+**Priority:** MEDIUM (after v0.8.0 performance work)
 
-### Phase 6: Valibot-Inspired Modular Design 🔮
+### Valibot-Inspired Modular Design 🔮
 
 **Goal:** Tree-shakable API for better bundle sizes
 
@@ -1685,9 +1942,9 @@ const schema = pipe(
 
 Each function is independently importable → bundler only includes what you use.
 
-#### Our Implementation (v0.8.0)
+#### Our Implementation (v0.9.0)
 
-**Option A: Dual API (backwards compatible)**
+**Dual API (backwards compatible):**
 ```typescript
 // Current API (still works):
 import { v } from 'property-validator';
@@ -1697,31 +1954,6 @@ v.string().min(5).max(10);
 import { string, minLength, maxLength, pipe } from 'property-validator/modular';
 pipe(string(), minLength(5), maxLength(10));
 ```
-
-**Option B: Breaking change (v2.0.0)**
-```typescript
-// Remove v namespace entirely
-import { string, number, object, pipe } from 'property-validator';
-```
-
-#### Trade-offs
-
-**Pros:**
-- ✅ Better tree-shaking (5 kB → 1-2 kB)
-- ✅ Smaller bundles for frontend
-- ✅ Aligns with Valibot's proven approach
-
-**Cons:**
-- ⚠️ API change (breaking if we go with Option B)
-- ⚠️ More complex imports
-- ⚠️ Documentation needs update
-- ⚠️ Migration guide required
-
-#### Decision
-
-**Defer to v0.8.0** after v0.7.0 performance work is complete. This is a quality-of-life improvement, not a performance optimization.
-
-**Recommended approach:** Option A (dual API) to maintain backwards compatibility.
 
 ---
 
