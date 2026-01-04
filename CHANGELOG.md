@@ -5,7 +5,68 @@ All notable changes to Property Validator will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.7.5] - 2026-01-04
+
+### Performance Optimizations
+
+Property Validator v0.7.5 delivers Valibot-tier performance through 6 optimization phases:
+
+**Phase 1: Skip Empty Refinement Loop (+8-20%)**
+- Early return in `createValidator()` when no refinements exist
+- Eliminates unnecessary loop iteration on every validation
+
+**Phase 2: Eliminate Fast API Result Allocation (+12-22%)**
+- Changed `validateFast(itemValidator, data[i]).ok` → `itemValidator.validate(data[i])`
+- Eliminates Result object allocation on every array item
+
+**Phase 3: Inline Primitive Validation (REJECTED)**
+- Attempted inline typeof checks in validate()
+- Caused -24% union regression - trade-off unacceptable
+- Reverted
+
+**Phase 4: Lazy Path Building (+24-30%)**
+- Changed path from `string[]` to `(string|number)[]`
+- Array validators push raw numbers instead of `"[${i}]"` strings
+- Added `formatPathString()` method for on-demand path formatting
+
+**Phase 5: Shared Primitive Validator Functions**
+- No measurable runtime benefit (V8 already inlines)
+- Kept for code cleanliness
+
+**Phase 6: Inline validateWithPath for Objects (+214%, 3.1x faster)**
+- Pre-compiled validators with fast-path for plain objects
+- Direct property access without dynamic lookup
+- Most impactful optimization
+
+### Performance Results
+
+**vs Zod: 6/6 categories won** ✅
+
+**vs Valibot (competitive tier):**
+| Category | propval | valibot | Winner |
+|----------|---------|---------|--------|
+| Simple objects | 120 ns | 207 ns | propval 1.7x ✅ |
+| Unions | 107 ns | 450 ns | propval 4.5x ✅ |
+| Primitives | 180 ns | 101 ns | valibot 1.8x |
+| Complex nested | 2.5 µs | 1.05 µs | valibot 2.4x |
+| Primitive arrays | 1.1 µs | 296 ns | valibot 3.8x |
+
+### Added
+- **PathSegment Type:** `(string | number)[]` for efficient path representation
+- **formatPathString() Method:** On-demand path formatting in ValidationError
+- **Compiled Validators:** Fast-path for plain object validation
+
+### Changed
+- **Benchmarking Infrastructure:** Migrated from tinybench to tatami-ng v0.8.18
+  - Variance improved from ±19.4% to ±0.86% (13.1x more stable)
+  - Criterion-equivalent statistical rigor
+
+### Documentation
+- Updated README with v0.7.5 benchmarks and competitor analysis
+- Created `docs/v0_7_5_PHASE1_RESEARCH.md` for optimization research
+- Added `BASELINE_COMPARISON.md` with head-to-head comparisons
+
+## [0.7.0] - 2026-01-03
 
 ### Changed
 - **Benchmarking Migration:** Migrated all benchmarks from tinybench to tatami-ng v0.8.18
@@ -13,7 +74,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - All competitor benchmarks (zod, yup, valibot) migrated to tatami-ng
   - Created comprehensive baseline comparison documentation (`BASELINE_COMPARISON.md`)
   - Updated BASELINE.md with reliable tatami-ng data
-  - Ready for v0.7.5 optimization work with trustworthy benchmarking infrastructure
 
 ### Added
 - **Baseline Comparison Documentation:**
