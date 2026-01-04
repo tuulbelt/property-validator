@@ -1575,6 +1575,17 @@ export const v = {
       (fieldValidator) => fieldValidator._transform !== undefined || fieldValidator._default !== undefined
     );
 
+    // PHASE 6 OPTIMIZATION: Pre-compile object validator for fast path
+    // For plain objects (no transforms/defaults/refinements), we can use the compiled validator directly
+    // and skip full validateWithPath machinery when validation succeeds
+    // Expected impact: +10-15% for object validation
+    const compiledValidator = compileObjectValidator(shape);
+    // Check if ANY field validator has refinements (refinements must be checked at validation time)
+    const hasFieldRefinements = Object.values(shape).some(
+      (fieldValidator) => fieldValidator._hasRefinements === true
+    );
+    const isPlainObject = !hasTransforms && !hasFieldRefinements;
+
     if (hasTransforms) {
       // Store transformation function to apply transforms/defaults to object properties
       validator._transform = (data: any): T => {
@@ -1619,6 +1630,23 @@ export const v = {
           code: 'VALIDATION_ERROR',
         });
         return { ok: false, error: details.message, details };
+      }
+
+      // PHASE 6 OPTIMIZATION: Fast path for plain objects with valid data
+      // Skip full validateWithPath machinery when:
+      // 1. Object is plain (no transforms/defaults/refinements)
+      // 2. No security options (no maxProperties limit, no circular detection)
+      // 3. Data is valid (compiled validator returns true)
+      // Note: _hasRefinements is checked at runtime because .refine() can be called after object creation
+      // Expected impact: +10-15% for successful object validation
+      if (isPlainObject &&
+          !validator._hasRefinements &&
+          options.checkCircular === false &&
+          options.maxProperties === undefined) {
+        if (compiledValidator(data)) {
+          return { ok: true, value: data as T };
+        }
+        // If invalid, fall through to full validation for detailed error message
       }
 
       // Check maximum properties limit

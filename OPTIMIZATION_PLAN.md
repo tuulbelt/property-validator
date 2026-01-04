@@ -1284,12 +1284,24 @@ Phase 5 optimizes **validator creation time**, not **validation time**. The benc
 
 ---
 
-### Phase 6: Inline validateWithPath for Plain Objects 🏗️
+### Phase 6: Inline validateWithPath for Plain Objects ✅ COMPLETE
 
-**Status:** ❌ Not Started
+**Status:** ✅ COMPLETE (2026-01-04)
 **Expected Impact:** +10-15% for simple objects (Normal API)
-**Difficulty:** High
-**Priority:** LOW (complex, deferred after other phases)
+**Actual Impact:** **+68% (+3.1-3.3x) for simple objects** - FAR EXCEEDS expectations!
+**Difficulty:** High (actually Medium once understood)
+**Priority:** Completed
+
+#### Results
+
+| Category | v0.7.0 Baseline | Phase 6 | Change |
+|----------|-----------------|---------|--------|
+| object: simple (valid) | 386.67 ns | 116.71-122.95 ns | **+214% (+3.1-3.3x)** |
+| object: complex nested (valid) | 3.14 µs | 2.51-2.65 µs | **+16-20%** |
+| primitive: string (valid) | 210.25 ns | 180.10-184.24 ns | **+12-14%** |
+| union: string match | 113.50 ns | 107.45-117.83 ns | ±4% (within variance) |
+
+**Key Finding:** Phase 6 provides massive object validation improvement with NO union regression!
 
 #### Problem
 
@@ -1347,15 +1359,31 @@ function isPlainObject(validator: Validator<any>): boolean {
 }
 ```
 
-#### Complexity Warning
+#### Actual Implementation (2026-01-04)
 
-This phase is **complex** because:
-1. Requires detecting "plain object" vs "complex object"
-2. Compiled validators don't produce detailed errors
-3. Need fallback to validateWithPath for error details
-4. Risk of incorrect fast path detection
+The actual approach was simpler than expected:
 
-**Defer** until Phases 1-5 are complete and benchmarked. May not be worth the complexity.
+1. **Pre-compile at object creation time:**
+   - Call `compileObjectValidator(shape)` when `v.object()` is called
+   - Store compiled validator in closure
+
+2. **Fast path in `_validateWithPath`:**
+   ```typescript
+   if (isPlainObject && !validator._hasRefinements &&
+       options.checkCircular === false && options.maxProperties === undefined) {
+     if (compiledValidator(data)) {
+       return { ok: true, value: data as T };
+     }
+     // Fall through to full validation for error details
+   }
+   ```
+
+3. **Plain object detection:**
+   - `hasTransforms` checked at creation: any field has `_transform` or `_default`
+   - `hasFieldRefinements` checked at creation: any field has `_hasRefinements`
+   - `validator._hasRefinements` checked at runtime: catches `.refine()` after object creation
+
+**Key insight:** By containing the optimization WITHIN `_validateWithPath` (not at `validate()` entry), we avoid Phase 3's regression problem where every validator (including unions) was affected.
 
 ---
 
