@@ -378,11 +378,104 @@ if (isPlainArray) {
 
 ---
 
+## Phase 10 Implementation Results (v0.8.0)
+
+**Date:** 2026-01-04
+
+### Problem Identified
+
+Phase 8 and 9 exposed `_compiled` for top-level objects and arrays, but **complex nested objects** were still 2x slower than valibot:
+
+| Category | propval | valibot | Result |
+|----------|---------|---------|--------|
+| Complex Nested | 2.04 µs | 1.03 µs | valibot 2x faster |
+
+### Root Cause Analysis
+
+Two issues discovered:
+
+1. **`compilePropertyValidator()` didn't use `_compiled` for nested validators**
+   - Line 713: `return (data: unknown): boolean => validator.validate(data);`
+   - Should use `validator._compiled` if available
+
+2. **Arrays ALWAYS had `_transform` defined as a method**
+   - Line 1139-1142: `_transform(data: any) { return compiledTransform(data); }`
+   - Parent objects saw this and thought transforms were needed
+   - Blocked parent objects from getting `_compiled`
+
+### Solution
+
+**Fix 1:** Chain `_compiled` for nested validators:
+```typescript
+// compilePropertyValidator() - lines 712-719
+if (validator._compiled && !validator._hasRefinements) {
+  return validator._compiled;
+}
+return (data: unknown): boolean => validator.validate(data);
+```
+
+**Fix 2:** Only define `_transform` on arrays when actually needed:
+```typescript
+// createArrayValidator() - lines 1426-1437
+const itemNeedsTransform = hasItemTransform || hasItemDefault;
+if (itemNeedsTransform) {
+  validator._transform = (data: any): T[] => compiledTransform(data);
+}
+// Otherwise leave _transform undefined (allows parent JIT bypass)
+```
+
+### Performance Results
+
+**Complex Nested Object:**
+
+| Metric | Before | After | Improvement |
+|--------|--------|-------|-------------|
+| 5 props + nested metadata | 1.37 µs | 69.99 ns | **20x faster** |
+| Full complex | 1.85 µs | 225.34 ns | **8.2x faster** |
+| validate() API | 1.94 µs | 245.86 ns | **7.9x faster** |
+
+**Full Competitive Benchmark vs Valibot:**
+
+| Category | propval | valibot | Winner |
+|----------|---------|---------|--------|
+| Primitives (string) | 66.77 ns | 69.33 ns | **propval 1.04x** ✅ |
+| Primitives (number) | 64.62 ns | 71.14 ns | **propval 1.10x** ✅ |
+| Simple Object | 63.61 ns | 202.49 ns | **propval 3.18x** ✅ |
+| Complex Nested | 233.69 ns | 1.03 µs | **propval 4.41x** ✅ |
+| Number Array [100] | 114.36 ns | 650.79 ns | **propval 5.69x** ✅ |
+| String Array [100] | 157.77 ns | 644.24 ns | **propval 4.08x** ✅ |
+| Union (3 types) | 92.10 ns | 82.48 ns | valibot 1.12x |
+
+### Competitive Position Reversal
+
+**Before (Phase 9):** 2x SLOWER than valibot on complex nested objects
+**After (Phase 10):** **4.41x FASTER** than valibot!
+
+**Final Score: 6 wins, 1 loss vs valibot!**
+
+**All 537 tests passing.**
+
+---
+
+## v0.8.0 Summary
+
+| Phase | Target | Result |
+|-------|--------|--------|
+| Phase 7 | JIT Primitives | ❌ Skipped - V8 already optimizes |
+| Phase 8 | JIT Object Bypass | ✅ 5.3x faster, 3.4x vs valibot |
+| Phase 9 | JIT Array Bypass | ✅ 10x faster, 4-6x vs valibot |
+| Phase 10 | Recursive JIT Bypass | ✅ 8x faster, 4.4x vs valibot |
+
+**Final v0.8.0 vs Valibot: 6 wins, 1 loss (vs 2 wins, 3 losses in v0.7.5)**
+
+---
+
 ## Next Steps
 
 1. ✅ **Phase 8 COMPLETE** - JIT bypass for objects (5x improvement)
 2. ✅ **Phase 9 COMPLETE** - JIT bypass for arrays (4-6x faster than valibot!)
 3. ❌ **Skip Phase 7** (primitives) - confirmed not beneficial
+4. ✅ **Phase 10 COMPLETE** - Recursive JIT bypass (4.4x faster than valibot!)
 
 ---
 
