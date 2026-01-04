@@ -12,6 +12,7 @@
     "build": "tsc",
     "test": "node --import tsx --test test/index.test.ts test/error-messages.test.ts test/edge-cases.test.ts test/deep-nesting.test.ts test/arrays.test.ts test/tuples.test.ts test/nested-arrays.test.ts test/unions.test.ts test/literals.test.ts test/refinements.test.ts test/transforms.test.ts test/optional-nullable.test.ts test/default-values.test.ts test/enhanced-error-messages.test.ts test/schema-compilation.test.ts test/error-formatting.test.ts test/circular-references.test.ts test/security-limits.test.ts test/csp-fallback.test.ts test/stack-trace-preservation.test.ts",
     "test:watch": "node --import tsx --test --watch test/**/*.test.ts",
+    "bench": "node --import tsx benchmarks/index.bench.ts",
     "dogfood": "npm run dogfood:flaky && npm run dogfood:diff",
     "dogfood:flaky": "flaky --test 'npm test' --runs 10",
     "dogfood:diff": "bash scripts/dogfood-diff.sh"
@@ -35,6 +36,7 @@
     "@tuulbelt/output-diffing-utility": "git+https://github.com/tuulbelt/output-diffing-utility.git",
     "@tuulbelt/test-flakiness-detector": "git+https://github.com/tuulbelt/test-flakiness-detector.git",
     "@types/node": "^25.0.3",
+    "tatami-ng": "^0.8.0",
     "tsx": "^4.7.0",
     "typescript": "^5.3.0"
   }
