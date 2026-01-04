@@ -9,9 +9,14 @@ import { bench, group, run } from 'tatami-ng';
 import * as v from 'valibot';
 
 // ============================================================================
-// Schemas
+// Schemas (PRE-CREATED for fair benchmarking)
 // ============================================================================
 
+// Primitives
+const StringSchema = v.string();
+const NumberSchema = v.number();
+
+// Objects
 const UserSchema = v.object({
   name: v.string(),
   age: v.number(),
@@ -32,6 +37,18 @@ const ComplexSchema = v.object({
   })),
 });
 
+// Arrays
+const StringArraySchema = v.array(v.string());
+const NumberArraySchema = v.array(v.number());
+const UserArraySchema = v.array(UserSchema);
+
+// Unions
+const UnionSchema = v.union([v.string(), v.number(), v.boolean()]);
+
+// Optional/Nullable
+const OptionalStringSchema = v.optional(v.string());
+const NullableStringSchema = v.nullable(v.string());
+
 // ============================================================================
 // Prevent Dead Code Elimination
 // ============================================================================
@@ -46,15 +63,15 @@ console.log('\n🔥 Valibot Competitor Benchmark (tatami-ng)\n');
 
 group('Primitives', () => {
   bench('valibot: primitive string (valid)', () => {
-    result = v.safeParse(v.string(), 'hello world');
+    result = v.safeParse(StringSchema, 'hello world');
   });
 
   bench('valibot: primitive number (valid)', () => {
-    result = v.safeParse(v.number(), 42);
+    result = v.safeParse(NumberSchema, 42);
   });
 
   bench('valibot: primitive string (invalid)', () => {
-    result = v.safeParse(v.string(), 123);
+    result = v.safeParse(StringSchema, 123);
   });
 });
 
@@ -103,15 +120,15 @@ const userArrayLarge = Array(1000).fill({ name: 'Charlie', age: 35, email: 'char
 
 group('Arrays - Objects', () => {
   bench('valibot: array OBJECTS small (10 items)', () => {
-    result = v.safeParse(v.array(UserSchema), userArraySmall);
+    result = v.safeParse(UserArraySchema, userArraySmall);
   });
 
   bench('valibot: array OBJECTS medium (100 items)', () => {
-    result = v.safeParse(v.array(UserSchema), userArrayMedium);
+    result = v.safeParse(UserArraySchema, userArrayMedium);
   });
 
   bench('valibot: array OBJECTS large (1000 items)', () => {
-    result = v.safeParse(v.array(UserSchema), userArrayLarge);
+    result = v.safeParse(UserArraySchema, userArrayLarge);
   });
 });
 
@@ -122,51 +139,51 @@ const stringArrayLarge = Array(1000).fill('test');
 
 group('Arrays - Primitives', () => {
   bench('valibot: array PRIMITIVES string[] small (10 items)', () => {
-    result = v.safeParse(v.array(v.string()), stringArraySmall);
+    result = v.safeParse(StringArraySchema, stringArraySmall);
   });
 
   bench('valibot: array PRIMITIVES string[] medium (100 items)', () => {
-    result = v.safeParse(v.array(v.string()), stringArrayMedium);
+    result = v.safeParse(StringArraySchema, stringArrayMedium);
   });
 
   bench('valibot: array PRIMITIVES string[] large (1000 items)', () => {
-    result = v.safeParse(v.array(v.string()), stringArrayLarge);
+    result = v.safeParse(StringArraySchema, stringArrayLarge);
   });
 });
 
 group('Unions', () => {
   bench('valibot: union string match', () => {
-    result = v.safeParse(v.union([v.string(), v.number(), v.boolean()]), 'test');
+    result = v.safeParse(UnionSchema, 'test');
   });
 
   bench('valibot: union number match', () => {
-    result = v.safeParse(v.union([v.string(), v.number(), v.boolean()]), 42);
+    result = v.safeParse(UnionSchema, 42);
   });
 
   bench('valibot: union boolean match', () => {
-    result = v.safeParse(v.union([v.string(), v.number(), v.boolean()]), true);
+    result = v.safeParse(UnionSchema, true);
   });
 
   bench('valibot: union no match', () => {
-    result = v.safeParse(v.union([v.string(), v.number(), v.boolean()]), null);
+    result = v.safeParse(UnionSchema, null);
   });
 });
 
 group('Optional/Nullable', () => {
   bench('valibot: optional present', () => {
-    result = v.safeParse(v.optional(v.string()), 'value');
+    result = v.safeParse(OptionalStringSchema, 'value');
   });
 
   bench('valibot: optional absent', () => {
-    result = v.safeParse(v.optional(v.string()), undefined);
+    result = v.safeParse(OptionalStringSchema, undefined);
   });
 
   bench('valibot: nullable non-null', () => {
-    result = v.safeParse(v.nullable(v.string()), 'value');
+    result = v.safeParse(NullableStringSchema, 'value');
   });
 
   bench('valibot: nullable null', () => {
-    result = v.safeParse(v.nullable(v.string()), null);
+    result = v.safeParse(NullableStringSchema, null);
   });
 });
 

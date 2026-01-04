@@ -18,9 +18,14 @@ const medium = JSON.parse(readFileSync('./fixtures/medium.json', 'utf8'));
 const large = JSON.parse(readFileSync('./fixtures/large.json', 'utf8'));
 
 // ============================================================================
-// Schemas
+// Schemas (PRE-CREATED for fair benchmarking)
 // ============================================================================
 
+// Primitives
+const StringSchema = z.string();
+const NumberSchema = z.number();
+
+// Objects
 const UserSchema = z.object({
   name: z.string(),
   age: z.number(),
@@ -45,6 +50,14 @@ const ComplexSchema = z.object({
   })),
 });
 
+// Arrays
+const StringArraySchema = z.array(z.string());
+const UserArraySchema = z.array(UserSchema);
+
+// Optional/Nullable
+const OptionalStringSchema = z.optional(z.string());
+
+// Refinements
 const RefineSchema = z.number().refine(n => n > 0, 'Must be positive').refine(n => n < 100, 'Must be less than 100');
 
 // ============================================================================
@@ -61,15 +74,15 @@ console.log('\n🔵 Zod Competitor Benchmark (tatami-ng)\n');
 
 group('Primitives', () => {
   bench('zod: primitive string (valid)', () => {
-    result = z.string().safeParse('hello world');
+    result = StringSchema.safeParse('hello world');
   });
 
   bench('zod: primitive number (valid)', () => {
-    result = z.number().safeParse(42);
+    result = NumberSchema.safeParse(42);
   });
 
   bench('zod: primitive string (invalid)', () => {
-    result = z.string().safeParse(123);
+    result = StringSchema.safeParse(123);
   });
 });
 
@@ -106,15 +119,15 @@ const userArrayLarge = Array(1000).fill({ name: 'Charlie', age: 35, email: 'char
 
 group('Arrays - Objects', () => {
   bench('zod: array OBJECTS small (10 items)', () => {
-    result = z.array(UserSchema).safeParse(userArraySmall);
+    result = UserArraySchema.safeParse(userArraySmall);
   });
 
   bench('zod: array OBJECTS medium (100 items)', () => {
-    result = z.array(UserSchema).safeParse(userArrayMedium);
+    result = UserArraySchema.safeParse(userArrayMedium);
   });
 
   bench('zod: array OBJECTS large (1000 items)', () => {
-    result = z.array(UserSchema).safeParse(userArrayLarge);
+    result = UserArraySchema.safeParse(userArrayLarge);
   });
 });
 
@@ -125,15 +138,15 @@ const stringArrayLarge = Array(1000).fill('test');
 
 group('Arrays - Primitives', () => {
   bench('zod: array PRIMITIVES string[] small (10 items)', () => {
-    result = z.array(z.string()).safeParse(stringArraySmall);
+    result = StringArraySchema.safeParse(stringArraySmall);
   });
 
   bench('zod: array PRIMITIVES string[] medium (100 items)', () => {
-    result = z.array(z.string()).safeParse(stringArrayMedium);
+    result = StringArraySchema.safeParse(stringArrayMedium);
   });
 
   bench('zod: array PRIMITIVES string[] large (1000 items)', () => {
-    result = z.array(z.string()).safeParse(stringArrayLarge);
+    result = StringArraySchema.safeParse(stringArrayLarge);
   });
 });
 
@@ -152,11 +165,11 @@ group('Unions', () => {
 
 group('Optional/Nullable', () => {
   bench('zod: optional present', () => {
-    result = z.optional(z.string()).safeParse('value');
+    result = OptionalStringSchema.safeParse('value');
   });
 
   bench('zod: optional absent', () => {
-    result = z.optional(z.string()).safeParse(undefined);
+    result = OptionalStringSchema.safeParse(undefined);
   });
 });
 
