@@ -183,14 +183,63 @@ This baseline serves as the reference point for:
 2. **Regression testing** - Ensure future changes don't degrade performance
 3. **Competitor comparison** - Documented in `BASELINE_COMPARISON.md`
 
-**Next Steps:**
-1. Implement v0.7.5 Phase 1: Skip empty refinement loop
-2. Benchmark after Phase 1 and compare to this baseline
-3. Document improvements in OPTIMIZATION_PLAN.md
-4. Iterate through remaining phases
+---
+
+## Phase 1 v0.7.5 Results (Skip Empty Refinement Loop)
+
+**Date:** 2026-01-04
+**Optimization:** Added `if (refinements.length === 0) { return true; }` before `Array.every()` in:
+- `createValidator()` (line 267)
+- `ArrayValidator.validate()` (line 1012)
+
+### Phase 1 Improvements vs v0.7.0 Baseline
+
+| Category | v0.7.0 Baseline | Phase 1 v0.7.5 | Improvement |
+|----------|-----------------|----------------|-------------|
+| **Primitives** |
+| string (valid) | 210.25 ns | 187.36 ns | **+10.9%** ✅ |
+| number (valid) | 218.19 ns | 185.70 ns | **+14.9%** ✅ |
+| boolean (valid) | 207.35 ns | 198.90 ns | **+4.1%** ✅ |
+| **Objects** |
+| simple (valid) | 386.67 ns | 334.88 ns | **+13.4%** ✅ |
+| complex nested (valid) | 3.14 µs | 2.87 µs | **+8.6%** ✅ |
+| **Arrays** |
+| OBJECTS small (10) | 5.63 µs | 4.63 µs | **+17.8%** ✅ |
+| OBJECTS medium (100) | 52.49 µs | 43.07 µs | **+17.9%** ✅ |
+| OBJECTS large (1000) | 505.74 µs | 411.01 µs | **+18.7%** ✅ |
+| **Unions** |
+| string (1st option) | 113.50 ns | 103.86 ns | **+8.5%** ✅ |
+| **Compiled** |
+| simple object (valid) | 416.20 ns | 333.49 ns | **+19.9%** ✅ |
+
+### Phase 1 Summary
+
+**Target:** +5-10% improvement for validators with zero refinements
+**Achieved:** +8-20% across most categories (EXCEEDS expectations!)
+
+**Key Insights:**
+- The optimization benefits schemas with NO refinements (most common case)
+- Objects and arrays show highest gains due to nested validator calls
+- Compiled validators benefit most (+19.9%) from early return path
+- All 537 tests still passing
+
+**valibot Gap Closure:**
+- Primitives: 2.08x slower → 1.96x slower (6% relative improvement)
+- Simple objects: 1.79x slower → 1.51x slower (16% relative improvement)
+- Unions: Still 4.6x FASTER than valibot ✅
+
+**Detailed Analysis:** See `v0.7.5-phase1-results.md` and `docs/v0_7_5_PHASE1_RESEARCH.md`
 
 ---
 
-**Generated:** 2026-01-03
+**Next Steps:**
+1. ✅ Phase 1: Skip empty refinement loop - COMPLETE
+2. Phase 2: Eliminate Fast API Result allocation (target: +10-15%)
+3. Phase 3: Inline primitive validation (target: +15-20%)
+4. Phase 4: Lazy path building (target: +10-15%)
+
+---
+
+**Generated:** 2026-01-03 (v0.7.0 baseline), 2026-01-04 (Phase 1 update)
 **Benchmark command:** `npm run bench`
 **Raw output:** `/tmp/pv-v0.7.0-complete-comparison.txt`
