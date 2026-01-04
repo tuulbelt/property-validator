@@ -1,4 +1,4 @@
-# v0.9.0+ Performance Roadmap: Competing with TypeBox
+# v0.8.5+ Performance Roadmap: Competing with TypeBox
 
 **Date:** 2026-01-04
 **Status:** Research & Planning
@@ -140,7 +140,7 @@ const value = v.parse(schema, data);  // Returns T or throws
 
 ---
 
-## v0.9.0 Implementation Plan
+## v0.8.5 Implementation Plan
 
 ### Phase 1: v.check() - Boolean-Only Fast Path
 
@@ -174,7 +174,7 @@ Current (v0.8.0):
 validator._compiled = (data) => typeof data === 'string';
 ```
 
-v0.9.0:
+v0.8.5:
 ```typescript
 // At schema creation, for string():
 const code = `return typeof data === 'string'`;
@@ -205,7 +205,7 @@ validator._compiled = (data) => {
 };
 ```
 
-v0.9.0:
+v0.8.5:
 ```typescript
 // Generate:
 const code = `
@@ -258,7 +258,7 @@ function compile<T>(validator: Validator<T>): (data: unknown) => boolean {
 
 ## Performance Targets Summary
 
-| API | Current (v0.8.0) | Target (v0.9.0) | Improvement |
+| API | Current (v0.8.0) | Target (v0.8.5) | Improvement |
 |-----|------------------|-----------------|-------------|
 | `v.validate()` | ~5M ops/sec | 8M ops/sec | +60% |
 | `v.check()` | N/A | 12-15M ops/sec | New |
@@ -332,7 +332,7 @@ Creates a standalone check function. ~3x faster than `validate()`.
 
 ## Success Criteria
 
-**v0.9.0 is successful if:**
+**v0.8.5 is successful if:**
 
 1. **Performance:**
    - `v.check()` achieves 12M+ ops/sec on simple objects
@@ -353,21 +353,21 @@ Creates a standalone check function. ~3x faster than `validate()`.
 
 ## Implementation Timeline
 
-**Phase 1 (v0.9.0-alpha):**
+**Phase 1 (v0.8.5-alpha):**
 - [ ] Implement `v.check()`
 - [ ] Benchmark vs valibot.is(), zod.safeParse().success
 
-**Phase 2 (v0.9.0-beta):**
+**Phase 2 (v0.8.5-beta):**
 - [ ] Full JIT compilation for primitives
 - [ ] Full JIT compilation for objects
 - [ ] Benchmark vs TypeBox TypeCompiler
 
-**Phase 3 (v0.9.0-rc):**
+**Phase 3 (v0.8.5-rc):**
 - [ ] Implement `v.compile()`
 - [ ] Documentation updates
 - [ ] CSP compatibility testing
 
-**Phase 4 (v0.9.0):**
+**Phase 4 (v0.8.5):**
 - [ ] Final benchmarks
 - [ ] Performance guide documentation
 - [ ] Release
