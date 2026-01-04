@@ -906,12 +906,13 @@ export function validate<T>(...): ValidationResult<T> {
 
 ---
 
-### Phase 3: Inline Primitive Validation (Skip validateWithPath) 🎯
+### Phase 3: Inline Primitive Validation (Skip validateWithPath) ❌
 
-**Status:** ❌ Not Started
+**Status:** ❌ REJECTED (2026-01-04)
 **Expected Impact:** +15-20% for primitives in Normal API
+**Actual Impact:** +15% primitives, BUT -24% to -40% unions, -10% arrays
 **Difficulty:** Medium
-**Priority:** MEDIUM (Normal API optimization)
+**Priority:** CANCELLED (unacceptable regressions)
 
 #### Problem
 
@@ -976,9 +977,48 @@ function isPrimitiveType(type: string): boolean {
 #### Acceptance Criteria
 
 - ✅ `primitives.bench.ts` shows +15-20% improvement for Normal API
-- ✅ Object and array benchmarks unchanged
-- ✅ 511/511 tests passing
-- ✅ Error messages still include correct paths
+- ❌ Object and array benchmarks unchanged (FAILED: -10% arrays)
+- ✅ 537/537 tests passing
+- ❌ Union benchmarks unchanged (FAILED: -24% to -40% regression!)
+
+#### Investigation Results (2026-01-04)
+
+**Attempted Implementation v1:**
+```typescript
+const validatorType = validator._type;
+if (validatorType && !validator._default && !validator._transform && !validator._hasRefinements) {
+  if (validatorType === 'string') { ... }
+  if (validatorType === 'number') { ... }
+  if (validatorType === 'boolean') { ... }
+}
+```
+
+**Problem:** This checks 4 properties (`_type`, `_default`, `_transform`, `_hasRefinements`) for EVERY validator, even unions/objects/arrays. The overhead from property access adds -24% regression on unions.
+
+**Attempted Implementation v2:**
+```typescript
+const validatorType = validator._type;
+if (validatorType === 'string') {
+  if (!validator._default && ...) { ... }
+} else if (validatorType === 'number') {
+  if (!validator._default && ...) { ... }
+} else if (validatorType === 'boolean') {
+  if (!validator._default && ...) { ... }
+}
+```
+
+**Problem:** Still checks `_type` plus 3 string comparisons for non-primitives. Reduced overhead but still -40% regression on unions.
+
+**Root Cause:**
+ANY code added at the start of `validate()` affects ALL validators, including our strength (unions). Unions need to be as fast as possible since we're 4.5x faster than valibot on unions - this is our key advantage.
+
+**Conclusion:**
+Phase 3 cannot be implemented without regressing unions. The trade-off (primitives +15%, unions -40%) is unacceptable because:
+1. Unions are our key competitive advantage (4.5x faster than valibot)
+2. The regression would hurt our position vs valibot significantly
+3. Alternative: Consider optimizing primitives in validateFast() instead, but this has lower impact since validateFast() already skips path tracking.
+
+**REJECTED:** Phase 3 optimization reverted. Focus on Phase 4 (Lazy Path Building) instead.
 
 ---
 
