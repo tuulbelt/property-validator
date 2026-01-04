@@ -1048,6 +1048,8 @@ export const v = {
   string(): Validator<string> {
     const validator = createValidator(validateString, stringError);
     validator._type = 'string';
+    // v0.8.0 OPTIMIZATION: Expose _compiled for JIT bypass (used by unions)
+    validator._compiled = validateString;
     return validator;
   },
 
@@ -1057,6 +1059,8 @@ export const v = {
   number(): Validator<number> {
     const validator = createValidator(validateNumber, numberError);
     validator._type = 'number';
+    // v0.8.0 OPTIMIZATION: Expose _compiled for JIT bypass (used by unions)
+    validator._compiled = validateNumber;
     return validator;
   },
 
@@ -1066,6 +1070,8 @@ export const v = {
   boolean(): Validator<boolean> {
     const validator = createValidator(validateBoolean, booleanError);
     validator._type = 'boolean';
+    // v0.8.0 OPTIMIZATION: Expose _compiled for JIT bypass (used by unions)
+    validator._compiled = validateBoolean;
     return validator;
   },
 
@@ -1815,11 +1821,29 @@ export const v = {
   union<T extends readonly Validator<any>[]>(
     validators: T
   ): Validator<UnionType<T>> {
-    return createValidator(
-      (data): data is UnionType<T> => {
-        // Try each validator in order, return true on first success
-        return validators.some((validator) => validator.validate(data));
-      },
+    // v0.8.0 OPTIMIZATION: Check if all child validators have _compiled for JIT bypass
+    const allHaveCompiled = validators.every((v) => v._compiled !== undefined);
+    const noneHaveRefinements = validators.every((v) => !v._hasRefinements);
+
+    // Create compiled validation function that uses child _compiled if available
+    const compiledValidate = allHaveCompiled && noneHaveRefinements
+      ? (data: unknown): boolean => {
+          // Fast path: use _compiled for each child validator
+          for (let i = 0; i < validators.length; i++) {
+            if (validators[i]._compiled!(data)) return true;
+          }
+          return false;
+        }
+      : (data: unknown): boolean => {
+          // Fallback: use .validate() method
+          for (let i = 0; i < validators.length; i++) {
+            if (validators[i].validate(data)) return true;
+          }
+          return false;
+        };
+
+    const validator = createValidator(
+      (data): data is UnionType<T> => compiledValidate(data),
       (data) => {
         // If validation failed, collect errors from all validators
         const errors = validators.map((validator) => validator.error(data));
@@ -1832,6 +1856,14 @@ export const v = {
         return `Expected one of:\n  - ${errors.join('\n  - ')}`;
       }
     );
+
+    // v0.8.0 OPTIMIZATION: Expose _compiled for validateFast() bypass
+    // Only when no child validators have refinements
+    if (noneHaveRefinements) {
+      validator._compiled = compiledValidate;
+    }
+
+    return validator;
   },
 
   /**
@@ -1840,10 +1872,18 @@ export const v = {
   literal<T extends string | number | boolean | null>(
     value: T
   ): Validator<T> {
-    return createValidator(
-      (data): data is T => data === value,
+    // v0.8.0 OPTIMIZATION: Create compiled validation function for JIT bypass
+    const compiledValidate = (data: unknown): boolean => data === value;
+
+    const validator = createValidator(
+      (data): data is T => compiledValidate(data),
       (data) => `Expected literal value ${JSON.stringify(value)}, got ${getTypeName(data)}`
     );
+
+    // Expose _compiled for unions to chain JIT bypass
+    validator._compiled = compiledValidate;
+
+    return validator;
   },
 
   /**
