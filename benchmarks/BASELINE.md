@@ -283,11 +283,88 @@ This baseline serves as the reference point for:
 **Next Steps:**
 1. ✅ Phase 1: Skip empty refinement loop - COMPLETE
 2. ✅ Phase 2: Eliminate Fast API Result allocation - COMPLETE
-3. Phase 3: Inline primitive validation (target: +15-20%)
-4. Phase 4: Lazy path building (target: +10-15%)
+3. ❌ Phase 3: Inline primitive validation - REJECTED (union regression unacceptable)
+4. ✅ Phase 4: Lazy path building - COMPLETE
 
 ---
 
-**Generated:** 2026-01-03 (v0.7.0 baseline), 2026-01-04 (Phase 1+2 update)
+## Phase 4 v0.7.5 Results (Lazy Path Building)
+
+**Date:** 2026-01-04
+**Optimization:** Changed path type from `string[]` to `(string | number)[]` (PathSegment alias). Array indices are now stored as raw numbers instead of formatted strings like `"[0]"`. Path formatting is deferred to error reporting via `formatPathString()` method on ValidationError.
+
+### Phase 4 Changes
+
+**Type Changes:**
+- Added `PathSegment = string | number` type alias
+- Changed `path: string[]` to `path: PathSegment[]` in ValidationError and all validators
+- Added `formatPathString()` method to ValidationError class for path formatting on demand
+
+**Implementation:**
+- Array validators now push `i` (number) instead of `\`[\${i}]\`` (string)
+- Object validators still push property names (strings)
+- Path formatting only occurs when error message is generated
+
+### Phase 4 Improvements vs v0.7.0 Baseline
+
+| Category | v0.7.0 Baseline | Phase 4 v0.7.5 | Improvement |
+|----------|-----------------|----------------|-------------|
+| **Arrays** |
+| small (10 items) | 3.18 µs | 2.68 µs | **+15.7%** ✅ |
+| medium (100 items) | 19.46 µs | 13.93 µs | **+28.4%** ✅ |
+| large (1000 items) | 176.95 µs | 124.56 µs | **+29.6%** ✅ |
+| OBJECTS small (10) | 5.63 µs | 4.17 µs | **+25.9%** ✅ |
+| OBJECTS medium (100) | 52.49 µs | 37.38 µs | **+28.8%** ✅ |
+| OBJECTS large (1000) | 505.74 µs | 384.15 µs | **+24.0%** ✅ |
+| **Primitives** |
+| string (valid) | 210.25 ns | 179.97 ns | **+14.4%** ✅ |
+| number (valid) | 218.19 ns | 186.70 ns | **+14.4%** ✅ |
+| boolean (valid) | 207.35 ns | 193.35 ns | **+6.8%** ✅ |
+| **Objects** |
+| simple (valid) | 386.67 ns | 332.10 ns | **+14.1%** ✅ |
+| complex nested (valid) | 3.14 µs | 2.78 µs | **+11.5%** ✅ |
+| **Unions** |
+| string (1st option) | 113.50 ns | 101.24 ns | **+10.8%** ✅ |
+| **Compiled** |
+| simple object (valid) | 416.20 ns | 341.03 ns | **+18.1%** ✅ |
+
+### Phase 4 Summary
+
+**Target:** +10-15% improvement on arrays
+**Achieved:** +24% to +29.6% on arrays ✅ EXCEEDS TARGET
+
+**Key Insights:**
+- Lazy path building eliminates string allocation on every array index
+- Largest gains on arrays where N index strings would be allocated (N = array length)
+- Objects also benefit (+11-14%) from reduced path manipulation overhead
+- Unions remain stable at 101.24 ns (within ±1.31% variance of Phase 2's 99.43 ns)
+- All 537 tests still passing
+
+**Total Cumulative Improvement (Phase 1 + 2 + 4 vs v0.7.0):**
+- Arrays large: 176.95 µs → 124.56 µs = **+29.6%**
+- OBJECTS medium: 52.49 µs → 37.38 µs = **+28.8%**
+- Compiled validators: 416.20 ns → 341.03 ns = **+18.1%**
+- Primitives: ~210 ns → ~180 ns = **+14-15%**
+- Unions: 113.50 ns → 101.24 ns = **+10.8%** (no regression!)
+
+**Competitor Status (Phase 4):**
+- vs zod: 6.5x faster on primitives, 2.2x faster on objects, 3.0x faster on arrays
+- vs yup: 7.7x faster on primitives, 17.8x faster on objects, 23.3x faster on arrays
+- vs valibot: ~1.8x slower on primitives, ~1.5x slower on objects, ~1.2x slower on arrays
+- Unions: 4.5x FASTER than valibot ✅ (property-validator's competitive advantage)
+
+---
+
+**Phase Status:**
+1. ✅ Phase 1: Skip empty refinement loop - COMPLETE
+2. ✅ Phase 2: Eliminate Fast API Result allocation - COMPLETE
+3. ❌ Phase 3: Inline primitive validation - REJECTED
+4. ✅ Phase 4: Lazy path building - COMPLETE
+5. 📋 Phase 5: Optimize primitive validator closures (optional)
+6. 📋 Phase 6: Inline validateWithPath for plain objects (optional)
+
+---
+
+**Generated:** 2026-01-03 (v0.7.0 baseline), 2026-01-04 (Phase 1+2+4 update)
 **Benchmark command:** `npm run bench`
 **Raw output:** `/tmp/pv-v0.7.0-complete-comparison.txt`

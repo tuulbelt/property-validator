@@ -14,9 +14,16 @@ import { realpathSync } from 'node:fs';
  * Stack traces are captured lazily only when accessed via .stack getter.
  * This provides 52x faster error creation while keeping all debugging features.
  */
+/**
+ * Path segment type - can be string (property name) or number (array index)
+ * Numbers are stored raw and only formatted to "[0]" when displaying errors
+ * This avoids string allocation on every array iteration (hot path optimization)
+ */
+export type PathSegment = string | number;
+
 export class ValidationError {
   public readonly message: string;
-  public readonly path: string[];
+  public readonly path: PathSegment[];
   public readonly value: unknown;
   public readonly expected: string;
   public readonly code: string;
@@ -24,7 +31,7 @@ export class ValidationError {
 
   constructor(options: {
     message: string;
-    path?: readonly string[] | string[];
+    path?: readonly PathSegment[] | PathSegment[];
     value?: unknown;
     expected?: string;
     code?: string;
@@ -34,6 +41,36 @@ export class ValidationError {
     this.value = options.value;
     this.expected = options.expected || '';
     this.code = options.code || 'VALIDATION_ERROR';
+  }
+
+  /**
+   * Format path segments into a readable string
+   * Numbers become [0], [1], etc. Strings are joined with dots.
+   * Examples:
+   *   ['name'] → 'name'
+   *   ['users', 0] → 'users[0]'
+   *   ['users', 0, 'email'] → 'users[0].email'
+   *   [0, 'name'] → '[0].name'
+   * @internal
+   */
+  private formatPathString(): string {
+    if (this.path.length === 0) return '';
+
+    let result = '';
+    for (let i = 0; i < this.path.length; i++) {
+      const segment = this.path[i]!;
+      if (typeof segment === 'number') {
+        // Numbers always become [n] - no separator needed before them
+        result += `[${segment}]`;
+      } else {
+        // String segment - add dot separator if not first element
+        if (i > 0) {
+          result += '.';
+        }
+        result += segment;
+      }
+    }
+    return result;
   }
 
   /**
@@ -76,11 +113,12 @@ export class ValidationError {
    * Format as JSON
    */
   private formatJSON(): string {
+    const pathStr = this.formatPathString();
     return JSON.stringify(
       {
         error: this.code,
         message: this.message,
-        path: this.path.length > 0 ? this.path.join('.') : undefined,
+        path: pathStr || undefined,
         expected: this.expected || undefined,
         received: this.getTypeName(this.value),
       },
@@ -94,9 +132,10 @@ export class ValidationError {
    */
   private formatText(): string {
     const parts: string[] = [];
+    const pathStr = this.formatPathString();
 
-    if (this.path.length > 0) {
-      parts.push(`At path: ${this.path.join('.')}`);
+    if (pathStr) {
+      parts.push(`At path: ${pathStr}`);
     }
 
     parts.push(`Error: ${this.message}`);
@@ -122,9 +161,10 @@ export class ValidationError {
     const bold = '\x1b[1m';
 
     const parts: string[] = [];
+    const pathStr = this.formatPathString();
 
-    if (this.path.length > 0) {
-      parts.push(`${gray}At path:${reset} ${blue}${this.path.join('.')}${reset}`);
+    if (pathStr) {
+      parts.push(`${gray}At path:${reset} ${blue}${pathStr}${reset}`);
     }
 
     parts.push(`${red}${bold}Error:${reset} ${this.message}`);
@@ -203,7 +243,7 @@ export interface Validator<T> {
   _default?: T | (() => T);  // Internal: default value or function
   _type?: string;  // Internal: validator type for optimizations
   _hasRefinements?: boolean;  // Internal: whether validator has refinements
-  _validateWithPath?: (data: unknown, path: readonly string[] | string[], seen: WeakSet<object>, depth: number, options: ValidationOptions) => Result<T>;  // Internal: path-aware validation
+  _validateWithPath?: (data: unknown, path: readonly PathSegment[] | PathSegment[], seen: WeakSet<object>, depth: number, options: ValidationOptions) => Result<T>;  // Internal: path-aware validation
 }
 
 /**
@@ -320,7 +360,7 @@ function createValidator<T>(
       );
 
       // Delegate path-aware validation to wrapped validator
-      optionalValidator._validateWithPath = (data: unknown, path: readonly string[] | string[], seen: WeakSet<object>, depth: number, options: ValidationOptions): Result<T | undefined> => {
+      optionalValidator._validateWithPath = (data: unknown, path: readonly PathSegment[] | PathSegment[], seen: WeakSet<object>, depth: number, options: ValidationOptions): Result<T | undefined> => {
         if (data === undefined) {
           return { ok: true, value: undefined as T | undefined };
         }
@@ -338,7 +378,7 @@ function createValidator<T>(
       );
 
       // Delegate path-aware validation to wrapped validator
-      nullableValidator._validateWithPath = (data: unknown, path: readonly string[] | string[], seen: WeakSet<object>, depth: number, options: ValidationOptions): Result<T | null> => {
+      nullableValidator._validateWithPath = (data: unknown, path: readonly PathSegment[] | PathSegment[], seen: WeakSet<object>, depth: number, options: ValidationOptions): Result<T | null> => {
         if (data === null) {
           return { ok: true, value: null as T | null };
         }
@@ -357,7 +397,7 @@ function createValidator<T>(
       );
 
       // Delegate path-aware validation to wrapped validator
-      nullishValidator._validateWithPath = (data: unknown, path: readonly string[] | string[], seen: WeakSet<object>, depth: number, options: ValidationOptions): Result<T | undefined | null> => {
+      nullishValidator._validateWithPath = (data: unknown, path: readonly PathSegment[] | PathSegment[], seen: WeakSet<object>, depth: number, options: ValidationOptions): Result<T | undefined | null> => {
         if (data === undefined || data === null) {
           return { ok: true, value: data as T | undefined | null };
         }
@@ -391,7 +431,7 @@ function createValidator<T>(
 export function validateWithPath<T>(
   validator: Validator<T>,
   data: unknown,
-  path: readonly string[] | string[] = [],
+  path: readonly PathSegment[] | PathSegment[] = [],
   seen: WeakSet<object> = new WeakSet(),
   depth: number = 0,
   options: ValidationOptions = {}
@@ -478,14 +518,14 @@ function extractExpectedType(message: string): string {
  * to avoid allocation overhead
  * @internal
  */
-const EMPTY_PATH: readonly string[] = [];
+const EMPTY_PATH: readonly PathSegment[] = [];
 
 /**
  * Ensure path is mutable (clone if it's the singleton EMPTY_PATH)
  * @internal
  */
-function ensureMutablePath(path: string[] | readonly string[]): string[] {
-  return path === EMPTY_PATH ? [] : path as string[];
+function ensureMutablePath(path: PathSegment[] | readonly PathSegment[]): PathSegment[] {
+  return path === EMPTY_PATH ? [] : path as PathSegment[];
 }
 
 /**
@@ -1152,7 +1192,7 @@ export const v = {
           return baseValidator.default(value);
         },
 
-        _validateWithPath(data: unknown, path: readonly string[] | string[], seen: WeakSet<object>, depth: number, options: ValidationOptions): Result<T[]> {
+        _validateWithPath(data: unknown, path: readonly PathSegment[] | PathSegment[], seen: WeakSet<object>, depth: number, options: ValidationOptions): Result<T[]> {
           if (!Array.isArray(data)) {
             const details = new ValidationError({
               message: `Expected array, got ${getTypeName(data)}`,
@@ -1271,9 +1311,9 @@ export const v = {
               }
 
               if (!isValid) {
-                // Only build path and create error details on failure
-                const indexPath = `[${i}]`;
-                mutablePath.push(indexPath);
+                // PHASE 4 OPTIMIZATION: Push raw index instead of formatted string
+                // String formatting happens only in ValidationError.formatPathString()
+                mutablePath.push(i);
                 const message = `Invalid item at index ${i}: Expected ${primitiveType}, got ${getTypeName(item)}`;
                 const details = new ValidationError({
                   message,
@@ -1291,10 +1331,10 @@ export const v = {
               // Skip holes in sparse arrays (like [1, , 3])
               if (!(i in data)) continue;
 
-              // OPTIMIZATION: Reuse path array with push/pop instead of spread
-              // This avoids O(n * path_length) allocations and gives 3-4x speedup
-              const indexPath = `[${i}]`;
-              mutablePath.push(indexPath);
+              // PHASE 4 OPTIMIZATION: Push raw index instead of formatted string "[${i}]"
+              // This avoids string allocation on every iteration (hot path)
+              // String formatting happens only when errors occur
+              mutablePath.push(i);
               const result = validateWithPath(itemValidator, data[i], mutablePath, seen, depth + 1, options);
 
               if (!result.ok) {
@@ -1388,7 +1428,7 @@ export const v = {
     );
 
     // Path-aware validation for tuple elements
-    validator._validateWithPath = (data: unknown, path: readonly string[] | string[], seen: WeakSet<object>, depth: number, options: ValidationOptions): Result<TupleType<T>> => {
+    validator._validateWithPath = (data: unknown, path: readonly PathSegment[] | PathSegment[], seen: WeakSet<object>, depth: number, options: ValidationOptions): Result<TupleType<T>> => {
       if (!Array.isArray(data)) {
         const details = new ValidationError({
           message: `Expected tuple (array), got ${getTypeName(data)}`,
@@ -1435,9 +1475,9 @@ export const v = {
       let mutablePath = ensureMutablePath(path);
 
       // Validate each element with index in path
+      // PHASE 4 OPTIMIZATION: Push raw index instead of formatted string
       for (let i = 0; i < validators.length; i++) {
-        const indexPath = `[${i}]`;
-        mutablePath.push(indexPath);
+        mutablePath.push(i);
         const result = validateWithPath(validators[i]!, data[i], mutablePath, seen, depth + 1, options);
 
         if (!result.ok) {
@@ -1541,7 +1581,7 @@ export const v = {
     // If no transforms, leave _transform undefined → compileArrayTransform uses optimized path
 
     // Path-aware validation for nested errors
-    validator._validateWithPath = (data: unknown, path: readonly string[] | string[], seen: WeakSet<object>, depth: number, options: ValidationOptions): Result<T> => {
+    validator._validateWithPath = (data: unknown, path: readonly PathSegment[] | PathSegment[], seen: WeakSet<object>, depth: number, options: ValidationOptions): Result<T> => {
       if (typeof data !== 'object' || data === null) {
         const details = new ValidationError({
           message: `Expected object, got ${getTypeName(data)}`,
@@ -1762,7 +1802,7 @@ export const v = {
     );
 
     // Delegate path-aware validation to the wrapped validator
-    lazyValidator._validateWithPath = (data: unknown, path: readonly string[] | string[], seen: WeakSet<object>, depth: number, options: ValidationOptions): Result<T> => {
+    lazyValidator._validateWithPath = (data: unknown, path: readonly PathSegment[] | PathSegment[], seen: WeakSet<object>, depth: number, options: ValidationOptions): Result<T> => {
       const validator = getValidator();
       return validateWithPath(validator, data, path, seen, depth, options);
     };
