@@ -355,16 +355,66 @@ This baseline serves as the reference point for:
 
 ---
 
+## Phase 5 v0.7.5 Results (Shared Primitive Validator Functions)
+
+**Date:** 2026-01-04
+**Optimization:** Extracted shared validator functions at module level to avoid creating new closures every time `v.string()`, `v.number()`, or `v.boolean()` is called.
+
+### Phase 5 Implementation
+
+**Changes:**
+- Added `validateString()`, `stringError()`, `validateNumber()`, `numberError()`, `validateBoolean()`, `booleanError()` as module-level functions
+- Updated `v.string()`, `v.number()`, `v.boolean()` to use shared functions instead of inline closures
+
+### Phase 5 Results vs Phase 4
+
+| Category | Phase 4 | Phase 5 | Change |
+|----------|---------|---------|--------|
+| **Primitives** |
+| string (valid) | 179.97 ns | 174-186 ns | ±3% (within variance) |
+| number (valid) | 186.70 ns | 178-184 ns | ±3% (within variance) |
+| boolean (valid) | 193.35 ns | 165-169 ns | ~+12% (anomaly) |
+| **Objects** |
+| simple (valid) | 332.10 ns | 337 ns | -1.5% (within variance) |
+| complex nested | 2.78 µs | 2.86-3.03 µs | -3% to -9% (mixed) |
+| **Arrays OBJECTS** |
+| small (10) | 4.17 µs | 4.41-4.60 µs | -6% to -10% (slight regression) |
+| medium (100) | 37.38 µs | 37-38 µs | ±2% (within variance) |
+| large (1000) | 384.15 µs | 363-388 µs | ±5% (within variance) |
+| **Unions** |
+| string match | 101.24 ns | 106-108 ns | -5% to -7% (within variance) |
+
+### Phase 5 Summary
+
+**Target:** +5-10% improvement on primitives
+**Achieved:** NO measurable improvement ❌
+
+**Key Insight:**
+Phase 5 optimizes **validator creation time**, not **validation time**. The benchmark measures validation speed, where:
+- Validators are created once at startup
+- Validations run millions of times per benchmark
+- One-time closure allocation savings are amortized to near-zero
+
+**When Phase 5 Helps:**
+- Applications creating many short-lived validator instances
+- Dynamic schema generation at runtime
+- Memory-constrained environments
+
+**Conclusion:**
+Phase 5 is implemented but provides no runtime validation performance benefit. The optimization is architectural (cleaner code, reduced memory churn) rather than performance-oriented. All 537 tests still passing.
+
+---
+
 **Phase Status:**
 1. ✅ Phase 1: Skip empty refinement loop - COMPLETE
 2. ✅ Phase 2: Eliminate Fast API Result allocation - COMPLETE
 3. ❌ Phase 3: Inline primitive validation - REJECTED
 4. ✅ Phase 4: Lazy path building - COMPLETE
-5. 📋 Phase 5: Optimize primitive validator closures (optional)
+5. ✅ Phase 5: Shared primitive validator functions - COMPLETE (no perf benefit)
 6. 📋 Phase 6: Inline validateWithPath for plain objects (optional)
 
 ---
 
-**Generated:** 2026-01-03 (v0.7.0 baseline), 2026-01-04 (Phase 1+2+4 update)
+**Generated:** 2026-01-03 (v0.7.0 baseline), 2026-01-04 (Phase 1+2+4+5 update)
 **Benchmark command:** `npm run bench`
 **Raw output:** `/tmp/pv-v0.7.0-complete-comparison.txt`

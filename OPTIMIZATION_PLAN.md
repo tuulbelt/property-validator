@@ -1152,8 +1152,9 @@ function pathArrayToString(arr: (string | number)[]): string {
 
 ### Phase 5: Optimize Primitive Validator Closures 🔬
 
-**Status:** ❌ Not Started
+**Status:** ✅ COMPLETE (2026-01-04)
 **Expected Impact:** +5-10% for primitives (both APIs)
+**Actual Result:** ❌ NO measurable improvement (creation-time only)
 **Difficulty:** Low
 **Priority:** LOW (incremental gain)
 
@@ -1254,9 +1255,32 @@ export const v = {
 
 #### Acceptance Criteria
 
-- ✅ `primitives.bench.ts` shows +5-10% improvement
-- ✅ 511/511 tests passing
-- ✅ V8 profiling shows inlining of primitive validators
+- ❌ `primitives.bench.ts` shows +5-10% improvement → **NO improvement**
+- ✅ 537/537 tests passing
+- ❌ V8 profiling shows inlining → **Not applicable**
+
+#### Phase 5 Results (2026-01-04)
+
+**Implementation Completed:**
+- Added `validateString()`, `stringError()`, `validateNumber()`, `numberError()`, `validateBoolean()`, `booleanError()` as module-level functions (lines 985-1020)
+- Updated `v.string()`, `v.number()`, `v.boolean()` to use shared functions
+
+**Benchmark Results vs Phase 4:**
+| Category | Phase 4 | Phase 5 | Change |
+|----------|---------|---------|--------|
+| string (valid) | 179.97 ns | 174-186 ns | ±3% (within variance) |
+| number (valid) | 186.70 ns | 178-184 ns | ±3% (within variance) |
+| boolean (valid) | 193.35 ns | 165-169 ns | ~+12% (anomaly) |
+| Objects simple | 332.10 ns | 337 ns | -1.5% (within variance) |
+| Unions | 101.24 ns | 106-108 ns | -5% (within variance) |
+
+**Root Cause Analysis:**
+Phase 5 optimizes **validator creation time**, not **validation time**. The benchmark measures validation speed, where:
+- Validators are created once at startup
+- Validations run millions of times per benchmark
+- One-time closure allocation savings are amortized to near-zero
+
+**Conclusion:** Phase 5 is architecturally cleaner but provides no measurable runtime validation performance benefit.
 
 ---
 
@@ -1580,17 +1604,18 @@ After implementing "selective optimization" (ArrayValidator only) and seeing une
 - **Difficulty:** Complex
 - **Priority:** MEDIUM
 
-**Phase 5: Optimize Primitive Validator Closures**
+**Phase 5: Optimize Primitive Validator Closures** ✅ COMPLETE
 - **Expected Impact:** +5-10%
+- **Actual Result:** ❌ NO improvement (creation-time only)
 - **Difficulty:** Low
 - **Priority:** LOW
 
 **Phase 6: Inline validateWithPath for Plain Objects**
 - **Expected Impact:** +10-15%
 - **Difficulty:** Complex
-- **Priority:** MEDIUM
+- **Priority:** MEDIUM (optional)
 
-**Decision Point:** Phases 2-6 pending. Phase 1 alone achieved significant improvements. Consider whether additional micro-optimizations are worth the complexity.
+**Decision Point:** Phases 1, 2, 4 achieved significant improvements (+10-30%). Phase 3 rejected (union regression). Phase 5 complete but no runtime benefit. Phase 6 optional.
 
 ---
 

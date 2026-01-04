@@ -982,6 +982,43 @@ function compileArrayTransform<T>(itemValidator: Validator<T>): (data: any) => T
   };
 }
 
+// ============================================================================
+// PHASE 5 OPTIMIZATION: Shared Primitive Validator Functions
+// ============================================================================
+// These functions are defined once at module level to avoid creating new
+// closures every time v.string(), v.number(), or v.boolean() is called.
+// This reduces function allocation overhead for primitive validators.
+
+/** Shared string validation function */
+function validateString(data: unknown): data is string {
+  return typeof data === 'string';
+}
+
+/** Shared string error function */
+function stringError(data: unknown): string {
+  return `Expected string, got ${getTypeName(data)}`;
+}
+
+/** Shared number validation function */
+function validateNumber(data: unknown): data is number {
+  return typeof data === 'number' && !Number.isNaN(data);
+}
+
+/** Shared number error function */
+function numberError(data: unknown): string {
+  return `Expected number, got ${getTypeName(data)}`;
+}
+
+/** Shared boolean validation function */
+function validateBoolean(data: unknown): data is boolean {
+  return typeof data === 'boolean';
+}
+
+/** Shared boolean error function */
+function booleanError(data: unknown): string {
+  return `Expected boolean, got ${getTypeName(data)}`;
+}
+
 /**
  * Validator builders
  */
@@ -990,10 +1027,7 @@ export const v = {
    * String validator
    */
   string(): Validator<string> {
-    const validator = createValidator(
-      (data): data is string => typeof data === 'string',
-      (data) => `Expected string, got ${getTypeName(data)}`
-    );
+    const validator = createValidator(validateString, stringError);
     validator._type = 'string';
     return validator;
   },
@@ -1002,10 +1036,7 @@ export const v = {
    * Number validator
    */
   number(): Validator<number> {
-    const validator = createValidator(
-      (data): data is number => typeof data === 'number' && !Number.isNaN(data),
-      (data) => `Expected number, got ${getTypeName(data)}`
-    );
+    const validator = createValidator(validateNumber, numberError);
     validator._type = 'number';
     return validator;
   },
@@ -1014,10 +1045,7 @@ export const v = {
    * Boolean validator
    */
   boolean(): Validator<boolean> {
-    const validator = createValidator(
-      (data): data is boolean => typeof data === 'boolean',
-      (data) => `Expected boolean, got ${getTypeName(data)}`
-    );
+    const validator = createValidator(validateBoolean, booleanError);
     validator._type = 'boolean';
     return validator;
   },
