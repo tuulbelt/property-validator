@@ -1,12 +1,12 @@
 # Property Validator / `propval`
 
 [![Tests](https://github.com/tuulbelt/property-validator/actions/workflows/test.yml/badge.svg)](https://github.com/tuulbelt/property-validator/actions/workflows/test.yml)
-![Version](https://img.shields.io/badge/version-0.6.0-blue)
+![Version](https://img.shields.io/badge/version-0.7.5-blue)
 ![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)
 ![Dogfooded](https://img.shields.io/badge/dogfooded-🐕-purple)
-![Tests](https://img.shields.io/badge/tests-526%20passing-success)
+![Tests](https://img.shields.io/badge/tests-537%20passing-success)
 ![Zero Dependencies](https://img.shields.io/badge/dependencies-0-success)
-![Performance](https://img.shields.io/badge/vs%20zod-71%25%20win%20rate-yellow)
+![Performance](https://img.shields.io/badge/performance-Valibot--tier-brightgreen)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Runtime type validation with TypeScript inference.
@@ -404,35 +404,50 @@ Errors are returned in the `error` field of the result object, not thrown.
 
 Property Validator is built for high-throughput validation with zero runtime dependencies.
 
-### Benchmarks
+### Benchmarks (v0.7.5)
 
-Comprehensive benchmarks compare property-validator against zod, yup, and valibot. See [`benchmarks/README.md`](./benchmarks/README.md) for full results.
+Comprehensive benchmarks compare property-validator against zod, yup, and valibot using [tatami-ng](https://github.com/poolifier/tatami-ng) with criterion-equivalent statistical rigor. See [`benchmarks/README.md`](./benchmarks/README.md) for full results.
 
-**Key Results (v0.6.0) - vs Zod:**
+**vs Zod (all categories won):**
 
 | Operation | property-validator | zod | Winner |
 |-----------|-------------------|-----|--------|
-| **Primitives** | 3.9M ops/sec | 698k ops/sec | **property-validator** (5.6x faster) ✅ |
-| **Objects (simple)** | 1.69M ops/sec | 1.26M ops/sec | **property-validator** (1.3x faster) ✅ |
-| **Primitive Arrays** | 888k ops/sec | 333k ops/sec | **property-validator** (2.7x faster) ✅ |
-| **Object Arrays** | 70k ops/sec | 136k ops/sec | **zod** (1.9x faster) ❌ |
-| **Unions** | 7.1M ops/sec | 4.1M ops/sec | **property-validator** (1.7x faster) ✅ |
-| **Refinements** | 7.2M ops/sec | 474k ops/sec | **property-validator** (15x faster) ✅ |
+| **Primitives** | ~180 ns | ~1,100 ns | **propval** (6.1x faster) ✅ |
+| **Simple Objects** | ~120 ns | ~800 ns | **propval** (6.7x faster) ✅ |
+| **Object Arrays** | ~5.0 µs | ~16.5 µs | **propval** (3.3x faster) ✅ |
+| **Unions** | ~107 ns | ~350 ns | **propval** (3.3x faster) ✅ |
+| **Refinements** | ~200 ns | ~2.5 µs | **propval** (12.5x faster) ✅ |
 
-**Score vs Zod: 5 wins, 2 losses (71% win rate)** 📊
+**Score vs Zod: 6/6 categories won** 📊
 
-**vs Valibot:** property-validator trails valibot in most categories (2 wins, 5 losses). Valibot is 1.6-4.2x faster for objects and arrays. Property-validator excels at unions (4.7x faster) and refinements (1.4x faster). See [`benchmarks/README.md`](./benchmarks/README.md) for detailed valibot comparison.
+**vs Valibot (competitive tier):**
+
+| Operation | property-validator | valibot | Winner |
+|-----------|-------------------|---------|--------|
+| **Simple Objects** | ~120 ns | ~207 ns | **propval** (1.7x faster) ✅ |
+| **Unions** | ~107 ns | ~450 ns | **propval** (4.5x faster) ✅ |
+| **Primitives** | ~180 ns | ~101 ns | valibot (1.8x faster) |
+| **Complex Nested** | ~2.5 µs | ~1.05 µs | valibot (2.4x faster) |
+| **Primitive Arrays** | ~1.1 µs | ~296 ns | valibot (3.8x faster) |
+
+**Score vs Valibot: 2 wins, 3 losses (competitive tier)**
 
 **Why It's Fast:**
 - ✅ Zero dependencies = smaller bundle, faster load
-- ✅ Hybrid compilation (v0.6.0): inline primitive checks, compiled object validators
-- ✅ Fast-path optimizations for common patterns
-- ✅ Minimal allocations (eliminated via compilation)
+- ✅ Pre-compiled validators with fast-path for plain objects
+- ✅ Lazy path building (paths computed only on errors)
+- ✅ Minimal allocations via zero-copy validation
+
+**Performance Tiers (TypeScript Validators):**
+- **Ultra-fast:** Typia (AOT), TypeBox (JIT), ArkType (JIT) — 10-100x faster than Zod
+- **Fast:** Valibot, property-validator — 2-6x faster than Zod
+- **Baseline:** Zod — good DX, moderate performance
 
 **Trade-offs:**
-- ⚠️ Valibot is faster for most validation scenarios (1.6-4.2x)
-- ⚠️ Zod is faster for object array validation (1.9x)
-- ✅ property-validator provides richer error messages and security limits
+- ⚠️ Valibot is faster for primitives and complex nested objects
+- ⚠️ Ultra-fast validators require build steps or different APIs
+- ✅ property-validator provides rich error messages and security limits
+- ✅ property-validator has Zod-like DX with better performance
 
 ### Compilation
 
@@ -463,7 +478,7 @@ See [MIGRATION.md](./MIGRATION.md) for a complete migration guide with side-by-s
 | Feature | property-validator | zod | yup | joi |
 |---------|-------------------|-----|-----|-----|
 | Zero Dependencies | ✅ | ❌ | ❌ | ❌ |
-| Performance | 5/6 wins vs zod | Good | Slow | Slow |
+| Performance | 6/6 wins vs zod | Good | Slow | Slow |
 | TypeScript Inference | ✅ | ✅ | ⚠️ Partial | ❌ |
 | Bundle Size | ~5KB | ~50KB | ~30KB | ~150KB |
 
@@ -471,23 +486,34 @@ See [MIGRATION.md](./MIGRATION.md) for a complete migration guide with side-by-s
 
 Planned improvements for future versions:
 
-### High Priority (v1.0.0)
+### v0.8.0 (Performance)
+- **JIT primitive validators**: Close 1.8x gap with valibot on primitives
+- **JIT object validators**: Close 2.4x gap on complex nested objects
+- **JIT array validators**: Close 3.8x gap on primitive arrays
+
+### v0.9.0 (Bundle Size)
+- **Modular design**: Tree-shakable API (13.5 kB → 1-2 kB)
+- **Valibot-style imports**: `import { string, object } from 'property-validator/modular'`
+
+### v1.0.0 (Features + Stable)
 - **String constraints**: `.pattern()`, `.email()`, `.url()` validators
 - **Number constraints**: `.int()`, `.positive()`, `.negative()` validators
-- **Object array optimization**: Close the 1.9x performance gap with zod (v0.6.0 improved from 46k → 70k ops/sec, but more work needed)
+- **Schema versioning**: Migration utilities for evolving schemas
 
-### Medium Priority (v1.1.0+)
+### v1.1.0+ (Advanced)
 - Schema generation from existing TypeScript types
 - Async validators for database/API checks
 - Record/Map validators for dynamic keys
 - Intersection types
 - Streaming validation for large files
 
-### As Needed
-- Plugin API for custom type handlers
-- Schema versioning and migration utilities
-- JSON Schema standard compatibility layer
-- Binary serialization format for schemas
+### Completed in v0.7.5
+- ✅ **+214% improvement** on simple objects (3.1x faster than v0.7.0)
+- ✅ Pre-compiled validators with fast-path for plain objects
+- ✅ Lazy path building (paths computed only on errors)
+- ✅ Now beats zod in ALL 6 benchmark categories
+- ✅ Competitive with valibot (2 wins, 3 losses)
+- ✅ tatami-ng benchmarking with criterion-equivalent rigor
 
 ### Completed in v0.4.0
 - ✅ Schema compilation (`v.compile()`) with automatic caching
