@@ -709,7 +709,13 @@ function compilePropertyValidator<T>(validator: Validator<T>): (data: unknown) =
     }
   }
 
-  // Complex validators: Use validate() method (still faster than validateFast - no Result allocation)
+  // v0.8.0 OPTIMIZATION: Use _compiled for nested validators if available
+  // This chains JIT-compiled validators for recursive speedup (nested objects, arrays)
+  if (validator._compiled && !validator._hasRefinements) {
+    return validator._compiled;
+  }
+
+  // Fallback: Use validate() method (still faster than validateFast - no Result allocation)
   return (data: unknown): boolean => validator.validate(data);
 }
 
@@ -1130,10 +1136,7 @@ export const v = {
           return 'Array validation failed';
         },
 
-        _transform(data: any): T[] {
-          // RUNTIME: Use pre-compiled transform (optimized copy-on-write)
-          return compiledTransform(data);
-        },
+        // NOTE: _transform is conditionally added below (only when item validators need transforms)
 
         min(n: number): ArrayValidator<T> {
           return createArrayValidator(n, maxLength, exactLength, refinements);
@@ -1420,14 +1423,25 @@ export const v = {
         },
       };
 
+      // v0.8.0 OPTIMIZATION: Only assign _transform when item validators need transforms
+      // This allows parent objects to detect arrays as "plain" and enable JIT bypass
+      const hasItemTransform = itemValidator._transform !== undefined;
+      const hasItemDefault = itemValidator._default !== undefined;
+      const itemNeedsTransform = hasItemTransform || hasItemDefault;
+
+      if (itemNeedsTransform) {
+        // Only define _transform when item validators actually need it
+        validator._transform = (data: any): T[] => {
+          return compiledTransform(data);
+        };
+      }
+
       // v0.8.0 OPTIMIZATION: Expose compiled validator for validateFast() bypass
       // For plain arrays (no length constraints, no refinements, no item transforms), validateFast() can
       // call _compiled directly without going through validateWithPath machinery (2x speedup)
-      // Note: Must also check item validator doesn't have transforms since bypass skips _transform
-      const hasItemTransform = itemValidator._transform !== undefined;
       const isPlainArray = minLength === undefined && maxLength === undefined &&
                            exactLength === undefined && refinements.length === 0 &&
-                           !hasItemTransform;
+                           !itemNeedsTransform;
       if (isPlainArray) {
         // Create wrapper that includes Array.isArray check + item validation
         validator._compiled = (data: unknown): boolean => {
