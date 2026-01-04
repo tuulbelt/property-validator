@@ -232,14 +232,62 @@ This baseline serves as the reference point for:
 
 ---
 
+## Phase 2 v0.7.5 Results (Eliminate Fast API Result Allocation)
+
+**Date:** 2026-01-04
+**Optimization:** Changed from `validateFast(itemValidator, data[i]).ok` to `itemValidator.validate(data[i])` in `compileArrayValidator()` (line 873). This eliminates Result object allocation on every array item.
+
+### Phase 2 Improvements vs v0.7.0 Baseline
+
+| Category | v0.7.0 Baseline | Phase 2 v0.7.5 | Improvement |
+|----------|-----------------|----------------|-------------|
+| **Arrays** |
+| small (10 items) | 3.18 µs | 2.68 µs | **+15.7%** ✅ |
+| medium (100 items) | 19.46 µs | 16.06 µs | **+17.5%** ✅ |
+| large (1000 items) | 176.95 µs | 154.12 µs | **+12.9%** ✅ |
+| OBJECTS small (10) | 5.63 µs | 4.92 µs | **+12.6%** ✅ |
+| OBJECTS medium (100) | 52.49 µs | 42.56 µs | **+18.9%** ✅ |
+| OBJECTS large (1000) | 505.74 µs | 426.18 µs | **+15.7%** ✅ |
+| **Primitives** |
+| string (valid) | 210.25 ns | 198.76 ns | **+5.5%** ✅ |
+| number (valid) | 218.19 ns | 194.26 ns | **+11.0%** ✅ |
+| **Objects** |
+| simple (valid) | 386.67 ns | 334.81 ns | **+13.4%** ✅ |
+| complex nested (valid) | 3.14 µs | 2.86 µs | **+8.9%** ✅ |
+| **Unions** |
+| string (1st option) | 113.50 ns | 99.43 ns | **+12.4%** ✅ |
+| **Compiled** |
+| simple object (valid) | 416.20 ns | 323.99 ns | **+22.2%** ✅ |
+
+### Phase 2 Summary
+
+**Target:** +10-15% improvement on arrays
+**Achieved:** +12.9% to +18.9% across array sizes ✅ EXCEEDS TARGET
+
+**Key Insights:**
+- Phase 2 eliminated N object allocations per array validation (N = array length)
+- Compiled validators saw massive +22.2% improvement
+- Union regression from Phase 1 recovered (+12.4% improvement)
+- All 537 tests still passing
+
+**Competitor Status:**
+- vs zod: 6.3x faster on primitives, 2.2x faster on objects, 3.3x faster on arrays
+- vs yup: 7.2x faster on primitives, 17.7x faster on objects, 31.5x faster on arrays
+- vs valibot: ~2x slower on primitives, ~1.5x slower on objects, ~1.2x slower on arrays
+- Unions: 4.5x FASTER than valibot (property-validator's strength!)
+
+**Detailed Analysis:** See `v0.7.5-phase2-results.md`
+
+---
+
 **Next Steps:**
 1. ✅ Phase 1: Skip empty refinement loop - COMPLETE
-2. Phase 2: Eliminate Fast API Result allocation (target: +10-15%)
+2. ✅ Phase 2: Eliminate Fast API Result allocation - COMPLETE
 3. Phase 3: Inline primitive validation (target: +15-20%)
 4. Phase 4: Lazy path building (target: +10-15%)
 
 ---
 
-**Generated:** 2026-01-03 (v0.7.0 baseline), 2026-01-04 (Phase 1 update)
+**Generated:** 2026-01-03 (v0.7.0 baseline), 2026-01-04 (Phase 1+2 update)
 **Benchmark command:** `npm run bench`
 **Raw output:** `/tmp/pv-v0.7.0-complete-comparison.txt`

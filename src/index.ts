@@ -867,10 +867,11 @@ function compileArrayValidator<T>(itemValidator: Validator<T>): (data: unknown[]
   }
 
   // Generic path: Complex validators (unions, refinements, etc.)
-  // Use validateFast to skip options overhead
+  // PHASE 2 OPTIMIZATION: Use validator.validate() directly instead of validateFast().ok
+  // This eliminates Result object allocation on every array item (expected: +10-15%)
   return (data: unknown[]): boolean => {
     for (let i = 0; i < data.length; i++) {
-      if (!validateFast(itemValidator, data[i]).ok) return false;
+      if (!itemValidator.validate(data[i])) return false;
     }
     return true;
   };
