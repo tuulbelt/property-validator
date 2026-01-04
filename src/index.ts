@@ -1829,15 +1829,15 @@ export const v = {
     const compiledValidate = allHaveCompiled && noneHaveRefinements
       ? (data: unknown): boolean => {
           // Fast path: use _compiled for each child validator
-          for (let i = 0; i < validators.length; i++) {
-            if (validators[i]._compiled!(data)) return true;
+          for (const v of validators) {
+            if (v._compiled!(data)) return true;
           }
           return false;
         }
       : (data: unknown): boolean => {
           // Fallback: use .validate() method
-          for (let i = 0; i < validators.length; i++) {
-            if (validators[i].validate(data)) return true;
+          for (const v of validators) {
+            if (v.validate(data)) return true;
           }
           return false;
         };
