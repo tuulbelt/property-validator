@@ -259,6 +259,60 @@ export interface ArrayValidator<T> extends Validator<T[]> {
 }
 
 /**
+ * String validator with built-in constraints (v0.8.5)
+ */
+export interface StringValidator extends Validator<string> {
+  /** Minimum string length */
+  min(length: number): StringValidator;
+  /** Maximum string length */
+  max(length: number): StringValidator;
+  /** Exact string length */
+  length(length: number): StringValidator;
+  /** Non-empty string (min length 1) */
+  nonempty(): StringValidator;
+  /** Must be valid email format */
+  email(): StringValidator;
+  /** Must be valid URL format */
+  url(): StringValidator;
+  /** Must be valid UUID format (v1-v5) */
+  uuid(): StringValidator;
+  /** Must match custom regex pattern */
+  pattern(regex: RegExp, message?: string): StringValidator;
+  /** Must start with prefix */
+  startsWith(prefix: string): StringValidator;
+  /** Must end with suffix */
+  endsWith(suffix: string): StringValidator;
+  /** Must contain substring */
+  includes(substring: string): StringValidator;
+}
+
+/**
+ * Number validator with built-in constraints (v0.8.5)
+ */
+export interface NumberValidator extends Validator<number> {
+  /** Must be an integer */
+  int(): NumberValidator;
+  /** Must be positive (> 0) */
+  positive(): NumberValidator;
+  /** Must be negative (< 0) */
+  negative(): NumberValidator;
+  /** Must be non-negative (>= 0) */
+  nonnegative(): NumberValidator;
+  /** Must be non-positive (<= 0) */
+  nonpositive(): NumberValidator;
+  /** Minimum value (inclusive) */
+  min(n: number): NumberValidator;
+  /** Maximum value (inclusive) */
+  max(n: number): NumberValidator;
+  /** Must be within range [min, max] (inclusive) */
+  range(min: number, max: number): NumberValidator;
+  /** Must be a finite number */
+  finite(): NumberValidator;
+  /** Must be a safe integer (within Number.MIN_SAFE_INTEGER to MAX) */
+  safeInt(): NumberValidator;
+}
+
+/**
  * Tuple type inference helper
  */
 type TupleType<T extends readonly Validator<any>[]> = {
@@ -1313,30 +1367,277 @@ function booleanError(data: unknown): string {
   return `Expected boolean, got ${getTypeName(data)}`;
 }
 
+// ============================================================================
+// PHASE 7: Built-in Validator Patterns (v0.8.5)
+// ============================================================================
+// Standard patterns for common string formats
+
+/** Email pattern - follows RFC 5322 simplified format */
+const EMAIL_PATTERN = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+
+/** URL pattern - matches http/https URLs */
+const URL_PATTERN = /^https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_+.~#?&/=]*)$/;
+
+/** UUID pattern - matches v1-v5 UUIDs */
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/**
+ * Create a StringValidator with chainable constraint methods
+ * @internal
+ */
+function createStringValidator(
+  refinements: Array<{ check: (s: string) => boolean; message: string }> = []
+): StringValidator {
+  // Base validation: typeof + all refinements
+  const validateFn = (data: unknown): data is string => {
+    if (typeof data !== 'string') return false;
+    return refinements.every(r => r.check(data));
+  };
+
+  // Error message: first failing refinement or type error
+  const errorFn = (data: unknown): string => {
+    if (typeof data !== 'string') {
+      return `Expected string, got ${getTypeName(data)}`;
+    }
+    for (const r of refinements) {
+      if (!r.check(data)) {
+        return r.message;
+      }
+    }
+    return 'String validation failed';
+  };
+
+  const validator = createValidator(validateFn, errorFn) as StringValidator;
+  validator._type = 'string';
+
+  // Preserve JIT optimization when possible (no refinements)
+  if (refinements.length === 0) {
+    validator._compiled = validateString;
+  } else {
+    validator._hasRefinements = true;
+  }
+
+  // Add chainable methods
+  validator.min = (length: number): StringValidator => {
+    return createStringValidator([...refinements, {
+      check: (s) => s.length >= length,
+      message: `String must be at least ${length} character(s)`
+    }]);
+  };
+
+  validator.max = (length: number): StringValidator => {
+    return createStringValidator([...refinements, {
+      check: (s) => s.length <= length,
+      message: `String must be at most ${length} character(s)`
+    }]);
+  };
+
+  validator.length = (length: number): StringValidator => {
+    return createStringValidator([...refinements, {
+      check: (s) => s.length === length,
+      message: `String must be exactly ${length} character(s)`
+    }]);
+  };
+
+  validator.nonempty = (): StringValidator => {
+    return createStringValidator([...refinements, {
+      check: (s) => s.length > 0,
+      message: 'String cannot be empty'
+    }]);
+  };
+
+  validator.email = (): StringValidator => {
+    return createStringValidator([...refinements, {
+      check: (s) => EMAIL_PATTERN.test(s),
+      message: 'Must be a valid email address'
+    }]);
+  };
+
+  validator.url = (): StringValidator => {
+    return createStringValidator([...refinements, {
+      check: (s) => URL_PATTERN.test(s),
+      message: 'Must be a valid URL'
+    }]);
+  };
+
+  validator.uuid = (): StringValidator => {
+    return createStringValidator([...refinements, {
+      check: (s) => UUID_PATTERN.test(s),
+      message: 'Must be a valid UUID'
+    }]);
+  };
+
+  validator.pattern = (regex: RegExp, message?: string): StringValidator => {
+    return createStringValidator([...refinements, {
+      check: (s) => regex.test(s),
+      message: message ? `Must be a valid ${message}` : `String must match pattern ${regex}`
+    }]);
+  };
+
+  validator.startsWith = (prefix: string): StringValidator => {
+    return createStringValidator([...refinements, {
+      check: (s) => s.startsWith(prefix),
+      message: `String must start with "${prefix}"`
+    }]);
+  };
+
+  validator.endsWith = (suffix: string): StringValidator => {
+    return createStringValidator([...refinements, {
+      check: (s) => s.endsWith(suffix),
+      message: `String must end with "${suffix}"`
+    }]);
+  };
+
+  validator.includes = (substring: string): StringValidator => {
+    return createStringValidator([...refinements, {
+      check: (s) => s.includes(substring),
+      message: `String must contain "${substring}"`
+    }]);
+  };
+
+  return validator;
+}
+
+/**
+ * Create a NumberValidator with chainable constraint methods
+ * @internal
+ */
+function createNumberValidator(
+  refinements: Array<{ check: (n: number) => boolean; message: string }> = []
+): NumberValidator {
+  // Base validation: typeof + not NaN + all refinements
+  const validateFn = (data: unknown): data is number => {
+    if (typeof data !== 'number' || Number.isNaN(data)) return false;
+    return refinements.every(r => r.check(data));
+  };
+
+  // Error message: first failing refinement or type error
+  const errorFn = (data: unknown): string => {
+    if (typeof data !== 'number') {
+      return `Expected number, got ${getTypeName(data)}`;
+    }
+    if (Number.isNaN(data)) {
+      return 'Expected number, got NaN';
+    }
+    for (const r of refinements) {
+      if (!r.check(data)) {
+        return r.message;
+      }
+    }
+    return 'Number validation failed';
+  };
+
+  const validator = createValidator(validateFn, errorFn) as NumberValidator;
+  validator._type = 'number';
+
+  // Preserve JIT optimization when possible (no refinements)
+  if (refinements.length === 0) {
+    validator._compiled = validateNumber;
+  } else {
+    validator._hasRefinements = true;
+  }
+
+  // Add chainable methods
+  validator.int = (): NumberValidator => {
+    return createNumberValidator([...refinements, {
+      check: (n) => Number.isInteger(n),
+      message: 'Number must be an integer'
+    }]);
+  };
+
+  validator.positive = (): NumberValidator => {
+    return createNumberValidator([...refinements, {
+      check: (n) => n > 0,
+      message: 'Number must be positive'
+    }]);
+  };
+
+  validator.negative = (): NumberValidator => {
+    return createNumberValidator([...refinements, {
+      check: (n) => n < 0,
+      message: 'Number must be negative'
+    }]);
+  };
+
+  validator.nonnegative = (): NumberValidator => {
+    return createNumberValidator([...refinements, {
+      check: (n) => n >= 0,
+      message: 'Number must be non-negative'
+    }]);
+  };
+
+  validator.nonpositive = (): NumberValidator => {
+    return createNumberValidator([...refinements, {
+      check: (n) => n <= 0,
+      message: 'Number must be non-positive'
+    }]);
+  };
+
+  validator.min = (minVal: number): NumberValidator => {
+    return createNumberValidator([...refinements, {
+      check: (n) => n >= minVal,
+      message: `Number must be at least ${minVal}`
+    }]);
+  };
+
+  validator.max = (maxVal: number): NumberValidator => {
+    return createNumberValidator([...refinements, {
+      check: (n) => n <= maxVal,
+      message: `Number must be at most ${maxVal}`
+    }]);
+  };
+
+  validator.range = (minVal: number, maxVal: number): NumberValidator => {
+    return createNumberValidator([...refinements, {
+      check: (n) => n >= minVal && n <= maxVal,
+      message: `Number must be between ${minVal} and ${maxVal}`
+    }]);
+  };
+
+  validator.finite = (): NumberValidator => {
+    return createNumberValidator([...refinements, {
+      check: (n) => Number.isFinite(n),
+      message: 'Number must be finite'
+    }]);
+  };
+
+  validator.safeInt = (): NumberValidator => {
+    return createNumberValidator([...refinements, {
+      check: (n) => Number.isSafeInteger(n),
+      message: 'Number must be a safe integer'
+    }]);
+  };
+
+  return validator;
+}
+
 /**
  * Validator builders
  */
 export const v = {
   /**
-   * String validator
+   * String validator with built-in constraints
+   * @example
+   * v.string().email()
+   * v.string().url()
+   * v.string().uuid()
+   * v.string().pattern(/^\d{3}-\d{4}$/)
+   * v.string().min(1).max(100)
    */
-  string(): Validator<string> {
-    const validator = createValidator(validateString, stringError);
-    validator._type = 'string';
-    // v0.8.0 OPTIMIZATION: Expose _compiled for JIT bypass (used by unions)
-    validator._compiled = validateString;
-    return validator;
+  string(): StringValidator {
+    return createStringValidator();
   },
 
   /**
-   * Number validator
+   * Number validator with built-in constraints
+   * @example
+   * v.number().int()
+   * v.number().positive()
+   * v.number().range(0, 100)
+   * v.number().min(0).max(100)
    */
-  number(): Validator<number> {
-    const validator = createValidator(validateNumber, numberError);
-    validator._type = 'number';
-    // v0.8.0 OPTIMIZATION: Expose _compiled for JIT bypass (used by unions)
-    validator._compiled = validateNumber;
-    return validator;
+  number(): NumberValidator {
+    return createNumberValidator();
   },
 
   /**
@@ -2320,9 +2621,18 @@ export const v = {
 /**
  * Parse command line arguments
  */
-function parseArgs(args: string[]): { input: string; verbose: boolean } {
+interface CliOptions {
+  input: string;
+  verbose: boolean;
+  checkOnly: boolean;
+  showApi: boolean;
+}
+
+function parseArgs(args: string[]): CliOptions {
   let input = '';
   let verbose = false;
+  let checkOnly = false;
+  let showApi = false;
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -2330,35 +2640,147 @@ function parseArgs(args: string[]): { input: string; verbose: boolean } {
 
     if (arg === '--verbose' || arg === '-v') {
       verbose = true;
+    } else if (arg === '--check' || arg === '-c') {
+      checkOnly = true;
+    } else if (arg === '--api') {
+      showApi = true;
+    } else if (arg === '--version' || arg === '-V') {
+      console.log('property-validator v0.8.5');
+      console.log('Runtime type validation with TypeScript inference');
+      process.exit(0);
     } else if (arg === '--help' || arg === '-h') {
       console.log(`Usage: propval [options] <json-data>
 
-Runtime type validation with TypeScript inference.
+Property Validator v0.8.5 - Runtime type validation with TypeScript inference.
 
 Options:
   -v, --verbose  Enable verbose output
+  -c, --check    Boolean-only output (exit code only, no output)
+  --api          Show available validators and methods
+  -V, --version  Show version
   -h, --help     Show this help message
 
 Examples:
-  propval '{"name":"Alice","age":30}'
-  propval --verbose '{"email":"test@example.com"}'`);
+  # Validate JSON data against built-in user schema
+  propval '{"name":"Alice","age":30,"email":"alice@example.com"}'
+
+  # Check-only mode (boolean output)
+  propval --check '{"name":"Alice","age":30,"email":"alice@example.com"}'
+  echo $?  # 0 = valid, 1 = invalid
+
+  # Verbose mode
+  propval --verbose '{"name":"Alice","age":30,"email":"alice@example.com"}'
+
+  # Show available API
+  propval --api
+
+Library Usage:
+  import { v, validate, check } from 'property-validator';
+
+  const schema = v.object({
+    name: v.string().min(1),
+    email: v.string().email(),
+    age: v.number().int().positive()
+  });
+
+  const result = validate(schema, data);
+  const isValid = check(schema, data);
+`);
       process.exit(0);
     } else if (!arg.startsWith('-')) {
       input = arg;
     }
   }
 
-  return { input, verbose };
+  return { input, verbose, checkOnly, showApi };
+}
+
+function showApi(): void {
+  console.log(`
+Property Validator v0.8.5 - API Reference
+
+═══════════════════════════════════════════════════════════════════
+ Validation Functions
+═══════════════════════════════════════════════════════════════════
+  validate(schema, data)     Full validation with error details
+  check(schema, data)        Boolean-only (faster, no errors)
+  compileCheck(schema)       Pre-compiled boolean validator
+
+═══════════════════════════════════════════════════════════════════
+ String Validators
+═══════════════════════════════════════════════════════════════════
+  v.string()                 Base string validator
+    .min(n)                  Minimum length
+    .max(n)                  Maximum length
+    .length(n)               Exact length
+    .nonempty()              Non-empty string
+    .email()                 Valid email format
+    .url()                   Valid URL (http/https)
+    .uuid()                  Valid UUID (v1-v5)
+    .pattern(regex, msg?)    Custom regex pattern
+    .startsWith(prefix)      String prefix
+    .endsWith(suffix)        String suffix
+    .includes(substring)     Contains substring
+
+═══════════════════════════════════════════════════════════════════
+ Number Validators
+═══════════════════════════════════════════════════════════════════
+  v.number()                 Base number validator
+    .int()                   Integer only
+    .positive()              Greater than 0
+    .negative()              Less than 0
+    .nonnegative()           >= 0
+    .nonpositive()           <= 0
+    .min(n)                  Minimum value
+    .max(n)                  Maximum value
+    .range(min, max)         Between min and max
+    .finite()                Not Infinity or NaN
+    .safeInt()               Safe integer range
+
+═══════════════════════════════════════════════════════════════════
+ Other Validators
+═══════════════════════════════════════════════════════════════════
+  v.boolean()                Boolean type
+  v.array(itemValidator)     Array with item validation
+  v.object({...})            Object with property schemas
+  v.union([...])             One of multiple types
+  v.literal(value)           Exact value match
+  v.optional(validator)      Optional field
+  v.nullable(validator)      Nullable field
+
+═══════════════════════════════════════════════════════════════════
+ Example
+═══════════════════════════════════════════════════════════════════
+  const UserSchema = v.object({
+    name: v.string().min(1).max(100),
+    email: v.string().email(),
+    age: v.number().int().positive().max(150),
+    website: v.optional(v.string().url())
+  });
+
+  const result = validate(UserSchema, userData);
+  if (result.ok) {
+    console.log(result.value.name);  // TypeScript knows the type!
+  }
+`);
 }
 
 // CLI entry point - only runs when executed directly
 function main(): void {
   const args = globalThis.process?.argv?.slice(2) ?? [];
-  const { input, verbose } = parseArgs(args);
+  const { input, verbose, checkOnly, showApi: showApiFlag } = parseArgs(args);
+
+  // Show API reference if requested
+  if (showApiFlag) {
+    showApi();
+    globalThis.process?.exit(0);
+    return;
+  }
 
   if (!input) {
     console.error('Error: No input provided');
     console.error('Usage: propval [options] <json-data>');
+    console.error('Try: propval --help');
     globalThis.process?.exit(1);
     return;
   }
@@ -2366,13 +2788,21 @@ function main(): void {
   try {
     const data = JSON.parse(input);
 
-    // Example: validate a simple object
+    // Demo schema using built-in validators (Phase 7)
     const userValidator = v.object({
-      name: v.string(),
-      age: v.number(),
-      email: v.string(),
+      name: v.string().min(1).max(100),
+      age: v.number().int().positive().max(150),
+      email: v.string().email(),
     });
 
+    // Check-only mode: use check() for faster boolean validation
+    if (checkOnly) {
+      const isValid = check(userValidator, data);
+      globalThis.process?.exit(isValid ? 0 : 1);
+      return;
+    }
+
+    // Full validation with error details
     const result = validate(userValidator, data);
 
     if (result.ok) {

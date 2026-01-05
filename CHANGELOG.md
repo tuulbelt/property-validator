@@ -60,15 +60,46 @@ Reorganized benchmarks for honest, methodology-driven comparisons:
 - vs Zod: 3.4-25.6x faster across categories
 - vs Valibot: 1.3-7x faster across categories
 
+### Phase 7: Built-in Validators
+
+**String Validators:**
+- `v.string().email()` — Validates email addresses (RFC 5322 simplified)
+- `v.string().url()` — Validates HTTP/HTTPS URLs
+- `v.string().uuid()` — Validates UUIDs (v1-v5)
+- `v.string().pattern(regex, message?)` — Custom regex validation
+- `v.string().min(n)` / `.max(n)` / `.length(n)` — Length constraints
+- `v.string().nonempty()` — Non-empty string
+- `v.string().startsWith(prefix)` / `.endsWith(suffix)` / `.includes(substring)`
+
+**Number Validators:**
+- `v.number().int()` — Integer only
+- `v.number().positive()` / `.negative()` — Sign constraints
+- `v.number().nonnegative()` / `.nonpositive()` — Inclusive sign constraints
+- `v.number().min(n)` / `.max(n)` — Value bounds
+- `v.number().range(min, max)` — Value range (inclusive)
+- `v.number().finite()` — Not Infinity or NaN
+- `v.number().safeInt()` — Safe integer range
+
+**CLI Enhancements:**
+- `--check` / `-c` — Boolean-only output (exit code only)
+- `--api` — Display available validators and methods
+- `--version` / `-V` — Show version
+- Improved help with library usage examples
+
 ### Added
 - **`check(schema, data)` Function:** Boolean-only validation
 - **`compileCheck(schema)` Function:** Pre-compiled boolean validator
+- **Built-in String Validators:** email, url, uuid, pattern, length constraints
+- **Built-in Number Validators:** int, positive, negative, range, finite, safeInt
+- **CLI Enhancements:** --check, --api, --version flags
 - **Internal Benchmarks:** `benchmarks/internal/api-tiers.bench.ts`
 - **External Benchmarks:** `benchmarks/external/zod.bench.ts`, `valibot.bench.ts`
 - **API Equivalence Table:** Fair comparison methodology documentation
+- **58 new tests:** String and number validator test suites
 
 ### Documentation
 - Updated README with Three API Tiers section
+- Updated README with Built-in Validators section
 - Updated benchmarks/README.md with API equivalence methodology
 - Added benchmark scripts: `bench:internal`, `bench:external`, `bench:all`
 

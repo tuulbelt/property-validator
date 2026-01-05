@@ -4,7 +4,7 @@
 ![Version](https://img.shields.io/badge/version-0.8.5-blue)
 ![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)
 ![Dogfooded](https://img.shields.io/badge/dogfooded-🐕-purple)
-![Tests](https://img.shields.io/badge/tests-537%20passing-success)
+![Tests](https://img.shields.io/badge/tests-595%20passing-success)
 ![Zero Dependencies](https://img.shields.io/badge/dependencies-0-success)
 ![Performance](https://img.shields.io/badge/performance-high-brightgreen)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -67,11 +67,11 @@ npx tsx src/index.ts --help
 ```typescript
 import { validate, v } from '@tuulbelt/property-validator';
 
-// Define validators inline
+// Define validators with built-in constraints
 const userValidator = v.object({
-  name: v.string(),
-  age: v.number(),
-  email: v.string()
+  name: v.string().min(1).max(100),
+  age: v.number().int().positive().max(150),
+  email: v.string().email()
 });
 
 // Validate data
@@ -206,6 +206,24 @@ for (const user of users) {
 - `v.number()` — Number validator
 - `v.boolean()` — Boolean validator
 
+**Built-in String Constraints:**
+- `.min(n)` / `.max(n)` / `.length(n)` — Length constraints
+- `.nonempty()` — Requires non-empty string
+- `.email()` — Valid email address
+- `.url()` — Valid HTTP/HTTPS URL
+- `.uuid()` — Valid UUID (v1-v5)
+- `.pattern(regex, message?)` — Custom regex pattern
+- `.startsWith(prefix)` / `.endsWith(suffix)` / `.includes(substring)`
+
+**Built-in Number Constraints:**
+- `.int()` — Integer only
+- `.positive()` / `.negative()` — Sign constraints (exclusive)
+- `.nonnegative()` / `.nonpositive()` — Sign constraints (inclusive)
+- `.min(n)` / `.max(n)` — Value bounds
+- `.range(min, max)` — Value range (inclusive)
+- `.finite()` — Not Infinity or NaN
+- `.safeInt()` — Safe integer range
+
 **Collections:**
 - `v.array(itemValidator)` — Array validator (homogeneous elements)
   - `.min(n)` — Minimum length constraint
@@ -307,29 +325,40 @@ validate(statusValidator, 'active'); // ✓
 validate(statusValidator, 'archived'); // ✗
 ```
 
-### Refinement Examples
+### Built-in Validator Examples
 
 ```typescript
-// Positive number
-const positiveNumber = v.number().refine(n => n > 0, 'Must be positive');
-validate(positiveNumber, 5); // ✓
-validate(positiveNumber, -5); // ✗ "Must be positive"
-
-// Email validation
-const email = v.string().refine(
-  s => s.includes('@') && s.includes('.'),
-  'Invalid email format'
-);
+// Email validation (built-in)
+const email = v.string().email();
 validate(email, 'alice@example.com'); // ✓
-validate(email, 'not-an-email'); // ✗
+validate(email, 'not-an-email'); // ✗ "Must be a valid email address"
 
-// Chained refinements
+// URL validation (built-in)
+const website = v.string().url();
+validate(website, 'https://example.com'); // ✓
+
+// Number constraints (built-in)
+const age = v.number().int().positive().max(150);
+validate(age, 25); // ✓
+validate(age, -5); // ✗ "Number must be positive"
+validate(age, 25.5); // ✗ "Number must be an integer"
+
+// String constraints (built-in)
+const username = v.string().min(3).max(20).pattern(/^[a-z0-9_]+$/);
+validate(username, 'john_doe'); // ✓
+validate(username, 'ab'); // ✗ "String must be at least 3 character(s)"
+```
+
+### Refinement Examples (Custom Logic)
+
+```typescript
+// Custom validation with .refine()
 const password = v.string()
-  .refine(s => s.length >= 8, 'Password must be at least 8 characters')
-  .refine(s => /[A-Z]/.test(s), 'Password must contain uppercase letter')
-  .refine(s => /[0-9]/.test(s), 'Password must contain number');
+  .min(8)  // Built-in length check
+  .refine(s => /[A-Z]/.test(s), 'Must contain uppercase letter')
+  .refine(s => /[0-9]/.test(s), 'Must contain number');
 validate(password, 'SecurePass123'); // ✓
-validate(password, 'weak'); // ✗ "Password must be at least 8 characters"
+validate(password, 'weak'); // ✗ "String must be at least 8 character(s)"
 ```
 
 ### Transform Examples
