@@ -23,7 +23,8 @@ benchmarks/
 │   └── api-tiers.bench.ts
 ├── external/           # Inter-competitor comparison
 │   ├── zod.bench.ts
-│   └── valibot.bench.ts
+│   ├── valibot.bench.ts
+│   └── typebox.bench.ts
 ├── fixtures/           # Test data (small, medium, large)
 └── README.md           # This file
 ```
@@ -38,21 +39,21 @@ Compare property-validator's three API tiers:
 | `check()` | `boolean` | Filtering, conditionals |
 | `compileCheck()` | `boolean` (pre-compiled) | Hot paths, pipelines |
 
-**Latest Results (v0.8.5):**
+**Latest Results (v0.9.2):**
 
 | Scenario | validate() | check() | compileCheck() |
 |----------|------------|---------|----------------|
-| Simple Object | ~62 ns | ~57 ns | ~57 ns |
-| Complex Nested | ~154 ns | ~145 ns | ~143 ns |
-| Array (10 items) | ~71 ns | ~63 ns | ~61 ns |
-| Array (100 items) | ~190 ns | ~176 ns | ~176 ns |
-| Union (3 types) | ~74 ns | ~62 ns | ~55 ns |
-| Invalid Data | ~357 ns | ~55 ns | ~55 ns |
+| Simple Object | ~67 ns | ~64 ns | ~65 ns |
+| Complex Nested | ~162 ns | ~145 ns | ~138 ns |
+| Array (10 items) | ~74 ns | ~68 ns | ~68 ns |
+| Array (100 items) | ~197 ns | ~183 ns | ~180 ns |
+| Union (3 types) | ~85 ns | ~76 ns | ~63 ns |
+| Invalid Data | ~384 ns | ~62 ns | ~60 ns |
 
 **Key Insights:**
 - `check()` is ~10-18% faster than `validate()` for valid data
 - `compileCheck()` adds 5-15% on top of `check()` for unions
-- Invalid data shows biggest gap: **6.4x faster** (check/compileCheck skip error path)
+- Invalid data shows biggest gap: **6.2x faster** (check/compileCheck skip error path)
 
 ## External Benchmarks
 
@@ -62,9 +63,24 @@ Only compare equivalent functionality. If a library doesn't have an equivalent A
 
 | property-validator | Zod | Valibot | TypeBox | Description |
 |-------------------|-----|---------|---------|-------------|
-| `validate()` | `safeParse()` | `safeParse()` | — | Full validation with errors |
+| `validate()` | `safeParse()` | `safeParse()` | `Value.Check()` | Full validation with errors |
 | `check()` | ❌ | `is()` | `Value.Check()` | Boolean-only check |
-| `compileCheck()` | ❌ | ❌ | `TypeCompiler.Compile()` | Pre-compiled checker |
+| `compileCheck()` | ❌ | ❌ | `TypeCompiler.Check()` | Pre-compiled checker |
+
+### External Comparison Results (v0.9.2)
+
+| Category | property-validator | Zod | Valibot | TypeBox JIT |
+|----------|-------------------|-----|---------|-------------|
+| Primitives | 69 ns | 120 ns | 84 ns | 58 ns |
+| Simple Objects | 67 ns | 668 ns | 220 ns | 59 ns |
+| Complex Nested | 162 ns | 4.14 µs | 1.11 µs | 118 ns |
+| Unions | 85 ns | 220 ns | 93 ns | 60 ns |
+| Arrays (100) | 197 ns | 5.06 µs | 1.49 µs | 122 ns |
+
+**Summary:**
+- **vs Zod:** 1.7x - 25.7x faster ✅
+- **vs Valibot:** 1.1x - 7.6x faster ✅
+- **vs TypeBox JIT:** 1.1x - 1.6x slower (TypeBox uses `new Function()` JIT)
 
 ### What We Compare
 
@@ -155,11 +171,11 @@ npm run bench:legacy
 ## Future Work
 
 - [ ] Add competitor-provided benchmark suites (run their benchmarks, not just ours)
-- [ ] Add TypeBox comparisons for `compileCheck()`
-- [ ] Create automated regression detection
+- [ ] Create automated regression detection (v0.9.3 Benchmark CI)
+- [ ] Historical baseline tracking across versions
 
 ---
 
 **Last Updated:** 2026-01-05
 **Benchmark Tool:** tatami-ng v0.8.18
-**property-validator Version:** v0.8.5
+**property-validator Version:** v0.9.2
