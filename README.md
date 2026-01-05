@@ -1,10 +1,10 @@
 # Property Validator / `propval`
 
 [![Tests](https://github.com/tuulbelt/property-validator/actions/workflows/test.yml/badge.svg)](https://github.com/tuulbelt/property-validator/actions/workflows/test.yml)
-![Version](https://img.shields.io/badge/version-0.8.5-blue)
+![Version](https://img.shields.io/badge/version-0.9.0-blue)
 ![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)
 ![Dogfooded](https://img.shields.io/badge/dogfooded-🐕-purple)
-![Tests](https://img.shields.io/badge/tests-595%20passing-success)
+![Tests](https://img.shields.io/badge/tests-636%20passing-success)
 ![Zero Dependencies](https://img.shields.io/badge/dependencies-0-success)
 ![Performance](https://img.shields.io/badge/performance-high-brightgreen)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -107,6 +107,39 @@ Using long name:
 
 ```bash
 property-validator --schema user.schema.json data.json
+```
+
+## Modular Imports (v0.9.0+)
+
+Property Validator supports tree-shaking for smaller bundle sizes. Import only what you need:
+
+```typescript
+// Named exports (tree-shakeable)
+import { string, number, object, validate } from '@tuulbelt/property-validator';
+
+const userValidator = object({
+  name: string().min(1),
+  age: number().positive()
+});
+
+const result = validate(userValidator, data);
+```
+
+**Available named exports:**
+- Validators: `string`, `number`, `boolean`, `array`, `tuple`, `object`, `optional`, `nullable`, `union`, `literal`, `lazy`, `enum_`
+- Functions: `validate`, `check`, `compile`, `compileCheck`
+- Class: `ValidationError`
+
+**Namespace import (still works):**
+```typescript
+import { v, validate } from '@tuulbelt/property-validator';
+
+const schema = v.object({ name: v.string() });
+```
+
+**Type-only imports:**
+```typescript
+import type { Validator, Result, ValidationOptions } from '@tuulbelt/property-validator/types';
 ```
 
 ## API
@@ -570,10 +603,10 @@ If you're migrating from another validation library, see [MIGRATION.md](./MIGRAT
 
 ## Roadmap
 
-### Next Up (v0.9.0)
-- **Modular design**: Tree-shakable API for smaller bundles
-- **String constraints**: `.pattern()`, `.email()`, `.url()` validators
-- **Number constraints**: `.int()`, `.positive()`, `.negative()` validators
+### Next Up (v0.9.5)
+- **Extended String Validators**: `cuid()`, `cuid2()`, `ulid()`, `nanoid()`, `base64()`, `hex()`, `jwt()`
+- **Extended Number Validators**: `port()`, `latitude()`, `longitude()`, `percentage()`
+- **JIT Phase 2**: Inlined primitive JIT for TypeBox-level performance
 
 ### Future (v1.0.0+)
 - Schema generation from existing TypeScript types
@@ -584,11 +617,17 @@ If you're migrating from another validation library, see [MIGRATION.md](./MIGRAT
 
 ### Recently Completed
 
+**v0.9.0:**
+- ✅ **Modular architecture** — Tree-shakeable named exports
+- ✅ **Separate types module** — `@tuulbelt/property-validator/types`
+- ✅ **Package.json exports** — Proper bundler support
+- ✅ **sideEffects: false** — Bundle optimization enabled
+
 **v0.8.5:**
 - ✅ `check()` API — Boolean-only validation (~3x faster than validate)
 - ✅ `compileCheck()` API — Pre-compiled for hot paths
-- ✅ JIT compilation for unions, primitives, arrays
-- ✅ Inlined type checks using `new Function()`
+- ✅ Built-in string validators (email, url, uuid, pattern, etc.)
+- ✅ Built-in number validators (int, positive, negative, range, etc.)
 - ✅ Restructured benchmarks with API equivalence methodology
 
 **v0.8.0:**

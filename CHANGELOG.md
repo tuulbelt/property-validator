@@ -5,6 +5,49 @@ All notable changes to Property Validator will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-01-05
+
+### Modularization & Tree-Shaking Support
+
+Property Validator v0.9.0 introduces modular architecture for better tree-shaking and smaller bundle sizes.
+
+**Named Exports for Tree-Shaking:**
+```typescript
+// New: Import only what you need (tree-shakeable)
+import { string, number, object, validate } from '@tuulbelt/property-validator';
+
+// Still works: Full namespace import
+import { v, validate } from '@tuulbelt/property-validator';
+```
+
+**Type-Only Imports:**
+```typescript
+// Import types separately (for advanced TypeScript usage)
+import type { Validator, Result, ValidationError } from '@tuulbelt/property-validator/types';
+```
+
+### Added
+- **Named Exports:** All validators available as named exports (`string`, `number`, `boolean`, `array`, `tuple`, `object`, `optional`, `nullable`, `union`, `literal`, `lazy`, `enum_`)
+- **Separate Types Module:** `@tuulbelt/property-validator/types` for type-only imports
+- **Package.json Exports Field:** Conditional exports for proper bundler support
+- **sideEffects: false:** Enables bundler tree-shaking optimizations
+
+### Changed
+- **Extracted Types:** All type definitions moved to `src/types.ts`
+- **ValidationError Location:** Moved to `src/types.ts` (re-exported from main)
+
+### Backward Compatibility
+- ✅ `v` namespace still works exactly as before
+- ✅ All existing imports continue to work
+- ✅ No breaking changes to API or behavior
+
+### Technical Details
+- Types extracted to `src/types.ts` for cleaner architecture
+- Named exports reference `v` namespace methods (zero overhead)
+- `enum_` exported instead of `enum` (reserved keyword in JS)
+
+---
+
 ## [0.8.5] - 2026-01-05
 
 ### New APIs: check() and compileCheck()
