@@ -142,6 +142,24 @@ const schema = v.object({ name: v.string() });
 import type { Validator, Result, ValidationOptions } from '@tuulbelt/property-validator/types';
 ```
 
+### Bundle Size
+
+| Import Style | Size (minified) | Size (gzipped) |
+|--------------|-----------------|----------------|
+| Full bundle | 30 KB | 8 KB |
+
+**Tree-Shaking Notes:**
+
+While named exports are available for all validator types, the current architecture means that tree-shaking provides limited bundle size reduction:
+
+1. **Core validators are tree-shakeable**: If you only import `{ string, object, validate }`, bundlers can potentially exclude unused validator types
+
+2. **Built-in validators are NOT tree-shakeable**: Methods like `.email()`, `.url()`, `.int()`, `.positive()` are attached to validator instances, not exported separately. If you import `string()`, all string methods are included.
+
+3. **Shared internals**: Validators share common validation machinery, so eliminating a single validator type doesn't significantly reduce bundle size
+
+**Practical impact:** The full bundle is already small (30KB/8KB gzipped). For most applications, this is negligible compared to React (~40KB) or other common dependencies. Use named imports for cleaner code organization rather than dramatic size reduction.
+
 ## API
 
 ### Core Functions
