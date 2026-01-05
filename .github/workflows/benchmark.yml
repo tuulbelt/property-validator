@@ -203,6 +203,10 @@ jobs:
           PR_URL="${{ github.event.pull_request.html_url }}"
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
+          # Convert repo name to Title Case (e.g., "property-validator" -> "Property Validator")
+          REPO_NAME="${{ github.event.repository.name }}"
+          TOOL_NAME=$(echo "$REPO_NAME" | sed 's/-/ /g' | sed 's/\b\(.\)/\u\1/g')
+
           curl -X POST "$TUULBELT_SLACK_WEBHOOK" \
             -H 'Content-Type: application/json' \
             -d "{
@@ -213,7 +217,7 @@ jobs:
                     \"type\": \"header\",
                     \"text\": {
                       \"type\": \"plain_text\",
-                      \"text\": \"$STATUS_EMOJI Property Validator Benchmark\"
+                      \"text\": \"$STATUS_EMOJI $TOOL_NAME Benchmark\"
                     }
                   },
                   {
