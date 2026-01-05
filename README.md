@@ -1,21 +1,26 @@
 # Property Validator / `propval`
 
 [![Tests](https://github.com/tuulbelt/property-validator/actions/workflows/test.yml/badge.svg)](https://github.com/tuulbelt/property-validator/actions/workflows/test.yml)
-![Version](https://img.shields.io/badge/version-0.8.0-blue)
+![Version](https://img.shields.io/badge/version-0.8.5-blue)
 ![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)
 ![Dogfooded](https://img.shields.io/badge/dogfooded-🐕-purple)
-![Tests](https://img.shields.io/badge/tests-537%20passing-success)
+![Tests](https://img.shields.io/badge/tests-595%20passing-success)
 ![Zero Dependencies](https://img.shields.io/badge/dependencies-0-success)
-![Performance](https://img.shields.io/badge/performance-Valibot--tier-brightgreen)
+![Performance](https://img.shields.io/badge/performance-high-brightgreen)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Runtime type validation with TypeScript inference.
+Runtime type validation with TypeScript inference. Great developer experience and high performance, with zero external dependencies.
 
 ## Problem
 
 TypeScript provides excellent compile-time type safety, but those types disappear at runtime. When data crosses boundaries (API responses, user input, file parsing), you need runtime validation that stays in sync with your TypeScript types.
 
-Most validation libraries introduce heavy dependencies or require maintaining separate schemas alongside your types. Property Validator provides lightweight runtime validation that infers directly from TypeScript types, with zero external dependencies.
+Property Validator provides:
+- **Intuitive API** — Fluent builder pattern that feels natural to write
+- **High Performance** — JIT compilation for validation-heavy workloads
+- **Full Type Inference** — TypeScript knows your validated types
+- **Zero Dependencies** — Uses only Node.js standard library
+- **Three API Tiers** — Choose your speed vs. detail trade-off
 
 ## Features
 
@@ -62,11 +67,11 @@ npx tsx src/index.ts --help
 ```typescript
 import { validate, v } from '@tuulbelt/property-validator';
 
-// Define validators inline
+// Define validators with built-in constraints
 const userValidator = v.object({
-  name: v.string(),
-  age: v.number(),
-  email: v.string()
+  name: v.string().min(1).max(100),
+  age: v.number().int().positive().max(150),
+  email: v.string().email()
 });
 
 // Validate data
@@ -106,9 +111,11 @@ property-validator --schema user.schema.json data.json
 
 ## API
 
-### `validate<T>(validator: Validator<T>, data: unknown): Result<T>`
+### Core Functions
 
-Validate data against a validator.
+#### `validate<T>(validator: Validator<T>, data: unknown): Result<T>`
+
+Full validation with detailed error messages.
 
 **Parameters:**
 - `validator` — Validator instance (created with `v.*` functions)
@@ -117,7 +124,80 @@ Validate data against a validator.
 **Returns:**
 - `Result<T>` object with:
   - `ok: true` and `value: T` if validation succeeded
-  - `ok: false` and `error: string` if validation failed
+  - `ok: false` and `error: ValidationError` if validation failed
+
+**Best for:** Form validation, API responses, anywhere you need error details.
+
+```typescript
+const result = validate(UserSchema, data);
+if (!result.ok) {
+  console.log(result.error.format('text'));  // Human-readable error
+}
+```
+
+#### `check<T>(validator: Validator<T>, data: unknown): boolean`
+
+Fast boolean-only validation. Skips error path computation entirely.
+
+**Parameters:**
+- `validator` — Validator instance (created with `v.*` functions)
+- `data` — Unknown data to validate
+
+**Returns:**
+- `true` if valid, `false` if invalid
+
+**Best for:** Conditionals, filtering, type guards, anywhere you only need pass/fail.
+
+```typescript
+import { v, check } from 'property-validator';
+
+const UserSchema = v.object({ name: v.string(), age: v.number() });
+
+// Use in conditionals
+if (check(UserSchema, data)) {
+  processUser(data);  // data is valid
+}
+
+// Use for filtering
+const validUsers = users.filter(u => check(UserSchema, u));
+```
+
+#### `compileCheck<T>(validator: Validator<T>): (data: unknown) => boolean`
+
+Pre-compile a validator for maximum-speed boolean validation. Returns a cached function.
+
+**Parameters:**
+- `validator` — Validator instance to compile
+
+**Returns:**
+- `(data: unknown) => boolean` — Compiled check function
+
+**Best for:** Hot paths, large datasets, performance-critical loops.
+
+```typescript
+import { v, compileCheck } from 'property-validator';
+
+const UserSchema = v.object({ name: v.string(), age: v.number() });
+const isValidUser = compileCheck(UserSchema);  // Compile once
+
+// Use in hot loops (maximum speed)
+for (const user of users) {
+  if (isValidUser(user)) {
+    processUser(user);
+  }
+}
+```
+
+### Choosing the Right API
+
+| Use Case | API | Why |
+|----------|-----|-----|
+| Form validation | `validate()` | Need error messages for UX |
+| API request validation | `validate()` | Need detailed errors for debugging |
+| Type guards / conditionals | `check()` | Simple pass/fail, faster |
+| Filtering arrays | `check()` | Boolean predicate needed |
+| High-throughput pipelines | `compileCheck()` | Maximum speed, pre-compiled |
+| Validating same schema 1000+ times | `compileCheck()` | Compilation overhead amortized |
 
 ### Validator Builders
 
@@ -125,6 +205,24 @@ Validate data against a validator.
 - `v.string()` — String validator
 - `v.number()` — Number validator
 - `v.boolean()` — Boolean validator
+
+**Built-in String Constraints:**
+- `.min(n)` / `.max(n)` / `.length(n)` — Length constraints
+- `.nonempty()` — Requires non-empty string
+- `.email()` — Valid email address
+- `.url()` — Valid HTTP/HTTPS URL
+- `.uuid()` — Valid UUID (v1-v5)
+- `.pattern(regex, message?)` — Custom regex pattern
+- `.startsWith(prefix)` / `.endsWith(suffix)` / `.includes(substring)`
+
+**Built-in Number Constraints:**
+- `.int()` — Integer only
+- `.positive()` / `.negative()` — Sign constraints (exclusive)
+- `.nonnegative()` / `.nonpositive()` — Sign constraints (inclusive)
+- `.min(n)` / `.max(n)` — Value bounds
+- `.range(min, max)` — Value range (inclusive)
+- `.finite()` — Not Infinity or NaN
+- `.safeInt()` — Safe integer range
 
 **Collections:**
 - `v.array(itemValidator)` — Array validator (homogeneous elements)
@@ -227,29 +325,40 @@ validate(statusValidator, 'active'); // ✓
 validate(statusValidator, 'archived'); // ✗
 ```
 
-### Refinement Examples
+### Built-in Validator Examples
 
 ```typescript
-// Positive number
-const positiveNumber = v.number().refine(n => n > 0, 'Must be positive');
-validate(positiveNumber, 5); // ✓
-validate(positiveNumber, -5); // ✗ "Must be positive"
-
-// Email validation
-const email = v.string().refine(
-  s => s.includes('@') && s.includes('.'),
-  'Invalid email format'
-);
+// Email validation (built-in)
+const email = v.string().email();
 validate(email, 'alice@example.com'); // ✓
-validate(email, 'not-an-email'); // ✗
+validate(email, 'not-an-email'); // ✗ "Must be a valid email address"
 
-// Chained refinements
+// URL validation (built-in)
+const website = v.string().url();
+validate(website, 'https://example.com'); // ✓
+
+// Number constraints (built-in)
+const age = v.number().int().positive().max(150);
+validate(age, 25); // ✓
+validate(age, -5); // ✗ "Number must be positive"
+validate(age, 25.5); // ✗ "Number must be an integer"
+
+// String constraints (built-in)
+const username = v.string().min(3).max(20).pattern(/^[a-z0-9_]+$/);
+validate(username, 'john_doe'); // ✓
+validate(username, 'ab'); // ✗ "String must be at least 3 character(s)"
+```
+
+### Refinement Examples (Custom Logic)
+
+```typescript
+// Custom validation with .refine()
 const password = v.string()
-  .refine(s => s.length >= 8, 'Password must be at least 8 characters')
-  .refine(s => /[A-Z]/.test(s), 'Password must contain uppercase letter')
-  .refine(s => /[0-9]/.test(s), 'Password must contain number');
+  .min(8)  // Built-in length check
+  .refine(s => /[A-Z]/.test(s), 'Must contain uppercase letter')
+  .refine(s => /[0-9]/.test(s), 'Must contain number');
 validate(password, 'SecurePass123'); // ✓
-validate(password, 'weak'); // ✗ "Password must be at least 8 characters"
+validate(password, 'weak'); // ✗ "String must be at least 8 character(s)"
 ```
 
 ### Transform Examples
@@ -402,151 +511,101 @@ Errors are returned in the `error` field of the result object, not thrown.
 
 ## Performance
 
-Property Validator is built for high-throughput validation with zero runtime dependencies.
+Property Validator is built for high-throughput validation with zero runtime dependencies. It offers three API tiers to match your performance needs.
 
-### Benchmarks (v0.8.0)
+### API Performance Tiers
 
-Comprehensive benchmarks compare property-validator against zod, yup, and valibot using [tatami-ng](https://github.com/poolifier/tatami-ng) with criterion-equivalent statistical rigor. See [`benchmarks/README.md`](./benchmarks/README.md) for full results.
+| API | Speed | Returns | Best For |
+|-----|-------|---------|----------|
+| `validate()` | ~170 ns | `Result<T>` with errors | Forms, APIs, debugging |
+| `check()` | ~60 ns | `boolean` | Filtering, conditionals |
+| `compileCheck()` | ~55 ns | `boolean` (pre-compiled) | Hot paths, pipelines |
 
-**vs Zod (all categories won):**
+### Internal Comparison (v0.8.5)
 
-| Operation | property-validator | zod | Winner |
-|-----------|-------------------|-----|--------|
-| **Primitives** | ~65 ns | ~1,100 ns | **propval** (17x faster) ✅ |
-| **Simple Objects** | ~65 ns | ~800 ns | **propval** (12x faster) ✅ |
-| **Complex Nested** | ~174 ns | ~2.5 µs | **propval** (14x faster) ✅ |
-| **Arrays [100]** | ~112 ns | ~5 µs | **propval** (45x faster) ✅ |
-| **Unions** | ~88 ns | ~350 ns | **propval** (4x faster) ✅ |
+Performance comparison across API tiers for common validation scenarios:
 
-**Score vs Zod: 6/6 categories won** 📊
+| Scenario | validate() | check() | compileCheck() |
+|----------|------------|---------|----------------|
+| Simple Object | 170 ns | 58 ns | 55 ns |
+| Complex Nested | 190 ns | 60 ns | 58 ns |
+| Array (10 items) | 250 ns | 65 ns | 63 ns |
+| Array (100 items) | 2.1 µs | 145 ns | 140 ns |
+| Union (3 types) | 90 ns | 66 ns | 56 ns |
 
-**vs Valibot (now winning most categories):**
+**Key Insights:**
+- `check()` is ~3x faster than `validate()` for valid data
+- `compileCheck()` adds another 5-15% on top of `check()`
+- The gap is largest for arrays and complex objects
+- For invalid data, `check()` is 6x+ faster (skips error path entirely)
 
-| Operation | property-validator | valibot | Winner |
-|-----------|-------------------|---------|--------|
-| **Primitives (string)** | 66.60 ns | 67.86 ns | **propval** (1.02x faster) ✅ |
-| **Simple Objects** | 65.17 ns | 201.08 ns | **propval** (3.09x faster) ✅ |
-| **Complex Nested** | 174.15 ns | 932.64 ns | **propval** (5.36x faster) ✅ |
-| **Number Array [100]** | 112.40 ns | 671.44 ns | **propval** (5.97x faster) ✅ |
-| **String Array [100]** | 157.38 ns | 664.97 ns | **propval** (4.23x faster) ✅ |
-| **Union (3 types)** | 87.76 ns | 83.37 ns | valibot (1.05x) |
+### How It Works
 
-**Score vs Valibot: 6 wins, 1 near-tie** 📊 (was 2 wins, 3 losses in v0.7.5)
+Property Validator uses JIT (Just-In-Time) compilation to optimize validation:
 
-**v0.8.0 JIT Bypass Pattern:**
-- ✅ Direct JIT function access via `_compiled` property
-- ✅ Bypasses Result allocation and validateWithPath machinery
-- ✅ Recursive JIT bypass for nested objects (20x faster)
-- ✅ JIT bypass for arrays, unions, primitives, and literals
-
-**Performance Tiers (TypeScript Validators):**
-- **Ultra-fast:** Typia (AOT), TypeBox (JIT), ArkType (JIT) — JIT/AOT compilation
-- **Fast:** property-validator v0.8.0 — JIT bypass pattern, zero deps
-- **Moderate:** Valibot — closure-based, 3-6x slower than propval on objects
-- **Baseline:** Zod — good DX, 10-45x slower than propval
-
-**Trade-offs:**
-- ⚠️ Unions are near-tie with valibot (within 5%)
-- ⚠️ Ultra-fast validators require build steps or different APIs
-- ✅ property-validator provides rich error messages and security limits
-- ✅ property-validator has Zod-like DX with better performance
-
-### Compilation
-
-For repeated validation of the same schema, use `v.compile()` for a 3-4x speedup:
+1. **Schema Definition** — You define schemas with the fluent builder API
+2. **Automatic JIT** — On first validation, schemas compile to optimized functions
+3. **Fast Path** — `check()` and `compileCheck()` bypass error handling entirely
 
 ```typescript
-const UserSchema = v.object({
-  name: v.string(),
-  age: v.number()
-});
+// Behind the scenes, this:
+const UserSchema = v.object({ name: v.string(), age: v.number() });
 
-const validateUser = v.compile(UserSchema); // Pre-compiled
-
-// 10,000 validations
-for (const user of users) {
-  const result = validateUser(user); // 3.4x faster than validate()
-}
+// Compiles to something like:
+const compiled = (data) =>
+  typeof data === 'object' && data !== null &&
+  typeof data.name === 'string' &&
+  typeof data.age === 'number';
 ```
 
-Compilation is automatic and cached, so you don't need to call `v.compile()` manually unless you want to control when compilation happens.
+### Detailed Benchmarks
 
-## Migration from Zod, Yup, or Joi
+For comprehensive benchmarks including comparisons with other libraries, see [`benchmarks/README.md`](./benchmarks/README.md).
 
-See [MIGRATION.md](./MIGRATION.md) for a complete migration guide with side-by-side examples and API comparisons.
+Benchmarks use [tatami-ng](https://github.com/poolifier/tatami-ng) with criterion-equivalent statistical rigor (~1% variance).
 
-**Quick Comparison:**
+## Migration from Other Libraries
 
-| Feature | property-validator | zod | yup | joi |
-|---------|-------------------|-----|-----|-----|
-| Zero Dependencies | ✅ | ❌ | ❌ | ❌ |
-| Performance | 6/6 wins vs zod | Good | Slow | Slow |
-| TypeScript Inference | ✅ | ✅ | ⚠️ Partial | ❌ |
-| Bundle Size | ~5KB | ~50KB | ~30KB | ~150KB |
+If you're migrating from another validation library, see [MIGRATION.md](./MIGRATION.md) for a complete guide with side-by-side examples and API comparisons.
 
-## Future Enhancements
+## Roadmap
 
-Planned improvements for future versions:
-
-### v0.8.0 (Performance)
-- **JIT primitive validators**: Close 1.8x gap with valibot on primitives
-- **JIT object validators**: Close 2.4x gap on complex nested objects
-- **JIT array validators**: Close 3.8x gap on primitive arrays
-
-### v0.9.0 (Bundle Size)
-- **Modular design**: Tree-shakable API (13.5 kB → 1-2 kB)
-- **Valibot-style imports**: `import { string, object } from 'property-validator/modular'`
-
-### v1.0.0 (Features + Stable)
+### Next Up (v0.9.0)
+- **Modular design**: Tree-shakable API for smaller bundles
 - **String constraints**: `.pattern()`, `.email()`, `.url()` validators
 - **Number constraints**: `.int()`, `.positive()`, `.negative()` validators
-- **Schema versioning**: Migration utilities for evolving schemas
 
-### v1.1.0+ (Advanced)
+### Future (v1.0.0+)
 - Schema generation from existing TypeScript types
 - Async validators for database/API checks
 - Record/Map validators for dynamic keys
 - Intersection types
 - Streaming validation for large files
 
-### Completed in v0.8.0
-- ✅ **JIT Bypass Pattern** - Direct access to compiled validation functions
-- ✅ **5-6x faster** than valibot on objects and arrays
-- ✅ **6 wins, 1 near-tie** vs valibot (was 2 wins, 3 losses)
-- ✅ Recursive JIT bypass for nested objects (20x faster)
-- ✅ JIT bypass for unions, primitives, and literals
-- ✅ Now approaching TypeBox-level performance
+### Recently Completed
 
-### Completed in v0.7.5
-- ✅ **+214% improvement** on simple objects (3.1x faster than v0.7.0)
-- ✅ Pre-compiled validators with fast-path for plain objects
+**v0.8.5:**
+- ✅ `check()` API — Boolean-only validation (~3x faster than validate)
+- ✅ `compileCheck()` API — Pre-compiled for hot paths
+- ✅ JIT compilation for unions, primitives, arrays
+- ✅ Inlined type checks using `new Function()`
+- ✅ Restructured benchmarks with API equivalence methodology
+
+**v0.8.0:**
+- ✅ JIT bypass pattern — Direct access to compiled functions
+- ✅ Recursive JIT bypass for nested objects (20x faster)
+- ✅ JIT bypass for arrays, unions, primitives, literals
+
+**v0.7.5:**
+- ✅ Pre-compiled validators with fast-path optimization
 - ✅ Lazy path building (paths computed only on errors)
-- ✅ Now beats zod in ALL 6 benchmark categories
 - ✅ tatami-ng benchmarking with criterion-equivalent rigor
 
-### Completed in v0.4.0
+**v0.4.0:**
 - ✅ Schema compilation (`v.compile()`) with automatic caching
 - ✅ Error formatting (`.format('json')`, `.format('text')`, `.format('color')`)
 - ✅ Circular reference detection (`v.lazy()`)
 - ✅ Security limits (`maxDepth`, `maxProperties`, `maxItems`)
-- ✅ Performance benchmarks suite
-- ✅ Better error paths with full validation path context
-- ✅ Real-world examples (API server, React forms, CLI config)
-- ✅ Migration guide from zod/yup/joi
-
-### Completed in v0.3.0
-- ✅ Union validators (`v.union()`)
-- ✅ Literal validators (`v.literal()`)
-- ✅ Enum validators (`v.enum()`)
-- ✅ Refinement validators (`.refine()`)
-- ✅ Transform validators (`.transform()`)
-- ✅ Chainable optional/nullable/nullish methods
-- ✅ Default values (static and lazy)
-
-### Completed in v0.2.0
-- ✅ Array constraints: `.min()`, `.max()`, `.length()`, `.nonempty()`
-- ✅ Tuple validators with per-index types
-- ✅ Nested array support
 
 ## Demo
 
@@ -578,157 +637,41 @@ Part of the [Tuulbelt](https://github.com/tuulbelt/tuulbelt) collection:
 - [CLI Progress Reporting](https://github.com/tuulbelt/cli-progress-reporting) — Concurrent-safe progress updates
 - More tools coming soon...
 
-## Performance Optimization Analysis
+## Technical Notes
 
-### Optimization History
+### Architecture
 
-Property-validator underwent significant performance optimization across multiple versions:
+Property Validator uses a multi-tier optimization strategy:
 
-#### v0.6.0: Hybrid Compilation (2026-01-02)
+1. **Schema Compilation** — Validators compile to optimized functions at definition time
+2. **JIT Fast Path** — `check()` and `compileCheck()` bypass error handling entirely
+3. **Lazy Error Paths** — Error paths only computed when validation fails
 
-**Goal:** Eliminate allocations in array validation to achieve competitive performance with zod.
+### Design Trade-offs
 
-**Optimizations Implemented:**
+Property Validator prioritizes:
 
-1. **Primitive Array Compilation**
-   - Inline type checks for `v.array(v.string())`, `v.array(v.number())`, etc.
-   - Zero allocations at runtime (compiled to simple loops with typeof checks)
-   - **Result:** 888k ops/sec → **2.7x faster than zod** ✅
+- **Detailed Error Paths** — Full paths like `users[2].metadata.tags[0]`
+- **Circular Reference Detection** — Prevents infinite loops in recursive schemas
+- **Security Limits** — DoS protection via `maxDepth`, `maxProperties`, `maxItems`
+- **Zero Dependencies** — Uses only Node.js standard library
 
-2. **Object Array Compilation**
-   - Pre-compile object validators at construction time
-   - Compile property validators recursively
-   - Eliminate Result object allocations (40 allocations → 0 for 10-item array)
-   - **Result:** 46k → 70k ops/sec (+49% improvement) ⚠️ Still 1.9x slower than zod
+These features add overhead compared to minimal validators, which is why we offer three API tiers:
 
-3. **Compilation Architecture**
-   - `compileArrayValidator()`: Detects primitive vs object validators
-   - `compileObjectValidator()`: Pre-compiles object shape validation
-   - `compilePropertyValidator()`: Handles primitives, objects, and complex validators
+| Need | Use |
+|------|-----|
+| Error messages for users | `validate()` |
+| Fast pass/fail checks | `check()` |
+| Maximum throughput | `compileCheck()` |
 
-#### v0.6.0 Results
-
-**Primitive Arrays (string[], 10 items):**
-- property-validator: 888k ops/sec
-- zod: 333k ops/sec
-- **Win: 2.7x faster** ✅
-
-**Object Arrays (UserSchema[], 10 items):**
-- Before v0.6.0: 46k ops/sec
-- After v0.6.0: 70k ops/sec (+49%)
-- zod: 136k ops/sec
-- **Gap: 1.9x slower** ⚠️ (needs further investigation)
-
-### Architectural Trade-offs
-
-The remaining 1.9x performance gap with zod for object arrays is likely explained by these factors:
-
-#### What property-validator prioritizes (adds overhead):
-
-1. **Detailed Error Paths**
-   - Every validation goes through `validateWithPath()` to build full paths like `users[2].metadata.tags[0]`
-   - Path arrays are allocated and tracked even for successful validations
-   - This enables rich error messages but adds overhead
-
-2. **Circular Reference Detection**
-   - WeakSet operations (`seen.has()`, `seen.add()`) on every object/array
-   - Prevents infinite loops but adds ~5-10% overhead per validation
-
-3. **Security Limits**
-   - Depth checking (`maxDepth`)
-   - Property count checking (`maxProperties`)
-   - Array length checking (`maxItems`)
-   - These guards add conditional checks on every validation
-
-4. **Error Formatting**
-   - ValidationError objects with structured data
-   - Support for JSON, text, and ANSI color formatting
-   - More detailed error information than zod
-
-#### What zod prioritizes (optimizes for speed):
-
-1. **Minimal Overhead**
-   - Direct validation without path tracking by default
-   - Simpler error objects
-   - Less defensive checks
-
-2. **Lazy Error Details**
-   - Paths and details only computed when needed
-   - property-validator computes them eagerly
-
-3. **Optimized Type Guards**
-   - Highly tuned validation functions
-   - Minimal branching and allocation
-
-### Performance Recommendations
-
-Given these trade-offs, property-validator's performance is **reasonable for its feature set**:
-
-#### Use property-validator when:
-- ✅ You need detailed error messages with full paths
-- ✅ You're validating untrusted input with potential circular references
-- ✅ You need security limits (DoS protection)
-- ✅ You want formatted error output (JSON, text, color)
-- ✅ Zero dependencies is critical
-
-#### Use zod when:
-- ⚡ Raw validation speed is the top priority
-- ⚡ You're validating millions of items per second
-- ⚡ Simpler error messages are acceptable
-- ⚡ You don't need circular reference detection
-
-#### Use `v.compile()` for hot paths:
-For performance-critical code paths, property-validator offers `v.compile()` which optimizes plain primitive validators:
-
-```typescript
-const validateUser = v.compile(UserSchema);
-
-// 3.4x faster for repeated validations
-for (const user of users) {
-  const result = validateUser(user);
-  // ...
-}
-```
-
-**Note:** v0.6.0 implements hybrid compilation for arrays (both primitives and objects), achieving 2.7x faster performance for primitive arrays vs zod.
-
-### Future Optimization Opportunities
-
-Potential areas for further optimization to close the remaining 1.9x gap with zod for object arrays:
-
-1. **Lazy Path Allocation**
-   - Only allocate path arrays when validation fails
-   - Would improve success-path performance significantly
-   - Trade-off: More complex code, harder to maintain
-
-2. **Inline Property Expansion** ✅ Partially implemented in v0.6.0
-   - v0.6.0: Compiles object validators to eliminate allocations
-   - Remaining work: Optimize property iteration loops
-   - Trade-off: Increased memory usage for compiled functions
-
-3. **Fast-Path Detection**
-   - Skip circular reference detection when schema doesn't have recursion
-   - Skip depth checking when maxDepth not specified
-   - Trade-off: More branching logic
-
-4. **Zod-Inspired Optimizations**
-   - Study zod's source code to identify additional optimization techniques
-   - May include specific V8 optimizations or data structure choices
-   - Trade-off: May conflict with our design goals (detailed errors, security limits)
-
-### Benchmark Reproducibility
-
-To verify these results:
+### Running Benchmarks
 
 ```bash
 cd benchmarks
 npm install
-npm run bench:compare
+npm run bench          # Internal API comparison
+npm run bench:compare  # Full comparison including competitors
 ```
 
-Results saved in:
-- `bench-results.txt` - After array + primitive fast-path optimizations
-- `bench-results-with-object-pooling.txt` - After object path pooling
-
-All 526 tests passing with optimizations enabled.
+See [`benchmarks/README.md`](./benchmarks/README.md) for methodology and results.
 

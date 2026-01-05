@@ -1,8 +1,8 @@
 # v0.8.5+ Performance Roadmap: Competing with TypeBox
 
-**Date:** 2026-01-04
-**Status:** Research & Planning
-**Goal:** Achieve TypeBox-level performance (~16M ops/sec) while maintaining Zod-like DX
+**Date:** 2026-01-05
+**Status:** Phase 4 Complete - Documentation & Benchmark restructuring next
+**Goal:** Achieve TypeBox-level performance (~16M ops/sec) while maintaining great DX
 
 ---
 
@@ -353,23 +353,224 @@ Creates a standalone check function. ~3x faster than `validate()`.
 
 ## Implementation Timeline
 
-**Phase 1 (v0.8.5-alpha):**
-- [ ] Implement `v.check()`
-- [ ] Benchmark vs valibot.is(), zod.safeParse().success
+**Phase 1 (v0.8.5-alpha): ✅ COMPLETE**
+- [x] Implement `v.check()`
+- [x] Benchmark vs `v.validate()`
+- [x] Add TypeBox competitor benchmarks
 
-**Phase 2 (v0.8.5-beta):**
-- [ ] Full JIT compilation for primitives
-- [ ] Full JIT compilation for objects
-- [ ] Benchmark vs TypeBox TypeCompiler
+**Phase 1 Results (2026-01-05):**
 
-**Phase 3 (v0.8.5-rc):**
-- [ ] Implement `v.compile()`
-- [ ] Documentation updates
-- [ ] CSP compatibility testing
+| Scenario | validate() | check() | Improvement |
+|----------|------------|---------|-------------|
+| Primitive string | 63.92 ns | 55.70 ns | **+15% faster** |
+| Primitive number | 65.98 ns | 60.11 ns | **+9% faster** |
+| Simple object | 62.54 ns | 55.53 ns | **+13% faster** |
+| Complex nested | 169.49 ns | 190.90 ns | **-12% regression** ⚠️ |
+| Invalid object (early reject) | 377.95 ns | 57.77 ns | **+6.54x faster** ✅ |
+| Array 10 objects | 250.31 ns | 220.45 ns | **+14% faster** |
+| Array 100 objects | 2.10 µs | 2.05 µs | **+2% faster** |
+| Array 10 strings | 171.08 ns | 161.89 ns | **+6% faster** |
+| Array 100 strings | 1.39 µs | 1.24 µs | **+12% faster** |
+| Union string | 82.97 ns | 69.57 ns | **+19% faster** |
+| Union number | 88.42 ns | 84.33 ns | **+5% faster** |
+| Union boolean | 89.25 ns | 79.74 ns | **+12% faster** |
 
-**Phase 4 (v0.8.5):**
-- [ ] Final benchmarks
-- [ ] Performance guide documentation
+**Phase 1 Analysis:**
+- ✅ Big win on invalid data: 6.54x faster (skips error path entirely)
+- ✅ Consistent 5-19% improvement on primitives, arrays, unions
+- ⚠️ Regression on complex nested valid objects (-12%)
+- The regression is due to nested validators not benefiting from _compiled bypass
+- Phase 2-3 JIT improvements should address this
+
+**Phase 2 (v0.8.5-beta): ✅ COMPLETE**
+- [x] JIT compilation for unions using `new Function()`
+- [x] Inline type checks for primitives and literals
+- [x] Benchmark vs TypeBox TypeCompiler
+
+**Phase 2 Results (2026-01-05):**
+
+| Scenario | Phase 1 check() | Phase 2 JIT | Improvement | vs TypeBox Compiled |
+|----------|-----------------|-------------|-------------|---------------------|
+| Union String (1st) | 69.57 ns | 63.90 ns | **+9% faster** | 1.15x slower |
+| Union Number (2nd) | 84.33 ns | 64.64 ns | **+30% faster** | 1.11x slower |
+
+**Phase 2 Head-to-Head Results:**
+
+| Category | property-validator | valibot | TypeBox Compiled | vs TypeBox | vs valibot |
+|----------|-------------------|---------|------------------|------------|------------|
+| String (prim) | 57.90 ns | 58.19 ns | 56.65 ns | 1.02x slower | ✅ 1.01x faster |
+| Number (prim) | 57.40 ns | 61.29 ns | 59.70 ns | ✅ 1.04x faster | ✅ 1.07x faster |
+| Simple Object | 55.90 ns | 169.87 ns | 56.11 ns | ✅ 1.00x (equal) | ✅ 3.04x faster |
+| Complex Nested | 59.31 ns | 604.83 ns | 58.47 ns | 1.01x slower | ✅ 10.20x faster |
+| Array 10 | 63.67 ns | 196.19 ns | 59.94 ns | 1.06x slower | ✅ 3.08x faster |
+| Array 100 | 147.30 ns | 1.19 µs | 105.88 ns | 1.39x slower | ✅ 8.07x faster |
+| Union String | 63.90 ns | 62.34 ns | 55.54 ns | 1.15x slower | 1.03x slower |
+| Union Number | 64.64 ns | 186.27 ns | 58.24 ns | 1.11x slower | ✅ 2.88x faster |
+
+**Phase 2 Analysis:**
+- ✅ Gap to TypeBox Compiled narrowed from ~24-44% to 11-15% on unions
+- ✅ 7/8 categories faster than valibot (Union String 1st is 1.03x slower)
+- ✅ Primitives and objects essentially equal to TypeBox Compiled
+- ⚠️ Arrays remain 6-39% slower than TypeBox (potential Phase 3 target)
+- ⚠️ Union String 1st match still slightly slower than valibot (first-match overhead)
+
+**Implementation Details:**
+1. `generateInlineTypeCheck()` - Generates inline `typeof` expressions
+2. `compileUnionValidator()` - Combines checks with `||` using `new Function()`
+3. `_literalValue` stored on literal validators for JIT inlining
+4. CSP fallback preserved (falls back to loop-based if `new Function()` blocked)
+
+**Phase 3 (v0.8.5-rc): ✅ COMPLETE**
+- [x] Implement `v.compileCheck()` - Pre-compiled boolean check functions
+- [x] Benchmark vs check() vs TypeBox Compiled
+- [x] Documentation updates
+
+**Phase 3 Results (2026-01-05):**
+
+Implemented `compileCheck()` - a function that pre-compiles validators into maximum-speed boolean check functions. Uses WeakMap caching for efficiency.
+
+```typescript
+// API
+const checker = v.compileCheck(UserSchema);  // Returns (data: unknown) => boolean
+
+// Usage (maximum speed)
+for (const user of users) {
+  if (checker(user)) {  // ~55 ns per call
+    processUser(user);
+  }
+}
+```
+
+**compileCheck() vs check() Improvement:**
+
+| Scenario | check() | compileCheck() | Improvement |
+|----------|---------|----------------|-------------|
+| String | 57.85 ns | 61.31 ns | -6% (noise) |
+| Number | 60.68 ns | 59.07 ns | +3% faster |
+| Simple Object | 58.00 ns | 56.91 ns | **+2% faster** |
+| Complex Nested | 60.13 ns | 57.82 ns | **+4% faster** |
+| Array 10 | 65.16 ns | 64.80 ns | +1% faster |
+| Array 100 | 145.91 ns | 143.85 ns | +1% faster |
+| Union String (1st) | 65.75 ns | 55.71 ns | **+18% faster** ✅ |
+| Union Number (2nd) | 63.62 ns | 55.28 ns | **+15% faster** ✅ |
+
+**compileCheck() vs TypeBox Compiled:**
+
+| Scenario | compileCheck() | TypeBox Compiled | vs TypeBox |
+|----------|----------------|------------------|------------|
+| String | 61.31 ns | 58.95 ns | 1.04x slower |
+| Number | 59.07 ns | 56.25 ns | 1.05x slower |
+| Simple Object | 56.91 ns | 58.10 ns | **✅ 1.02x faster** |
+| Complex Nested | 57.82 ns | 59.87 ns | **✅ 1.04x faster** |
+| Array 10 | 64.80 ns | 60.85 ns | 1.07x slower |
+| Array 100 | 143.85 ns | 106.47 ns | 1.35x slower |
+| Union String (1st) | 55.71 ns | 55.53 ns | **✅ Equal** |
+| Union Number (2nd) | 55.28 ns | 56.09 ns | **✅ 1.01x faster** |
+
+**compileCheck() vs valibot:**
+
+| Scenario | compileCheck() | valibot | vs valibot |
+|----------|----------------|---------|------------|
+| String | 61.31 ns | 61.99 ns | **✅ 1.01x faster** |
+| Number | 59.07 ns | 56.40 ns | 1.05x slower |
+| Simple Object | 56.91 ns | 172.53 ns | **✅ 3.03x faster** |
+| Complex Nested | 57.82 ns | 652.54 ns | **✅ 11.3x faster** |
+| Array 10 | 64.80 ns | 161.39 ns | **✅ 2.49x faster** |
+| Array 100 | 143.85 ns | 1.01 µs | **✅ 7.02x faster** |
+| Union String (1st) | 55.71 ns | 62.82 ns | **✅ 1.13x faster** |
+| Union Number (2nd) | 55.28 ns | 171.91 ns | **✅ 3.11x faster** |
+
+**Phase 3 Analysis:**
+- ✅ **TypeBox-level achieved** on objects and unions
+- ✅ **7/8 categories faster than valibot** (only Number primitive is 1.05x slower)
+- ✅ **Unions +15-18% faster** than check() thanks to cached JIT functions
+- ✅ **Simple objects 1.02x FASTER than TypeBox Compiled**
+- ⚠️ Arrays remain 7-35% slower than TypeBox (different optimization approach)
+
+**Implementation Details:**
+1. `compileCheck<T>(validator)` - Returns `(data: unknown) => boolean`
+2. WeakMap caching - Same compiled function returned for same schema
+3. Uses `_compiled` property when available (JIT optimized)
+4. Fallback to `validator.validate()` result for edge cases
+5. Added to `v` object export as `v.compileCheck()`
+
+**Phase 4 (v0.8.5-rc2): ✅ COMPLETE**
+- [x] Array JIT optimization with complete inlined functions
+- [x] Length caching in loops for reduced overhead
+- [x] Benchmark vs TypeBox Compiled
+
+**Phase 4 Results (2026-01-05):**
+
+Optimized array validation by generating complete JIT functions that include `Array.isArray` check and cached length:
+
+```typescript
+// Before: Wrapper function adding overhead
+validator._compiled = (data) => Array.isArray(data) && compiledValidate(data);
+
+// After: Complete JIT function (no wrapper)
+const code = `
+  if (!Array.isArray(data)) return false;
+  const len = data.length;
+  for (let i = 0; i < len; i++) {
+    if (!(typeof data[i] === 'number')) return false;
+  }
+  return true;
+`;
+validator._compiled = new Function('data', code);
+```
+
+**compileCheck() Array Performance:**
+
+| Scenario | Before | After | Improvement | vs TypeBox |
+|----------|--------|-------|-------------|------------|
+| Array 10 | 64.80 ns | 62.84 ns | +3% faster | 1.02x slower |
+| Array 100 | 143.85 ns | 139.13 ns | +3% faster | 1.32x slower |
+
+**Phase 4 Analysis:**
+- ✅ Array 10 now at near-parity with TypeBox (1.02x slower)
+- ⚠️ Array 100 still 32% slower (TypeBox has more aggressive loop unrolling)
+- ✅ Eliminated wrapper function overhead
+- ✅ Length caching reduces per-iteration cost
+
+**Remaining Gap Analysis:**
+TypeBox generates unrolled loops for small arrays and uses different iteration patterns. Further optimization would require:
+- Loop unrolling for small arrays (complexity vs benefit trade-off)
+- Different code generation strategy (diminishing returns)
+
+**Phase 5 (v0.8.5): 🔄 IN PROGRESS**
+- [ ] Update README with `check()` and `compileCheck()` APIs
+- [ ] Update pitch (great DX + great performance, no competitor names)
+- [ ] Restructure benchmarks into `internal/` and `external/`
+- [ ] Remove Yup from all benchmarks
+- [ ] Create API equivalence documentation
+
+**Phase 5 Goals:**
+
+1. **Documentation Restructure:**
+   - Document three API tiers: `validate()`, `check()`, `compileCheck()`
+   - New pitch: Great DX + great performance (no competitor callouts)
+   - API decision matrix for choosing the right API
+
+2. **Benchmark Restructure:**
+   - `internal/` - Intra-PV comparison (validate vs check vs compileCheck)
+   - `external/` - Inter-competitor comparison with API equivalence
+   - Remove Yup (legacy, not relevant competitor)
+   - Add API equivalence table
+
+**API Equivalence for Honest Benchmarking:**
+
+| property-validator | Zod | Valibot | TypeBox |
+|-------------------|-----|---------|---------|
+| `validate()` | `safeParse()` | `safeParse()` | — |
+| `check()` | ❌ | `is()` | `Value.Check()` |
+| `compileCheck()` | ❌ | ❌ | `TypeCompiler.Compile()` |
+
+Only compare equivalent APIs. If a library doesn't have an equivalent, it's excluded from that benchmark.
+
+**Phase 6 (v0.8.5-final):**
+- [ ] Version bump to v0.8.5
+- [ ] Final documentation review
+- [ ] Changelog update
 - [ ] Release
 
 ---

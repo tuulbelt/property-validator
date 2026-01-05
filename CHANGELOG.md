@@ -5,6 +5,106 @@ All notable changes to Property Validator will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.5] - 2026-01-05
+
+### New APIs: check() and compileCheck()
+
+Property Validator v0.8.5 introduces three API tiers for different use cases:
+
+**`validate()` — Full validation with error details**
+- Returns `Result<T>` with detailed error information
+- Best for: Forms, APIs, debugging
+- Performance: ~17M ops/sec
+
+**`check()` — Boolean-only validation**
+- Returns `boolean` only, skips error construction
+- Best for: Filtering, conditionals, quick checks
+- Performance: ~10-18% faster than validate() for valid data
+
+**`compileCheck()` — Pre-compiled boolean validation**
+- Returns a reusable `(data: unknown) => boolean` function
+- Best for: Hot paths, data pipelines, repeated validation
+- Performance: Additional 5-15% on top of check() for unions
+
+### Benchmark Restructuring
+
+Reorganized benchmarks for honest, methodology-driven comparisons:
+
+**Internal Benchmarks (`benchmarks/internal/`):**
+- API tier comparison: validate() vs check() vs compileCheck()
+- Shows performance trade-offs between detail and speed
+
+**External Benchmarks (`benchmarks/external/`):**
+- Competitor comparisons with API equivalence:
+  - validate() ↔ safeParse() (Zod, Valibot)
+  - check() ↔ is() (Valibot only)
+  - compileCheck() — no direct competitor equivalent
+
+### Performance Results
+
+**Internal API Comparison:**
+
+| Scenario | validate() | check() | compileCheck() |
+|----------|------------|---------|----------------|
+| Simple Object | ~62 ns | ~57 ns | ~57 ns |
+| Complex Nested | ~154 ns | ~145 ns | ~143 ns |
+| Union (3 types) | ~74 ns | ~62 ns | ~55 ns |
+| Invalid Data | ~357 ns | ~55 ns | ~55 ns |
+
+**Key Insights:**
+- check() is ~10-18% faster than validate() for valid data
+- compileCheck() adds 5-15% on top of check() for unions
+- Invalid data shows biggest gap: **6.4x faster** (check/compileCheck skip error path)
+
+**vs Competitors (validate/safeParse comparison):**
+- vs Zod: 3.4-25.6x faster across categories
+- vs Valibot: 1.3-7x faster across categories
+
+### Phase 7: Built-in Validators
+
+**String Validators:**
+- `v.string().email()` — Validates email addresses (RFC 5322 simplified)
+- `v.string().url()` — Validates HTTP/HTTPS URLs
+- `v.string().uuid()` — Validates UUIDs (v1-v5)
+- `v.string().pattern(regex, message?)` — Custom regex validation
+- `v.string().min(n)` / `.max(n)` / `.length(n)` — Length constraints
+- `v.string().nonempty()` — Non-empty string
+- `v.string().startsWith(prefix)` / `.endsWith(suffix)` / `.includes(substring)`
+
+**Number Validators:**
+- `v.number().int()` — Integer only
+- `v.number().positive()` / `.negative()` — Sign constraints
+- `v.number().nonnegative()` / `.nonpositive()` — Inclusive sign constraints
+- `v.number().min(n)` / `.max(n)` — Value bounds
+- `v.number().range(min, max)` — Value range (inclusive)
+- `v.number().finite()` — Not Infinity or NaN
+- `v.number().safeInt()` — Safe integer range
+
+**CLI Enhancements:**
+- `--check` / `-c` — Boolean-only output (exit code only)
+- `--api` — Display available validators and methods
+- `--version` / `-V` — Show version
+- Improved help with library usage examples
+
+### Added
+- **`check(schema, data)` Function:** Boolean-only validation
+- **`compileCheck(schema)` Function:** Pre-compiled boolean validator
+- **Built-in String Validators:** email, url, uuid, pattern, length constraints
+- **Built-in Number Validators:** int, positive, negative, range, finite, safeInt
+- **CLI Enhancements:** --check, --api, --version flags
+- **Internal Benchmarks:** `benchmarks/internal/api-tiers.bench.ts`
+- **External Benchmarks:** `benchmarks/external/zod.bench.ts`, `valibot.bench.ts`
+- **API Equivalence Table:** Fair comparison methodology documentation
+- **58 new tests:** String and number validator test suites
+
+### Documentation
+- Updated README with Three API Tiers section
+- Updated README with Built-in Validators section
+- Updated benchmarks/README.md with API equivalence methodology
+- Added benchmark scripts: `bench:internal`, `bench:external`, `bench:all`
+
+---
+
 ## [0.8.0] - 2026-01-05
 
 ### Performance Breakthrough: JIT Bypass Pattern

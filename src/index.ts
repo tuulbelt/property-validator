@@ -259,6 +259,74 @@ export interface ArrayValidator<T> extends Validator<T[]> {
 }
 
 /**
+ * String validator with built-in constraints (v0.8.5)
+ */
+export interface StringValidator extends Validator<string> {
+  /** Minimum string length */
+  min(length: number): StringValidator;
+  /** Maximum string length */
+  max(length: number): StringValidator;
+  /** Exact string length */
+  length(length: number): StringValidator;
+  /** Non-empty string (min length 1) */
+  nonempty(): StringValidator;
+  /** Must be valid email format */
+  email(): StringValidator;
+  /** Must be valid URL format */
+  url(): StringValidator;
+  /** Must be valid UUID format (v1-v5) */
+  uuid(): StringValidator;
+  /** Must match custom regex pattern */
+  pattern(regex: RegExp, message?: string): StringValidator;
+  /** Must start with prefix */
+  startsWith(prefix: string): StringValidator;
+  /** Must end with suffix */
+  endsWith(suffix: string): StringValidator;
+  /** Must contain substring */
+  includes(substring: string): StringValidator;
+  /** Must be valid ISO 8601 datetime (YYYY-MM-DDTHH:MM:SS) */
+  datetime(): StringValidator;
+  /** Must be valid ISO 8601 date (YYYY-MM-DD) */
+  date(): StringValidator;
+  /** Must be valid ISO 8601 time (HH:MM:SS) */
+  time(): StringValidator;
+  /** Must be valid IP address (IPv4 or IPv6) */
+  ip(): StringValidator;
+  /** Must be valid IPv4 address */
+  ipv4(): StringValidator;
+  /** Must be valid IPv6 address */
+  ipv6(): StringValidator;
+}
+
+/**
+ * Number validator with built-in constraints (v0.8.5)
+ */
+export interface NumberValidator extends Validator<number> {
+  /** Must be an integer */
+  int(): NumberValidator;
+  /** Must be positive (> 0) */
+  positive(): NumberValidator;
+  /** Must be negative (< 0) */
+  negative(): NumberValidator;
+  /** Must be non-negative (>= 0) */
+  nonnegative(): NumberValidator;
+  /** Must be non-positive (<= 0) */
+  nonpositive(): NumberValidator;
+  /** Minimum value (inclusive) */
+  min(n: number): NumberValidator;
+  /** Maximum value (inclusive) */
+  max(n: number): NumberValidator;
+  /** Must be within range [min, max] (inclusive) */
+  range(min: number, max: number): NumberValidator;
+  /** Must be a finite number */
+  finite(): NumberValidator;
+  /** Must be a safe integer (within Number.MIN_SAFE_INTEGER to MAX) */
+  safeInt(): NumberValidator;
+  /** Must be a multiple of n (useful for currency, steps) */
+  multipleOf(n: number): NumberValidator;
+}
+
+/**
  * Tuple type inference helper
  */
 type TupleType<T extends readonly Validator<any>[]> = {
@@ -601,6 +669,44 @@ export function validate<T>(validator: Validator<T>, data: unknown, options?: Va
 }
 
 /**
+ * Boolean-only validation without error details (v0.8.5)
+ *
+ * Maximum performance validation that returns only true/false.
+ * Use when you don't need error messages and want maximum throughput.
+ *
+ * @param validator - The validator to check against
+ * @param data - The data to validate
+ * @returns true if valid, false otherwise
+ *
+ * @example
+ * ```typescript
+ * const UserSchema = v.object({ name: v.string(), age: v.number() });
+ *
+ * // Fast boolean check (no error details)
+ * if (v.check(UserSchema, data)) {
+ *   // data is valid
+ *   processUser(data);
+ * }
+ *
+ * // For error details, use validate() instead:
+ * const result = validate(UserSchema, data);
+ * if (!result.ok) console.log(result.error);
+ * ```
+ */
+export function check<T>(validator: Validator<T>, data: unknown): boolean {
+  // v0.8.5 OPTIMIZATION: Direct JIT bypass for maximum speed
+  // Uses _compiled when available - returns boolean directly without Result allocation
+  // This is the fastest possible validation path
+  if (validator._compiled && !validator._hasRefinements) {
+    return validator._compiled(data);
+  }
+
+  // Fallback: use validator's internal validate method (returns boolean)
+  // This is still fast as it skips Result allocation
+  return validator.validate(data);
+}
+
+/**
  * Compiled validator type - a function that validates data
  */
 export type CompiledValidator<T> = (data: unknown) => Result<T>;
@@ -677,6 +783,68 @@ export function compile<T>(validator: Validator<T>): CompiledValidator<T> {
 
   // Cache the compiled validator
   compiledCache.set(validator, compiled);
+
+  return compiled;
+}
+
+/**
+ * Compiled check type - a function that validates data and returns boolean
+ */
+export type CompiledCheck = (data: unknown) => boolean;
+
+/**
+ * Cache for compiled check functions (WeakMap to allow garbage collection)
+ */
+const compiledCheckCache = new WeakMap<Validator<any>, CompiledCheck>();
+
+/**
+ * Compile a validator into a maximum-speed boolean check function
+ *
+ * This is the fastest possible validation path. The compiled function
+ * is cached, so subsequent calls with the same validator return the
+ * cached function. Unlike `compile()`, this returns only a boolean
+ * with no error details.
+ *
+ * **Performance target:** 15-18M ops/sec (TypeBox territory)
+ *
+ * @param validator - The validator to compile
+ * @returns A compiled check function that returns true/false
+ *
+ * @example
+ * ```typescript
+ * const checkUser = v.compileCheck(userValidator);
+ *
+ * // Maximum speed validation in hot loops
+ * for (const user of users) {
+ *   if (checkUser(user)) {
+ *     processUser(user);
+ *   }
+ * }
+ *
+ * // Compare to check() which has function call overhead:
+ * // v.check(userValidator, user)  // ~5% slower due to validator lookup
+ * ```
+ */
+export function compileCheck<T>(validator: Validator<T>): CompiledCheck {
+  // Check cache first
+  const cached = compiledCheckCache.get(validator);
+  if (cached) {
+    return cached;
+  }
+
+  let compiled: CompiledCheck;
+
+  // Fast path: Use existing _compiled if available (already JIT optimized)
+  if (validator._compiled && !validator._hasRefinements) {
+    compiled = validator._compiled;
+  } else {
+    // Fallback: Create wrapper around validate() method
+    // This is still fast - it just returns the boolean, no Result allocation
+    compiled = (data: unknown): boolean => validator.validate(data);
+  }
+
+  // Cache the compiled check function
+  compiledCheckCache.set(validator, compiled);
 
   return compiled;
 }
@@ -856,6 +1024,174 @@ function generatePropertyCheck(
 }
 
 /**
+ * Generate inline type check code for a validator.
+ * Used by JIT union compilation to generate fast inline checks.
+ *
+ * @param validator - The validator to generate code for
+ * @param valueExpr - The expression representing the value (e.g., 'data')
+ * @returns Inline check code string, or null if cannot be inlined
+ * @internal
+ */
+function generateInlineTypeCheck(validator: Validator<any>, valueExpr: string): string | null {
+  const validatorType = validator._type;
+  const hasRefinements = validator._hasRefinements;
+  const hasTransform = validator._transform !== undefined;
+  const hasDefault = validator._default !== undefined;
+
+  // Only inline plain validators (no refinements, transforms, or defaults)
+  if (hasRefinements || hasTransform || hasDefault) {
+    return null;
+  }
+
+  // Primitives - inline type checks
+  if (validatorType === 'string') {
+    return `typeof ${valueExpr} === 'string'`;
+  } else if (validatorType === 'number') {
+    return `(typeof ${valueExpr} === 'number' && !Number.isNaN(${valueExpr}))`;
+  } else if (validatorType === 'boolean') {
+    return `typeof ${valueExpr} === 'boolean'`;
+  }
+
+  // Literals - inline equality check
+  const literalValue = (validator as any)._literalValue;
+  if (literalValue !== undefined) {
+    if (typeof literalValue === 'string') {
+      return `${valueExpr} === '${literalValue.replace(/'/g, "\\'")}'`;
+    } else {
+      return `${valueExpr} === ${JSON.stringify(literalValue)}`;
+    }
+  }
+
+  // Cannot inline this validator type
+  return null;
+}
+
+/**
+ * Compile a union validator using new Function() for maximum speed.
+ *
+ * Generates code like: `return (typeof data === 'string') || (typeof data === 'number');`
+ * This eliminates loop overhead and function call overhead per validator.
+ *
+ * @param validators - Array of validators in the union
+ * @returns Compiled union check function, or null if cannot compile
+ * @internal
+ */
+function compileUnionValidator(validators: readonly Validator<any>[]): ((data: unknown) => boolean) | null {
+  // Check if code generation is available (CSP check)
+  if (!canUseCodeGeneration()) {
+    return null;
+  }
+
+  const checks: string[] = [];
+  const closures: Record<string, (value: unknown) => boolean> = {};
+  let closureIndex = 0;
+
+  for (const validator of validators) {
+    // Try to generate inline code first
+    const inlineCode = generateInlineTypeCheck(validator, 'data');
+
+    if (inlineCode !== null) {
+      checks.push(`(${inlineCode})`);
+    } else if (validator._compiled && !validator._hasRefinements) {
+      // Use closure for complex validators that have _compiled
+      const closureName = `c${closureIndex++}`;
+      closures[closureName] = validator._compiled;
+      checks.push(`closures.${closureName}(data)`);
+    } else {
+      // Cannot compile this union - fall back to loop-based approach
+      return null;
+    }
+  }
+
+  // Generate the union check function
+  const code = `return ${checks.join(' || ')};`;
+
+  try {
+    const fn = new Function('closures', `
+      return function(data) {
+        ${code}
+      }
+    `)(closures) as (data: unknown) => boolean;
+
+    return fn;
+  } catch {
+    // Fallback if code generation fails
+    return null;
+  }
+}
+
+/**
+ * PHASE 4: JIT compile complete array validator using new Function() for maximum speed.
+ *
+ * Generates a COMPLETE validator function that includes Array.isArray check:
+ * ```
+ * if (!Array.isArray(data)) return false;
+ * for (let i = 0; i < data.length; i++) {
+ *   if (typeof data[i] !== 'string') return false;
+ * }
+ * return true;
+ * ```
+ *
+ * This eliminates the wrapper function overhead and allows V8 to optimize the entire
+ * validation as a single function (no intermediate function calls).
+ *
+ * @param itemValidator - Validator for array items
+ * @returns JIT-compiled complete validator (includes Array.isArray), or null if cannot compile
+ * @internal
+ */
+function compileArrayValidatorJIT<T>(itemValidator: Validator<T>): ((data: unknown) => boolean) | null {
+  // Check if code generation is available (CSP check)
+  if (!canUseCodeGeneration()) {
+    return null;
+  }
+
+  // Try to generate inline code for item validation
+  const inlineCheck = generateInlineTypeCheck(itemValidator, 'data[i]');
+
+  if (inlineCheck !== null) {
+    // Generate COMPLETE JIT function with Array.isArray + inline type check loop
+    // OPTIMIZATION: Cache data.length in local variable to avoid repeated property access
+    const fnBody = `
+      if (!Array.isArray(data)) return false;
+      const len = data.length;
+      for (let i = 0; i < len; i++) {
+        if (!(${inlineCheck})) return false;
+      }
+      return true;
+    `;
+
+    try {
+      return new Function('data', fnBody) as (data: unknown) => boolean;
+    } catch {
+      return null;
+    }
+  }
+
+  // Check if item validator has _compiled (for objects, unions, etc.)
+  if (itemValidator._compiled && !itemValidator._hasRefinements) {
+    // Generate COMPLETE JIT function with closure reference
+    // OPTIMIZATION: Cache data.length in local variable
+    const fnBody = `
+      if (!Array.isArray(data)) return false;
+      const len = data.length;
+      for (let i = 0; i < len; i++) {
+        if (!itemCheck(data[i])) return false;
+      }
+      return true;
+    `;
+
+    try {
+      return new Function('itemCheck', 'data', fnBody).bind(null, itemValidator._compiled) as (data: unknown) => boolean;
+    } catch {
+      return null;
+    }
+  }
+
+  // Cannot JIT compile - fall back to closure-based
+  return null;
+}
+
+/**
  * Compile-time optimization for array validators.
  *
  * Pre-compiles specialized validators at construction time to eliminate
@@ -874,6 +1210,13 @@ function generatePropertyCheck(
  * @returns Pre-compiled validation function
  */
 function compileArrayValidator<T>(itemValidator: Validator<T>): (data: unknown[]) => boolean {
+  // PHASE 4: Try JIT compilation first for maximum performance
+  const jitValidator = compileArrayValidatorJIT(itemValidator);
+  if (jitValidator !== null) {
+    return jitValidator;
+  }
+
+  // Fallback: closure-based validation (CSP-safe)
   const itemType = itemValidator._type;
   const hasRefinements = itemValidator._hasRefinements;
   const hasTransform = itemValidator._transform !== undefined;
@@ -1038,30 +1381,345 @@ function booleanError(data: unknown): string {
   return `Expected boolean, got ${getTypeName(data)}`;
 }
 
+// ============================================================================
+// PHASE 7: Built-in Validator Patterns (v0.8.5)
+// ============================================================================
+// Standard patterns for common string formats
+
+/** Email pattern - follows RFC 5322 simplified format (rejects consecutive dots) */
+const EMAIL_PATTERN = /^[a-zA-Z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-zA-Z0-9!#$%&'*+/=?^_`{|}~-]+)*@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+
+/** URL pattern - matches http/https URLs */
+const URL_PATTERN = /^https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_+.~#?&/=]*)$/;
+
+/** UUID pattern - matches v1-v5 UUIDs */
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/** ISO 8601 datetime pattern - matches YYYY-MM-DDTHH:MM:SS with optional timezone */
+const DATETIME_PATTERN = /^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)?$/;
+
+/** ISO 8601 date pattern - matches YYYY-MM-DD */
+const DATE_PATTERN = /^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])$/;
+
+/** ISO 8601 time pattern - matches HH:MM:SS with optional milliseconds */
+const TIME_PATTERN = /^(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?$/;
+
+/** IPv4 pattern - matches valid IPv4 addresses */
+const IPV4_PATTERN = /^(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$/;
+
+/** IPv6 pattern - matches valid IPv6 addresses (full and compressed) */
+const IPV6_PATTERN = /^(?:(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|(?:[0-9a-fA-F]{1,4}:){1,7}:|(?:[0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|(?:[0-9a-fA-F]{1,4}:){1,5}(?::[0-9a-fA-F]{1,4}){1,2}|(?:[0-9a-fA-F]{1,4}:){1,4}(?::[0-9a-fA-F]{1,4}){1,3}|(?:[0-9a-fA-F]{1,4}:){1,3}(?::[0-9a-fA-F]{1,4}){1,4}|(?:[0-9a-fA-F]{1,4}:){1,2}(?::[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:(?::[0-9a-fA-F]{1,4}){1,6}|:(?::[0-9a-fA-F]{1,4}){1,7}|::)$/;
+
+/**
+ * Create a StringValidator with chainable constraint methods
+ * @internal
+ */
+function createStringValidator(
+  refinements: Array<{ check: (s: string) => boolean; message: string }> = []
+): StringValidator {
+  // Base validation: typeof + all refinements
+  const validateFn = (data: unknown): data is string => {
+    if (typeof data !== 'string') return false;
+    return refinements.every(r => r.check(data));
+  };
+
+  // Error message: first failing refinement or type error
+  const errorFn = (data: unknown): string => {
+    if (typeof data !== 'string') {
+      return `Expected string, got ${getTypeName(data)}`;
+    }
+    for (const r of refinements) {
+      if (!r.check(data)) {
+        return r.message;
+      }
+    }
+    return 'String validation failed';
+  };
+
+  const validator = createValidator(validateFn, errorFn) as StringValidator;
+  validator._type = 'string';
+
+  // Preserve JIT optimization when possible (no refinements)
+  if (refinements.length === 0) {
+    validator._compiled = validateString;
+  } else {
+    validator._hasRefinements = true;
+  }
+
+  // Add chainable methods
+  validator.min = (length: number): StringValidator => {
+    return createStringValidator([...refinements, {
+      check: (s) => s.length >= length,
+      message: `String must be at least ${length} character(s)`
+    }]);
+  };
+
+  validator.max = (length: number): StringValidator => {
+    return createStringValidator([...refinements, {
+      check: (s) => s.length <= length,
+      message: `String must be at most ${length} character(s)`
+    }]);
+  };
+
+  validator.length = (length: number): StringValidator => {
+    return createStringValidator([...refinements, {
+      check: (s) => s.length === length,
+      message: `String must be exactly ${length} character(s)`
+    }]);
+  };
+
+  validator.nonempty = (): StringValidator => {
+    return createStringValidator([...refinements, {
+      check: (s) => s.length > 0,
+      message: 'String cannot be empty'
+    }]);
+  };
+
+  validator.email = (): StringValidator => {
+    return createStringValidator([...refinements, {
+      check: (s) => EMAIL_PATTERN.test(s),
+      message: 'Must be a valid email address'
+    }]);
+  };
+
+  validator.url = (): StringValidator => {
+    return createStringValidator([...refinements, {
+      check: (s) => URL_PATTERN.test(s),
+      message: 'Must be a valid URL'
+    }]);
+  };
+
+  validator.uuid = (): StringValidator => {
+    return createStringValidator([...refinements, {
+      check: (s) => UUID_PATTERN.test(s),
+      message: 'Must be a valid UUID'
+    }]);
+  };
+
+  validator.pattern = (regex: RegExp, message?: string): StringValidator => {
+    return createStringValidator([...refinements, {
+      check: (s) => regex.test(s),
+      message: message ? `Must be a valid ${message}` : `String must match pattern ${regex}`
+    }]);
+  };
+
+  validator.startsWith = (prefix: string): StringValidator => {
+    return createStringValidator([...refinements, {
+      check: (s) => s.startsWith(prefix),
+      message: `String must start with "${prefix}"`
+    }]);
+  };
+
+  validator.endsWith = (suffix: string): StringValidator => {
+    return createStringValidator([...refinements, {
+      check: (s) => s.endsWith(suffix),
+      message: `String must end with "${suffix}"`
+    }]);
+  };
+
+  validator.includes = (substring: string): StringValidator => {
+    return createStringValidator([...refinements, {
+      check: (s) => s.includes(substring),
+      message: `String must contain "${substring}"`
+    }]);
+  };
+
+  validator.datetime = (): StringValidator => {
+    return createStringValidator([...refinements, {
+      check: (s) => DATETIME_PATTERN.test(s),
+      message: 'Must be a valid ISO 8601 datetime (YYYY-MM-DDTHH:MM:SS)'
+    }]);
+  };
+
+  validator.date = (): StringValidator => {
+    return createStringValidator([...refinements, {
+      check: (s) => DATE_PATTERN.test(s),
+      message: 'Must be a valid ISO 8601 date (YYYY-MM-DD)'
+    }]);
+  };
+
+  validator.time = (): StringValidator => {
+    return createStringValidator([...refinements, {
+      check: (s) => TIME_PATTERN.test(s),
+      message: 'Must be a valid ISO 8601 time (HH:MM:SS)'
+    }]);
+  };
+
+  validator.ip = (): StringValidator => {
+    return createStringValidator([...refinements, {
+      check: (s) => IPV4_PATTERN.test(s) || IPV6_PATTERN.test(s),
+      message: 'Must be a valid IP address (IPv4 or IPv6)'
+    }]);
+  };
+
+  validator.ipv4 = (): StringValidator => {
+    return createStringValidator([...refinements, {
+      check: (s) => IPV4_PATTERN.test(s),
+      message: 'Must be a valid IPv4 address'
+    }]);
+  };
+
+  validator.ipv6 = (): StringValidator => {
+    return createStringValidator([...refinements, {
+      check: (s) => IPV6_PATTERN.test(s),
+      message: 'Must be a valid IPv6 address'
+    }]);
+  };
+
+  return validator;
+}
+
+/**
+ * Create a NumberValidator with chainable constraint methods
+ * @internal
+ */
+function createNumberValidator(
+  refinements: Array<{ check: (n: number) => boolean; message: string }> = []
+): NumberValidator {
+  // Base validation: typeof + not NaN + all refinements
+  const validateFn = (data: unknown): data is number => {
+    if (typeof data !== 'number' || Number.isNaN(data)) return false;
+    return refinements.every(r => r.check(data));
+  };
+
+  // Error message: first failing refinement or type error
+  const errorFn = (data: unknown): string => {
+    if (typeof data !== 'number') {
+      return `Expected number, got ${getTypeName(data)}`;
+    }
+    if (Number.isNaN(data)) {
+      return 'Expected number, got NaN';
+    }
+    for (const r of refinements) {
+      if (!r.check(data)) {
+        return r.message;
+      }
+    }
+    return 'Number validation failed';
+  };
+
+  const validator = createValidator(validateFn, errorFn) as NumberValidator;
+  validator._type = 'number';
+
+  // Preserve JIT optimization when possible (no refinements)
+  if (refinements.length === 0) {
+    validator._compiled = validateNumber;
+  } else {
+    validator._hasRefinements = true;
+  }
+
+  // Add chainable methods
+  validator.int = (): NumberValidator => {
+    return createNumberValidator([...refinements, {
+      check: (n) => Number.isInteger(n),
+      message: 'Number must be an integer'
+    }]);
+  };
+
+  validator.positive = (): NumberValidator => {
+    return createNumberValidator([...refinements, {
+      check: (n) => n > 0,
+      message: 'Number must be positive'
+    }]);
+  };
+
+  validator.negative = (): NumberValidator => {
+    return createNumberValidator([...refinements, {
+      check: (n) => n < 0,
+      message: 'Number must be negative'
+    }]);
+  };
+
+  validator.nonnegative = (): NumberValidator => {
+    return createNumberValidator([...refinements, {
+      check: (n) => n >= 0,
+      message: 'Number must be non-negative'
+    }]);
+  };
+
+  validator.nonpositive = (): NumberValidator => {
+    return createNumberValidator([...refinements, {
+      check: (n) => n <= 0,
+      message: 'Number must be non-positive'
+    }]);
+  };
+
+  validator.min = (minVal: number): NumberValidator => {
+    return createNumberValidator([...refinements, {
+      check: (n) => n >= minVal,
+      message: `Number must be at least ${minVal}`
+    }]);
+  };
+
+  validator.max = (maxVal: number): NumberValidator => {
+    return createNumberValidator([...refinements, {
+      check: (n) => n <= maxVal,
+      message: `Number must be at most ${maxVal}`
+    }]);
+  };
+
+  validator.range = (minVal: number, maxVal: number): NumberValidator => {
+    return createNumberValidator([...refinements, {
+      check: (n) => n >= minVal && n <= maxVal,
+      message: `Number must be between ${minVal} and ${maxVal}`
+    }]);
+  };
+
+  validator.finite = (): NumberValidator => {
+    return createNumberValidator([...refinements, {
+      check: (n) => Number.isFinite(n),
+      message: 'Number must be finite'
+    }]);
+  };
+
+  validator.safeInt = (): NumberValidator => {
+    return createNumberValidator([...refinements, {
+      check: (n) => Number.isSafeInteger(n),
+      message: 'Number must be a safe integer'
+    }]);
+  };
+
+  validator.multipleOf = (divisor: number): NumberValidator => {
+    return createNumberValidator([...refinements, {
+      // Handle floating point precision: check if remainder is close to 0 or divisor
+      check: (n) => {
+        const remainder = Math.abs(n % divisor);
+        return remainder < 1e-10 || Math.abs(remainder - Math.abs(divisor)) < 1e-10;
+      },
+      message: `Number must be a multiple of ${divisor}`
+    }]);
+  };
+
+  return validator;
+}
+
 /**
  * Validator builders
  */
 export const v = {
   /**
-   * String validator
+   * String validator with built-in constraints
+   * @example
+   * v.string().email()
+   * v.string().url()
+   * v.string().uuid()
+   * v.string().pattern(/^\d{3}-\d{4}$/)
+   * v.string().min(1).max(100)
    */
-  string(): Validator<string> {
-    const validator = createValidator(validateString, stringError);
-    validator._type = 'string';
-    // v0.8.0 OPTIMIZATION: Expose _compiled for JIT bypass (used by unions)
-    validator._compiled = validateString;
-    return validator;
+  string(): StringValidator {
+    return createStringValidator();
   },
 
   /**
-   * Number validator
+   * Number validator with built-in constraints
+   * @example
+   * v.number().int()
+   * v.number().positive()
+   * v.number().range(0, 100)
+   * v.number().min(0).max(100)
    */
-  number(): Validator<number> {
-    const validator = createValidator(validateNumber, numberError);
-    validator._type = 'number';
-    // v0.8.0 OPTIMIZATION: Expose _compiled for JIT bypass (used by unions)
-    validator._compiled = validateNumber;
-    return validator;
+  number(): NumberValidator {
+    return createNumberValidator();
   },
 
   /**
@@ -1449,10 +2107,17 @@ export const v = {
                            exactLength === undefined && refinements.length === 0 &&
                            !itemNeedsTransform;
       if (isPlainArray) {
-        // Create wrapper that includes Array.isArray check + item validation
-        validator._compiled = (data: unknown): boolean => {
-          return Array.isArray(data) && compiledValidate(data);
-        };
+        // PHASE 4: Try to use complete JIT function (includes Array.isArray check)
+        // This eliminates the wrapper function overhead for a single JIT function call
+        const completeJIT = compileArrayValidatorJIT(itemValidator);
+        if (completeJIT !== null) {
+          validator._compiled = completeJIT;
+        } else {
+          // Fallback: Create wrapper that includes Array.isArray check + item validation
+          validator._compiled = (data: unknown): boolean => {
+            return Array.isArray(data) && compiledValidate(data);
+          };
+        }
       }
 
       return validator;
@@ -1821,26 +2486,38 @@ export const v = {
   union<T extends readonly Validator<any>[]>(
     validators: T
   ): Validator<UnionType<T>> {
-    // v0.8.0 OPTIMIZATION: Check if all child validators have _compiled for JIT bypass
-    const allHaveCompiled = validators.every((v) => v._compiled !== undefined);
     const noneHaveRefinements = validators.every((v) => !v._hasRefinements);
 
-    // Create compiled validation function that uses child _compiled if available
-    const compiledValidate = allHaveCompiled && noneHaveRefinements
-      ? (data: unknown): boolean => {
-          // Fast path: use _compiled for each child validator
-          for (const v of validators) {
-            if (v._compiled!(data)) return true;
+    // v0.8.5 OPTIMIZATION: Try JIT compilation first (generates inline OR expression)
+    // This eliminates loop overhead: `typeof data === 'string' || typeof data === 'number'`
+    const jitCompiled = noneHaveRefinements ? compileUnionValidator(validators) : null;
+
+    // Create compiled validation function
+    let compiledValidate: (data: unknown) => boolean;
+
+    if (jitCompiled !== null) {
+      // Best path: JIT-compiled inline checks (no loop, no function calls for primitives)
+      compiledValidate = jitCompiled;
+    } else {
+      // v0.8.0 fallback: Check if all child validators have _compiled for loop-based bypass
+      const allHaveCompiled = validators.every((v) => v._compiled !== undefined);
+
+      compiledValidate = allHaveCompiled && noneHaveRefinements
+        ? (data: unknown): boolean => {
+            // Fast path: use _compiled for each child validator
+            for (const v of validators) {
+              if (v._compiled!(data)) return true;
+            }
+            return false;
           }
-          return false;
-        }
-      : (data: unknown): boolean => {
-          // Fallback: use .validate() method
-          for (const v of validators) {
-            if (v.validate(data)) return true;
-          }
-          return false;
-        };
+        : (data: unknown): boolean => {
+            // Fallback: use .validate() method
+            for (const v of validators) {
+              if (v.validate(data)) return true;
+            }
+            return false;
+          };
+    }
 
     const validator = createValidator(
       (data): data is UnionType<T> => compiledValidate(data),
@@ -1882,6 +2559,9 @@ export const v = {
 
     // Expose _compiled for unions to chain JIT bypass
     validator._compiled = compiledValidate;
+
+    // v0.8.5: Store literal value for JIT union inlining
+    (validator as any)._literalValue = value;
 
     return validator;
   },
@@ -1973,14 +2653,68 @@ export const v = {
    * ```
    */
   compile,
+
+  /**
+   * Boolean-only validation without error details (v0.8.5)
+   *
+   * Maximum performance validation that returns only true/false.
+   * Use when you don't need error messages and want maximum throughput.
+   *
+   * @param validator - The validator to check against
+   * @param data - The data to validate
+   * @returns true if valid, false otherwise
+   *
+   * @example
+   * ```typescript
+   * const UserSchema = v.object({ name: v.string(), age: v.number() });
+   *
+   * // Fast boolean check (no error details)
+   * if (v.check(UserSchema, data)) {
+   *   processUser(data);
+   * }
+   * ```
+   */
+  check,
+
+  /**
+   * Compile a validator into a maximum-speed boolean check function.
+   *
+   * Returns a cached function that can be called directly without
+   * validator lookup overhead. This is the fastest validation path.
+   *
+   * @param validator - The validator to compile
+   * @returns A function that validates and returns boolean
+   *
+   * @example
+   * ```typescript
+   * const checkUser = v.compileCheck(UserSchema);
+   *
+   * // Maximum speed in hot loops
+   * for (const user of users) {
+   *   if (checkUser(user)) {
+   *     processUser(user);
+   *   }
+   * }
+   * ```
+   */
+  compileCheck,
 };
 
 /**
  * Parse command line arguments
  */
-function parseArgs(args: string[]): { input: string; verbose: boolean } {
+interface CliOptions {
+  input: string;
+  verbose: boolean;
+  checkOnly: boolean;
+  showApi: boolean;
+}
+
+function parseArgs(args: string[]): CliOptions {
   let input = '';
   let verbose = false;
+  let checkOnly = false;
+  let showApi = false;
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -1988,35 +2722,147 @@ function parseArgs(args: string[]): { input: string; verbose: boolean } {
 
     if (arg === '--verbose' || arg === '-v') {
       verbose = true;
+    } else if (arg === '--check' || arg === '-c') {
+      checkOnly = true;
+    } else if (arg === '--api') {
+      showApi = true;
+    } else if (arg === '--version' || arg === '-V') {
+      console.log('property-validator v0.8.5');
+      console.log('Runtime type validation with TypeScript inference');
+      process.exit(0);
     } else if (arg === '--help' || arg === '-h') {
       console.log(`Usage: propval [options] <json-data>
 
-Runtime type validation with TypeScript inference.
+Property Validator v0.8.5 - Runtime type validation with TypeScript inference.
 
 Options:
   -v, --verbose  Enable verbose output
+  -c, --check    Boolean-only output (exit code only, no output)
+  --api          Show available validators and methods
+  -V, --version  Show version
   -h, --help     Show this help message
 
 Examples:
-  propval '{"name":"Alice","age":30}'
-  propval --verbose '{"email":"test@example.com"}'`);
+  # Validate JSON data against built-in user schema
+  propval '{"name":"Alice","age":30,"email":"alice@example.com"}'
+
+  # Check-only mode (boolean output)
+  propval --check '{"name":"Alice","age":30,"email":"alice@example.com"}'
+  echo $?  # 0 = valid, 1 = invalid
+
+  # Verbose mode
+  propval --verbose '{"name":"Alice","age":30,"email":"alice@example.com"}'
+
+  # Show available API
+  propval --api
+
+Library Usage:
+  import { v, validate, check } from 'property-validator';
+
+  const schema = v.object({
+    name: v.string().min(1),
+    email: v.string().email(),
+    age: v.number().int().positive()
+  });
+
+  const result = validate(schema, data);
+  const isValid = check(schema, data);
+`);
       process.exit(0);
     } else if (!arg.startsWith('-')) {
       input = arg;
     }
   }
 
-  return { input, verbose };
+  return { input, verbose, checkOnly, showApi };
+}
+
+function showApi(): void {
+  console.log(`
+Property Validator v0.8.5 - API Reference
+
+═══════════════════════════════════════════════════════════════════
+ Validation Functions
+═══════════════════════════════════════════════════════════════════
+  validate(schema, data)     Full validation with error details
+  check(schema, data)        Boolean-only (faster, no errors)
+  compileCheck(schema)       Pre-compiled boolean validator
+
+═══════════════════════════════════════════════════════════════════
+ String Validators
+═══════════════════════════════════════════════════════════════════
+  v.string()                 Base string validator
+    .min(n)                  Minimum length
+    .max(n)                  Maximum length
+    .length(n)               Exact length
+    .nonempty()              Non-empty string
+    .email()                 Valid email format
+    .url()                   Valid URL (http/https)
+    .uuid()                  Valid UUID (v1-v5)
+    .pattern(regex, msg?)    Custom regex pattern
+    .startsWith(prefix)      String prefix
+    .endsWith(suffix)        String suffix
+    .includes(substring)     Contains substring
+
+═══════════════════════════════════════════════════════════════════
+ Number Validators
+═══════════════════════════════════════════════════════════════════
+  v.number()                 Base number validator
+    .int()                   Integer only
+    .positive()              Greater than 0
+    .negative()              Less than 0
+    .nonnegative()           >= 0
+    .nonpositive()           <= 0
+    .min(n)                  Minimum value
+    .max(n)                  Maximum value
+    .range(min, max)         Between min and max
+    .finite()                Not Infinity or NaN
+    .safeInt()               Safe integer range
+
+═══════════════════════════════════════════════════════════════════
+ Other Validators
+═══════════════════════════════════════════════════════════════════
+  v.boolean()                Boolean type
+  v.array(itemValidator)     Array with item validation
+  v.object({...})            Object with property schemas
+  v.union([...])             One of multiple types
+  v.literal(value)           Exact value match
+  v.optional(validator)      Optional field
+  v.nullable(validator)      Nullable field
+
+═══════════════════════════════════════════════════════════════════
+ Example
+═══════════════════════════════════════════════════════════════════
+  const UserSchema = v.object({
+    name: v.string().min(1).max(100),
+    email: v.string().email(),
+    age: v.number().int().positive().max(150),
+    website: v.optional(v.string().url())
+  });
+
+  const result = validate(UserSchema, userData);
+  if (result.ok) {
+    console.log(result.value.name);  // TypeScript knows the type!
+  }
+`);
 }
 
 // CLI entry point - only runs when executed directly
 function main(): void {
   const args = globalThis.process?.argv?.slice(2) ?? [];
-  const { input, verbose } = parseArgs(args);
+  const { input, verbose, checkOnly, showApi: showApiFlag } = parseArgs(args);
+
+  // Show API reference if requested
+  if (showApiFlag) {
+    showApi();
+    globalThis.process?.exit(0);
+    return;
+  }
 
   if (!input) {
     console.error('Error: No input provided');
     console.error('Usage: propval [options] <json-data>');
+    console.error('Try: propval --help');
     globalThis.process?.exit(1);
     return;
   }
@@ -2024,13 +2870,21 @@ function main(): void {
   try {
     const data = JSON.parse(input);
 
-    // Example: validate a simple object
+    // Demo schema using built-in validators (Phase 7)
     const userValidator = v.object({
-      name: v.string(),
-      age: v.number(),
-      email: v.string(),
+      name: v.string().min(1).max(100),
+      age: v.number().int().positive().max(150),
+      email: v.string().email(),
     });
 
+    // Check-only mode: use check() for faster boolean validation
+    if (checkOnly) {
+      const isValid = check(userValidator, data);
+      globalThis.process?.exit(isValid ? 0 : 1);
+      return;
+    }
+
+    // Full validation with error details
     const result = validate(userValidator, data);
 
     if (result.ok) {
