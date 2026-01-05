@@ -1,0 +1,89 @@
+name: Update Benchmark Baseline
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'benchmarks/**'
+      - 'package.json'
+  workflow_dispatch:  # Allow manual trigger
+
+# Only one baseline update at a time
+concurrency:
+  group: benchmark-baseline
+  cancel-in-progress: true
+
+jobs:
+  update-baseline:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run benchmarks
+        run: npm run --silent bench:ci > new-baseline.json
+
+      - name: Archive baseline history
+        run: |
+          # Create history directory if it doesn't exist
+          mkdir -p benchmarks/ci/history
+
+          # Get current date for filename
+          DATE=$(date +%Y-%m-%d)
+          VERSION=$(node -p "require('./package.json').version")
+
+          # Copy current baseline to history (if exists)
+          if [ -f benchmarks/ci/baseline.json ]; then
+            cp benchmarks/ci/baseline.json "benchmarks/ci/history/baseline-${VERSION}-${DATE}.json"
+          fi
+
+          # Update baseline with new results
+          cp new-baseline.json benchmarks/ci/baseline.json
+
+          echo "📊 Baseline updated for v${VERSION} on ${DATE}"
+
+      - name: Generate performance dashboard
+        run: |
+          if [ -f benchmarks/ci/generate-dashboard.ts ]; then
+            npm run --silent bench:dashboard 2>/dev/null || echo "Dashboard generation skipped (script may not exist)"
+          fi
+
+      - name: Commit baseline update
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+
+          git add benchmarks/ci/baseline.json
+          git add benchmarks/ci/history/ || true
+
+          # Only commit if there are changes
+          if git diff --staged --quiet; then
+            echo "No changes to baseline"
+          else
+            git commit -m "chore: update benchmark baseline [skip ci]"
+            git push
+          fi
+
+      - name: Upload historical data as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-baseline-${{ github.sha }}
+          path: |
+            benchmarks/ci/baseline.json
+            benchmarks/ci/history/
+          retention-days: 90

@@ -64,7 +64,7 @@ jobs:
         with:
           name: benchmark-results-node-${{ matrix.node-version }}
           path: benchmark-results.json
-          retention-days: 30
+          retention-days: 90  # Extended for historical tracking
 
       - name: Fail if regression detected
         if: steps.compare.outcome == 'failure'
