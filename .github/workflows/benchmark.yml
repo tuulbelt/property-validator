@@ -1,0 +1,69 @@
+name: Benchmark
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'benchmarks/**'
+      - 'package.json'
+  workflow_dispatch:  # Allow manual trigger for testing
+
+# Cancel in-progress runs when new commits are pushed
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run benchmarks
+        id: bench
+        run: |
+          npm run --silent bench:ci > benchmark-results.json
+          echo "Benchmark results:"
+          cat benchmark-results.json
+
+      - name: Compare against baseline
+        id: compare
+        run: |
+          npm run --silent bench:compare < benchmark-results.json
+        continue-on-error: true  # Don't fail workflow yet, capture result
+
+      - name: Set comparison result
+        id: result
+        run: |
+          if [ "${{ steps.compare.outcome }}" == "failure" ]; then
+            echo "regression=true" >> $GITHUB_OUTPUT
+            echo "status=❌ REGRESSION DETECTED" >> $GITHUB_OUTPUT
+          else
+            echo "regression=false" >> $GITHUB_OUTPUT
+            echo "status=✅ No regressions" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: benchmark-results.json
+          retention-days: 30
+
+      - name: Fail if regression detected
+        if: steps.compare.outcome == 'failure'
+        run: |
+          echo "Performance regression detected!"
+          exit 1
