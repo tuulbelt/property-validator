@@ -1,6 +1,6 @@
 {
   "name": "@tuulbelt/property-validator",
-  "version": "0.7.5",
+  "version": "0.8.0",
   "description": "Runtime type validation with TypeScript inference",
   "main": "src/index.ts",
   "type": "module",
