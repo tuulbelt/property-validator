@@ -1,7 +1,7 @@
 # Property Validator / `propval`
 
 [![Tests](https://github.com/tuulbelt/property-validator/actions/workflows/test.yml/badge.svg)](https://github.com/tuulbelt/property-validator/actions/workflows/test.yml)
-![Version](https://img.shields.io/badge/version-0.9.1-blue)
+![Version](https://img.shields.io/badge/version-0.9.2-blue)
 ![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)
 ![Dogfooded](https://img.shields.io/badge/dogfooded-🐕-purple)
 ![Tests](https://img.shields.io/badge/tests-680%20passing-success)
@@ -141,6 +141,46 @@ const schema = v.object({ name: v.string() });
 ```typescript
 import type { Validator, Result, ValidationOptions } from '@tuulbelt/property-validator/types';
 ```
+
+### Entry Points (v0.9.2+)
+
+Property Validator provides multiple entry points for different use cases:
+
+| Entry Point | Import From | Use Case |
+|-------------|-------------|----------|
+| Main | `@tuulbelt/property-validator` | Full API (v namespace + named exports) |
+| /v | `@tuulbelt/property-validator/v` | Fluent API only (v namespace) |
+| /lite | `@tuulbelt/property-validator/lite` | Functional API (no v namespace) |
+| /types | `@tuulbelt/property-validator/types` | Type definitions only |
+
+**Example: /v entry point (fluent API):**
+```typescript
+import { v, validate, check } from '@tuulbelt/property-validator/v';
+
+const UserSchema = v.object({
+  name: v.string().email(),
+  age: v.number().positive()
+});
+
+const result = validate(UserSchema, data);
+```
+
+**Example: /lite entry point (functional API):**
+```typescript
+import { validate, string, number, object, email, positive } from '@tuulbelt/property-validator/lite';
+
+const UserSchema = object({
+  name: string(email()),
+  age: number(positive())
+});
+
+const result = validate(UserSchema, data);
+```
+
+**When to use which:**
+- **Main entry point**: Full access to both APIs
+- **/v entry point**: Prefer fluent chainable API (v.string().email())
+- **/lite entry point**: Prefer functional composition (string(email()))
 
 ### Functional Refinement API (v0.9.1+)
 

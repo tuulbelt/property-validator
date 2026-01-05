@@ -6,6 +6,7 @@
  *
  * v0.9.0: Modular architecture - types extracted to ./types.ts
  * v0.9.1: Functional refinements API for tree-shaking support
+ * v0.9.2: Entry points for /v (fluent API) and /lite (functional API)
  */
 
 import { realpathSync } from 'node:fs';
