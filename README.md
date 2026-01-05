@@ -64,8 +64,10 @@ npx tsx src/index.ts --help
 
 ### As a Library
 
+**Fluent API** (v namespace):
 ```typescript
-import { validate, v } from '@tuulbelt/property-validator';
+// Import v from /v entry point for fluent method chaining
+import { v, validate } from '@tuulbelt/property-validator/v';
 
 // Define validators with built-in constraints
 const userValidator = v.object({
@@ -86,6 +88,20 @@ if (result.ok) {
 } else {
   console.error(result.error); // Clear error message
 }
+```
+
+**Named imports** (tree-shakeable):
+```typescript
+// Import named validators from main entry point
+import { validate, string, number, object, email, int, positive } from '@tuulbelt/property-validator';
+
+const userValidator = object({
+  name: string(),
+  age: number(int(), positive()),
+  email: string(email())
+});
+
+const result = validate(userValidator, data);
 ```
 
 ### As a CLI
@@ -125,14 +141,15 @@ const userValidator = object({
 const result = validate(userValidator, data);
 ```
 
-**Available named exports:**
+**Available named exports (main entry):**
 - Validators: `string`, `number`, `boolean`, `array`, `tuple`, `object`, `optional`, `nullable`, `union`, `literal`, `lazy`, `enum_`
 - Functions: `validate`, `check`, `compile`, `compileCheck`
 - Class: `ValidationError`
 
-**Namespace import (still works):**
+**Fluent API import (/v entry):**
 ```typescript
-import { v, validate } from '@tuulbelt/property-validator';
+// v namespace is available from the /v entry point
+import { v, validate } from '@tuulbelt/property-validator/v';
 
 const schema = v.object({ name: v.string() });
 ```
@@ -165,22 +182,9 @@ const UserSchema = v.object({
 const result = validate(UserSchema, data);
 ```
 
-**Example: /lite entry point (functional API):**
-```typescript
-import { validate, string, number, object, email, positive } from '@tuulbelt/property-validator/lite';
-
-const UserSchema = object({
-  name: string(email()),
-  age: number(positive())
-});
-
-const result = validate(UserSchema, data);
-```
-
 **When to use which:**
-- **Main entry point**: Full access to both APIs
-- **/v entry point**: Prefer fluent chainable API (v.string().email())
-- **/lite entry point**: Prefer functional composition (string(email()))
+- **Main entry point**: Named imports with tree-shaking (string(email()))
+- **/v entry point**: Fluent chainable API (v.string().email())
 
 ### Functional Refinement API (v0.9.1+)
 
@@ -289,7 +293,8 @@ Fast boolean-only validation. Skips error path computation entirely.
 **Best for:** Conditionals, filtering, type guards, anywhere you only need pass/fail.
 
 ```typescript
-import { v, check } from 'property-validator';
+import { v } from '@tuulbelt/property-validator/v';
+import { check } from '@tuulbelt/property-validator';
 
 const UserSchema = v.object({ name: v.string(), age: v.number() });
 
@@ -315,7 +320,8 @@ Pre-compile a validator for maximum-speed boolean validation. Returns a cached f
 **Best for:** Hot paths, large datasets, performance-critical loops.
 
 ```typescript
-import { v, compileCheck } from 'property-validator';
+import { v } from '@tuulbelt/property-validator/v';
+import { compileCheck } from '@tuulbelt/property-validator';
 
 const UserSchema = v.object({ name: v.string(), age: v.number() });
 const isValidUser = compileCheck(UserSchema);  // Compile once
@@ -568,7 +574,8 @@ validate(configValidator, { port: undefined, host: undefined, debug: undefined }
 ### Custom Validators
 
 ```typescript
-import { v, Validator } from '@tuulbelt/property-validator';
+import { v } from '@tuulbelt/property-validator/v';
+import type { Validator } from '@tuulbelt/property-validator';
 
 // Create custom validator
 const emailValidator: Validator<string> = {

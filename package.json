@@ -17,11 +17,6 @@
       "import": "./src/v.ts",
       "default": "./src/v.ts"
     },
-    "./lite": {
-      "types": "./src/lite.ts",
-      "import": "./src/lite.ts",
-      "default": "./src/lite.ts"
-    },
     "./types": {
       "types": "./src/types.ts",
       "import": "./src/types.ts",

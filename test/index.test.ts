@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { validate, v } from '../src/index.js';
+import { v } from '../src/v.js';
+import { validate } from '../src/index.js';
 
 test('validate - string validator', async (t) => {
   await t.test('accepts valid string', () => {

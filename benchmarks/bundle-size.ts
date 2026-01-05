@@ -3,9 +3,8 @@
  * Bundle Size Benchmark (v0.9.2)
  *
  * Measures bundle sizes for different import configurations:
- * - Full import (everything)
- * - /v import (v namespace + validate)
- * - /lite import (named exports only)
+ * - Full import (v namespace) via /v entry point
+ * - Named imports (tree-shakeable) via main entry point
  * - Minimal usage (string + object + validate)
  *
  * Uses esbuild for accurate tree-shaking measurement.
@@ -33,14 +32,12 @@ function getConfigs(): BundleConfig[] {
 
   return [
     {
-      name: 'full',
-      description: 'Full import (everything)',
+      name: 'full-v-namespace',
+      description: 'Full import via /v (v namespace + all validators)',
       code: `
-import { v, validate, check, compile, compileCheck, string, number, boolean, object, array, tuple, union, literal, lazy, optional, nullable, enum_ } from '${srcPath}/index.ts';
-import { email, url, uuid, minLength, maxLength, pattern } from '${srcPath}/refinements/string.ts';
-import { int, positive, negative, range, min, max } from '${srcPath}/refinements/number.ts';
+import { v, validate, check, compile, compileCheck } from '${srcPath}/v.ts';
 
-// Use everything to prevent tree-shaking
+// Use v namespace for fluent API
 const schema = v.object({
   name: v.string().email(),
   age: v.number().positive(),
@@ -51,42 +48,14 @@ const isValid = check(schema, { name: "test", age: 1, tags: [] });
 const compiled = compile(schema);
 const compiledCheck = compileCheck(schema);
 
-// Named exports
-const s = string(email());
-const n = number(int(), positive());
-const o = object({ x: string() });
-const a = array(number());
-const t = tuple([string(), number()]);
-const u = union([string(), number()]);
-const l = literal("test");
-const z = lazy(() => string());
-const opt = optional(string());
-const nul = nullable(string());
-const e = enum_(["a", "b"]);
-
-console.log(result, isValid, s, n, o, a, t, u, l, z, opt, nul, e, compiled, compiledCheck);
+console.log(result, isValid, compiled, compiledCheck);
 `
     },
     {
-      name: 'v-namespace',
-      description: '/v import (v namespace)',
+      name: 'named-imports',
+      description: 'Named imports from main (tree-shakeable)',
       code: `
-import { v, validate, check } from '${srcPath}/v.ts';
-
-const schema = v.object({
-  name: v.string().email(),
-  age: v.number().positive(),
-});
-const result = validate(schema, { name: "test", age: 25 });
-const isValid = check(schema, { name: "test", age: 1 });
-console.log(result, isValid);
-`
-    },
-    {
-      name: 'lite',
-      description: '/lite import (named exports)',
-      code: `
-import { validate, check, string, number, object, email, positive } from '${srcPath}/lite.ts';
+import { validate, check, string, number, object, email, positive } from '${srcPath}/index.ts';
 
 const schema = object({
   name: string(email()),
@@ -99,9 +68,9 @@ console.log(result, isValid);
     },
     {
       name: 'minimal',
-      description: 'Minimal (validate + string + object)',
+      description: 'Minimal (validate + string + object only)',
       code: `
-import { validate, string, object } from '${srcPath}/lite.ts';
+import { validate, string, object } from '${srcPath}/index.ts';
 
 const schema = object({ name: string() });
 const result = validate(schema, { name: "test" });
@@ -112,7 +81,7 @@ console.log(result);
       name: 'primitives-only',
       description: 'Primitives only (string + number + validate)',
       code: `
-import { validate, string, number } from '${srcPath}/lite.ts';
+import { validate, string, number } from '${srcPath}/index.ts';
 
 const s = string();
 const n = number();
@@ -125,7 +94,7 @@ console.log(r1, r2);
       name: 'with-refinements',
       description: 'With refinements (email + int + positive)',
       code: `
-import { validate, string, number, email, int, positive } from '${srcPath}/lite.ts';
+import { validate, string, number, email, int, positive } from '${srcPath}/index.ts';
 
 const emailSchema = string(email());
 const ageSchema = number(int(), positive());
@@ -138,7 +107,7 @@ console.log(r1, r2);
       name: 'complex-schema',
       description: 'Complex nested schema',
       code: `
-import { validate, string, number, object, array, optional, email, positive } from '${srcPath}/lite.ts';
+import { validate, string, number, object, array, optional, email, positive } from '${srcPath}/index.ts';
 
 const UserSchema = object({
   name: string(),
@@ -158,6 +127,35 @@ const result = validate(UserSchema, {
   tags: ["admin"],
 });
 console.log(result);
+`
+    },
+    {
+      name: 'check-only',
+      description: 'Boolean check only (no error details)',
+      code: `
+import { check, string, number, object } from '${srcPath}/index.ts';
+
+const schema = object({
+  name: string(),
+  age: number(),
+});
+const isValid = check(schema, { name: "test", age: 25 });
+console.log(isValid);
+`
+    },
+    {
+      name: 'compile-check',
+      description: 'Pre-compiled boolean check',
+      code: `
+import { compileCheck, string, number, object } from '${srcPath}/index.ts';
+
+const schema = object({
+  name: string(),
+  age: number(),
+});
+const validator = compileCheck(schema);
+const isValid = validator({ name: "test", age: 25 });
+console.log(isValid);
 `
     },
   ];
@@ -242,24 +240,26 @@ async function main() {
   console.log('');
 
   // Savings comparison
-  const full = results.find(r => r.name === 'full');
-  const lite = results.find(r => r.name === 'lite');
+  const full = results.find(r => r.name === 'full-v-namespace');
+  const named = results.find(r => r.name === 'named-imports');
   const minimal = results.find(r => r.name === 'minimal');
 
-  if (full && lite && minimal) {
+  if (full && named && minimal) {
     console.log('Savings Analysis');
     console.log('-'.repeat(60));
-    console.log(`Full bundle: ${formatSize(full.minified)} (${formatSize(full.gzipped)} gzip)`);
-    console.log(`/lite import: ${formatSize(lite.minified)} (${((1 - lite.minified / full.minified) * 100).toFixed(0)}% smaller)`);
+    console.log(`Full bundle (/v): ${formatSize(full.minified)} (${formatSize(full.gzipped)} gzip)`);
+    console.log(`Named imports: ${formatSize(named.minified)} (${((1 - named.minified / full.minified) * 100).toFixed(0)}% smaller)`);
     console.log(`Minimal: ${formatSize(minimal.minified)} (${((1 - minimal.minified / full.minified) * 100).toFixed(0)}% smaller)`);
   }
 
   console.log('');
   console.log('Import Recommendations');
   console.log('-'.repeat(60));
-  console.log('• For smallest bundles: Use /lite with named imports');
-  console.log('• For fluent API (v.string().email()): Use /v');
-  console.log('• For full access: Use main entry point');
+  console.log('• For smallest bundles: Use named imports from main entry');
+  console.log('  import { string, number, validate } from "@tuulbelt/property-validator"');
+  console.log('');
+  console.log('• For fluent API (v.string().email()): Use /v entry point');
+  console.log('  import { v, validate } from "@tuulbelt/property-validator/v"');
 }
 
 main().catch(console.error);

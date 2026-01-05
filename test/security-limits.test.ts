@@ -11,7 +11,8 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { validate, v } from '../src/index.ts';
+import { v } from '../src/v.ts';
+import { validate } from '../src/index.ts';
 
 // ============================================================================
 // Maximum Depth Limits (4 tests)

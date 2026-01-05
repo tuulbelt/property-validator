@@ -1394,7 +1394,9 @@ function createNumberValidator(
 /**
  * Validator builders
  */
-export const v = {
+// v namespace is NOT exported from main - use @tuulbelt/property-validator/v for fluent API
+// This enables tree-shaking: named imports like string(), number() won't pull in the entire v object
+const v = {
   /**
    * String validator with built-in constraints
    * @example
@@ -2432,7 +2434,8 @@ export const v = {
 export function string(...refinements: StringRefinement[]): StringValidator | Validator<string> {
   if (refinements.length === 0) {
     // No refinements: return chainable StringValidator (backwards compatible)
-    return v.string();
+    // Use createStringValidator directly to avoid pulling in v namespace
+    return createStringValidator();
   }
 
   // With refinements: create optimized validator without chainable methods
@@ -2472,14 +2475,23 @@ export function string(...refinements: StringRefinement[]): StringValidator | Va
       });
     },
     transform<U>(fn: (value: string) => U): Validator<U> {
-      const transformedValidator = v.string().transform(fn);
+      // Use createStringValidator directly to avoid pulling in v namespace
+      const transformedValidator = createStringValidator().transform(fn);
       return transformedValidator;
     },
     optional(): Validator<string | undefined> {
-      return v.optional(this);
+      // Use createValidator directly to avoid pulling in v namespace
+      return createValidator(
+        (data): data is string | undefined => data === undefined || this.validate(data),
+        (data) => this.error(data)
+      );
     },
     nullable(): Validator<string | null> {
-      return v.nullable(this);
+      // Use createValidator directly to avoid pulling in v namespace
+      return createValidator(
+        (data): data is string | null => data === null || this.validate(data),
+        (data) => this.error(data)
+      );
     },
     nullish(): Validator<string | undefined | null> {
       const base = this;
@@ -2496,7 +2508,8 @@ export function string(...refinements: StringRefinement[]): StringValidator | Va
       };
     },
     default(value: string | (() => string)): Validator<string> {
-      const defaultValidator = v.string().default(value);
+      // Use createStringValidator directly to avoid pulling in v namespace
+      const defaultValidator = createStringValidator().default(value);
       return defaultValidator;
     },
   };
@@ -2528,7 +2541,8 @@ export function string(...refinements: StringRefinement[]): StringValidator | Va
 export function number(...refinements: NumberRefinement[]): NumberValidator | Validator<number> {
   if (refinements.length === 0) {
     // No refinements: return chainable NumberValidator (backwards compatible)
-    return v.number();
+    // Use createNumberValidator directly to avoid pulling in v namespace
+    return createNumberValidator();
   }
 
   // With refinements: create optimized validator without chainable methods
@@ -2568,14 +2582,23 @@ export function number(...refinements: NumberRefinement[]): NumberValidator | Va
       });
     },
     transform<U>(fn: (value: number) => U): Validator<U> {
-      const transformedValidator = v.number().transform(fn);
+      // Use createNumberValidator directly to avoid pulling in v namespace
+      const transformedValidator = createNumberValidator().transform(fn);
       return transformedValidator;
     },
     optional(): Validator<number | undefined> {
-      return v.optional(this);
+      // Use createValidator directly to avoid pulling in v namespace
+      return createValidator(
+        (data): data is number | undefined => data === undefined || this.validate(data),
+        (data) => this.error(data)
+      );
     },
     nullable(): Validator<number | null> {
-      return v.nullable(this);
+      // Use createValidator directly to avoid pulling in v namespace
+      return createValidator(
+        (data): data is number | null => data === null || this.validate(data),
+        (data) => this.error(data)
+      );
     },
     nullish(): Validator<number | undefined | null> {
       const base = this;
@@ -2592,7 +2615,8 @@ export function number(...refinements: NumberRefinement[]): NumberValidator | Va
       };
     },
     default(value: number | (() => number)): Validator<number> {
-      const defaultValidator = v.number().default(value);
+      // Use createNumberValidator directly to avoid pulling in v namespace
+      const defaultValidator = createNumberValidator().default(value);
       return defaultValidator;
     },
   };
@@ -2607,28 +2631,101 @@ export function number(...refinements: NumberRefinement[]): NumberValidator | Va
   return validator;
 }
 
-// Other primitive validators (backwards compatible)
-export const boolean = v.boolean;
+// ============================================================================
+// Named Validator Exports (v0.9.2 - Tree-Shakeable)
+// These are standalone implementations that don't reference the v namespace,
+// enabling bundlers to tree-shake unused validators.
+// ============================================================================
 
-// Composite validators
-export const array = v.array;
-export const tuple = v.tuple;
-export const object = v.object;
+/**
+ * Boolean validator - standalone implementation for tree-shaking
+ */
+export function boolean(): Validator<boolean> {
+  const validator = createValidator(validateBoolean, booleanError);
+  validator._type = 'boolean';
+  validator._compiled = validateBoolean;
+  return validator;
+}
 
-// Modifier validators
-export const optional = v.optional;
-export const nullable = v.nullable;
+/**
+ * Array validator - delegates to v.array for full implementation
+ * Note: This is a function wrapper to enable tree-shaking of v namespace
+ */
+export function array<T>(itemValidator: Validator<T>): ArrayValidator<T> {
+  return v.array(itemValidator);
+}
 
-// Union and literal validators
-export const union = v.union;
-export const literal = v.literal;
+/**
+ * Tuple validator - delegates to v.tuple for full implementation
+ */
+export function tuple<T extends readonly Validator<any>[]>(
+  validators: T
+): Validator<TupleType<T>> {
+  return v.tuple(validators);
+}
 
-// Utility validators
-export const lazy = v.lazy;
+/**
+ * Object validator - delegates to v.object for full implementation
+ */
+export function object<T extends Record<string, unknown>>(
+  shape: { [K in keyof T]: Validator<T[K]> }
+): Validator<T> {
+  return v.object(shape);
+}
 
-// Enum validator (renamed to avoid conflict with TS reserved word)
-const enumValidator = v.enum;
-export { enumValidator as enum_ };
+/**
+ * Optional validator - standalone implementation for tree-shaking
+ */
+export function optional<T>(validator: Validator<T>): Validator<T | undefined> {
+  return createValidator(
+    (data): data is T | undefined => data === undefined || validator.validate(data),
+    (data) => validator.error(data)
+  );
+}
+
+/**
+ * Nullable validator - standalone implementation for tree-shaking
+ */
+export function nullable<T>(validator: Validator<T>): Validator<T | null> {
+  return createValidator(
+    (data): data is T | null => data === null || validator.validate(data),
+    (data) => validator.error(data)
+  );
+}
+
+/**
+ * Union validator - delegates to v.union for full implementation
+ */
+export function union<T extends readonly Validator<any>[]>(
+  validators: T
+): Validator<UnionType<T>> {
+  return v.union(validators);
+}
+
+/**
+ * Literal validator - delegates to v.literal for full implementation
+ */
+export function literal<T extends string | number | boolean | null | undefined>(
+  value: T
+): Validator<T> {
+  return v.literal(value);
+}
+
+/**
+ * Lazy validator - delegates to v.lazy for full implementation
+ */
+export function lazy<T>(fn: () => Validator<T>): Validator<T> {
+  return v.lazy(fn);
+}
+
+/**
+ * Enum validator - delegates to v.enum for full implementation
+ */
+export function enum_<T extends readonly (string | number)[]>(
+  values: T
+): Validator<T[number]> {
+  return v.enum(values);
+}
 
 // ============================================================================
 // Tree-Shakeable Refinement Functions (v0.9.1)

@@ -274,7 +274,7 @@ function compile<T>(validator: Validator<T>): (data: unknown) => boolean {
 ## Quick Start
 
 ```typescript
-import { v, validate } from 'property-validator';
+import { v, validate } from '@tuulbelt/property-validator/v';
 
 const User = v.object({ name: v.string(), age: v.number() });
 const result = validate(User, data);

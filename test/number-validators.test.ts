@@ -4,7 +4,8 @@
  */
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { v, validate } from '../src/index.ts';
+import { v } from '../src/v.ts';
+import { validate } from '../src/index.ts';
 
 describe('number validators: int()', () => {
   const intValidator = v.number().int();
