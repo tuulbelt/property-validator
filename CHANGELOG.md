@@ -5,6 +5,38 @@ All notable changes to Property Validator will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.3] - 2026-01-05
+
+### Benchmark CI Infrastructure
+
+Property Validator v0.9.3 adds automated benchmark regression detection in CI.
+
+**GitHub Actions Workflows:**
+- `benchmark.yml` — Runs benchmarks on PRs to main
+- `benchmark-update-baseline.yml` — Auto-updates baseline on merges to main
+
+**Features:**
+- **Multi-Node Matrix:** Tests on Node.js 18, 20, 22 in parallel
+- **PR Comments:** Posts summary with pass/fail status
+- **Slack Notifications:** Alerts via `TUULBELT_SLACK_WEBHOOK` org secret
+- **Historical Baselines:** Archives in `benchmarks/ci/history/` with 90-day retention
+- **Regression Detection:** Fails PR if performance regresses >15%
+
+### Added
+- **`benchmark.yml`:** CI workflow for benchmark regression detection
+- **`benchmark-update-baseline.yml`:** Auto-baseline update on main merges
+- **Slack Integration:** Org-level webhook with dynamic tool name (Title Case)
+- **PR Comments:** Automatic benchmark summary on pull requests
+- **90-day Artifacts:** Extended retention for historical tracking
+
+### Technical Details
+- Uses existing `npm run bench:ci` and `npm run bench:compare` scripts
+- Matrix strategy runs all Node versions even if one fails
+- Summary job aggregates results and posts single PR comment
+- Slack message includes status emoji, PR link, and workflow URL
+
+---
+
 ## [0.9.0] - 2026-01-05
 
 ### Modularization & Tree-Shaking Support
