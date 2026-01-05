@@ -720,6 +720,68 @@ export function compile<T>(validator: Validator<T>): CompiledValidator<T> {
 }
 
 /**
+ * Compiled check type - a function that validates data and returns boolean
+ */
+export type CompiledCheck = (data: unknown) => boolean;
+
+/**
+ * Cache for compiled check functions (WeakMap to allow garbage collection)
+ */
+const compiledCheckCache = new WeakMap<Validator<any>, CompiledCheck>();
+
+/**
+ * Compile a validator into a maximum-speed boolean check function
+ *
+ * This is the fastest possible validation path. The compiled function
+ * is cached, so subsequent calls with the same validator return the
+ * cached function. Unlike `compile()`, this returns only a boolean
+ * with no error details.
+ *
+ * **Performance target:** 15-18M ops/sec (TypeBox territory)
+ *
+ * @param validator - The validator to compile
+ * @returns A compiled check function that returns true/false
+ *
+ * @example
+ * ```typescript
+ * const checkUser = v.compileCheck(userValidator);
+ *
+ * // Maximum speed validation in hot loops
+ * for (const user of users) {
+ *   if (checkUser(user)) {
+ *     processUser(user);
+ *   }
+ * }
+ *
+ * // Compare to check() which has function call overhead:
+ * // v.check(userValidator, user)  // ~5% slower due to validator lookup
+ * ```
+ */
+export function compileCheck<T>(validator: Validator<T>): CompiledCheck {
+  // Check cache first
+  const cached = compiledCheckCache.get(validator);
+  if (cached) {
+    return cached;
+  }
+
+  let compiled: CompiledCheck;
+
+  // Fast path: Use existing _compiled if available (already JIT optimized)
+  if (validator._compiled && !validator._hasRefinements) {
+    compiled = validator._compiled;
+  } else {
+    // Fallback: Create wrapper around validate() method
+    // This is still fast - it just returns the boolean, no Result allocation
+    compiled = (data: unknown): boolean => validator.validate(data);
+  }
+
+  // Cache the compiled check function
+  compiledCheckCache.set(validator, compiled);
+
+  return compiled;
+}
+
+/**
  * Compile a single property validator for inline validation.
  * Returns a function that validates without allocating Result objects.
  *
@@ -2145,6 +2207,29 @@ export const v = {
    * ```
    */
   check,
+
+  /**
+   * Compile a validator into a maximum-speed boolean check function.
+   *
+   * Returns a cached function that can be called directly without
+   * validator lookup overhead. This is the fastest validation path.
+   *
+   * @param validator - The validator to compile
+   * @returns A function that validates and returns boolean
+   *
+   * @example
+   * ```typescript
+   * const checkUser = v.compileCheck(UserSchema);
+   *
+   * // Maximum speed in hot loops
+   * for (const user of users) {
+   *   if (checkUser(user)) {
+   *     processUser(user);
+   *   }
+   * }
+   * ```
+   */
+  compileCheck,
 };
 
 /**

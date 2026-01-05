@@ -7,7 +7,7 @@
 import { bench, baseline, group, run } from 'tatami-ng';
 
 // property-validator
-import { v, validate, check } from '../src/index.ts';
+import { v, validate, check, compileCheck } from '../src/index.ts';
 
 // valibot
 import * as valibot from 'valibot';
@@ -115,6 +115,14 @@ const valibotUnion = valibot.union([valibot.string(), valibot.number(), valibot.
 const typeboxUnion = T.Union([T.String(), T.Number(), T.Boolean()]);
 const typeboxUnionCompiled = TypeCompiler.Compile(typeboxUnion);
 
+// v0.8.5: Pre-compiled property-validator checkers (maximum speed)
+const pvStringCompiled = compileCheck(pvString);
+const pvNumberCompiled = compileCheck(pvNumber);
+const pvSimpleObjectCompiled = compileCheck(pvSimpleObject);
+const pvComplexNestedCompiled = compileCheck(pvComplexNested);
+const pvArrayStringsCompiled = compileCheck(pvArrayStrings);
+const pvUnionCompiled = compileCheck(pvUnion);
+
 // ========================================
 // Test Data
 // ========================================
@@ -142,8 +150,11 @@ console.log('📊 Head-to-Head Comparison: property-validator vs valibot vs Type
 // ========================================
 
 group('Primitive: String (valid)', () => {
-  baseline('property-validator', () => {
+  baseline('pv check()', () => {
     result = check(pvString, validString);
+  });
+  bench('pv compileCheck()', () => {
+    result = pvStringCompiled(validString);
   });
   bench('valibot', () => {
     result = valibot.is(valibotString, validString);
@@ -157,8 +168,11 @@ group('Primitive: String (valid)', () => {
 });
 
 group('Primitive: Number (valid)', () => {
-  baseline('property-validator', () => {
+  baseline('pv check()', () => {
     result = check(pvNumber, validNumber);
+  });
+  bench('pv compileCheck()', () => {
+    result = pvNumberCompiled(validNumber);
   });
   bench('valibot', () => {
     result = valibot.is(valibotNumber, validNumber);
@@ -172,8 +186,11 @@ group('Primitive: Number (valid)', () => {
 });
 
 group('Object: Simple (valid)', () => {
-  baseline('property-validator', () => {
+  baseline('pv check()', () => {
     result = check(pvSimpleObject, validSimpleObject);
+  });
+  bench('pv compileCheck()', () => {
+    result = pvSimpleObjectCompiled(validSimpleObject);
   });
   bench('valibot', () => {
     result = valibot.is(valibotSimpleObject, validSimpleObject);
@@ -187,8 +204,11 @@ group('Object: Simple (valid)', () => {
 });
 
 group('Object: Complex Nested (valid)', () => {
-  baseline('property-validator', () => {
+  baseline('pv check()', () => {
     result = check(pvComplexNested, validComplexNested);
+  });
+  bench('pv compileCheck()', () => {
+    result = pvComplexNestedCompiled(validComplexNested);
   });
   bench('valibot', () => {
     result = valibot.is(valibotComplexNested, validComplexNested);
@@ -202,8 +222,11 @@ group('Object: Complex Nested (valid)', () => {
 });
 
 group('Array: 10 strings (valid)', () => {
-  baseline('property-validator', () => {
+  baseline('pv check()', () => {
     result = check(pvArrayStrings, validArrayStrings10);
+  });
+  bench('pv compileCheck()', () => {
+    result = pvArrayStringsCompiled(validArrayStrings10);
   });
   bench('valibot', () => {
     result = valibot.is(valibotArrayStrings, validArrayStrings10);
@@ -217,8 +240,11 @@ group('Array: 10 strings (valid)', () => {
 });
 
 group('Array: 100 strings (valid)', () => {
-  baseline('property-validator', () => {
+  baseline('pv check()', () => {
     result = check(pvArrayStrings, validArrayStrings100);
+  });
+  bench('pv compileCheck()', () => {
+    result = pvArrayStringsCompiled(validArrayStrings100);
   });
   bench('valibot', () => {
     result = valibot.is(valibotArrayStrings, validArrayStrings100);
@@ -232,8 +258,11 @@ group('Array: 100 strings (valid)', () => {
 });
 
 group('Union: String (1st match)', () => {
-  baseline('property-validator', () => {
+  baseline('pv check()', () => {
     result = check(pvUnion, validString);
+  });
+  bench('pv compileCheck()', () => {
+    result = pvUnionCompiled(validString);
   });
   bench('valibot', () => {
     result = valibot.is(valibotUnion, validString);
@@ -247,8 +276,11 @@ group('Union: String (1st match)', () => {
 });
 
 group('Union: Number (2nd match)', () => {
-  baseline('property-validator', () => {
+  baseline('pv check()', () => {
     result = check(pvUnion, validNumber);
+  });
+  bench('pv compileCheck()', () => {
+    result = pvUnionCompiled(validNumber);
   });
   bench('valibot', () => {
     result = valibot.is(valibotUnion, validNumber);
