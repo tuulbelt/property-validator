@@ -1053,6 +1053,77 @@ function compileUnionValidator(validators: readonly Validator<any>[]): ((data: u
 }
 
 /**
+ * PHASE 4: JIT compile complete array validator using new Function() for maximum speed.
+ *
+ * Generates a COMPLETE validator function that includes Array.isArray check:
+ * ```
+ * if (!Array.isArray(data)) return false;
+ * for (let i = 0; i < data.length; i++) {
+ *   if (typeof data[i] !== 'string') return false;
+ * }
+ * return true;
+ * ```
+ *
+ * This eliminates the wrapper function overhead and allows V8 to optimize the entire
+ * validation as a single function (no intermediate function calls).
+ *
+ * @param itemValidator - Validator for array items
+ * @returns JIT-compiled complete validator (includes Array.isArray), or null if cannot compile
+ * @internal
+ */
+function compileArrayValidatorJIT<T>(itemValidator: Validator<T>): ((data: unknown) => boolean) | null {
+  // Check if code generation is available (CSP check)
+  if (!canUseCodeGeneration()) {
+    return null;
+  }
+
+  // Try to generate inline code for item validation
+  const inlineCheck = generateInlineTypeCheck(itemValidator, 'data[i]');
+
+  if (inlineCheck !== null) {
+    // Generate COMPLETE JIT function with Array.isArray + inline type check loop
+    // OPTIMIZATION: Cache data.length in local variable to avoid repeated property access
+    const fnBody = `
+      if (!Array.isArray(data)) return false;
+      const len = data.length;
+      for (let i = 0; i < len; i++) {
+        if (!(${inlineCheck})) return false;
+      }
+      return true;
+    `;
+
+    try {
+      return new Function('data', fnBody) as (data: unknown) => boolean;
+    } catch {
+      return null;
+    }
+  }
+
+  // Check if item validator has _compiled (for objects, unions, etc.)
+  if (itemValidator._compiled && !itemValidator._hasRefinements) {
+    // Generate COMPLETE JIT function with closure reference
+    // OPTIMIZATION: Cache data.length in local variable
+    const fnBody = `
+      if (!Array.isArray(data)) return false;
+      const len = data.length;
+      for (let i = 0; i < len; i++) {
+        if (!itemCheck(data[i])) return false;
+      }
+      return true;
+    `;
+
+    try {
+      return new Function('itemCheck', 'data', fnBody).bind(null, itemValidator._compiled) as (data: unknown) => boolean;
+    } catch {
+      return null;
+    }
+  }
+
+  // Cannot JIT compile - fall back to closure-based
+  return null;
+}
+
+/**
  * Compile-time optimization for array validators.
  *
  * Pre-compiles specialized validators at construction time to eliminate
@@ -1071,6 +1142,13 @@ function compileUnionValidator(validators: readonly Validator<any>[]): ((data: u
  * @returns Pre-compiled validation function
  */
 function compileArrayValidator<T>(itemValidator: Validator<T>): (data: unknown[]) => boolean {
+  // PHASE 4: Try JIT compilation first for maximum performance
+  const jitValidator = compileArrayValidatorJIT(itemValidator);
+  if (jitValidator !== null) {
+    return jitValidator;
+  }
+
+  // Fallback: closure-based validation (CSP-safe)
   const itemType = itemValidator._type;
   const hasRefinements = itemValidator._hasRefinements;
   const hasTransform = itemValidator._transform !== undefined;
@@ -1646,10 +1724,17 @@ export const v = {
                            exactLength === undefined && refinements.length === 0 &&
                            !itemNeedsTransform;
       if (isPlainArray) {
-        // Create wrapper that includes Array.isArray check + item validation
-        validator._compiled = (data: unknown): boolean => {
-          return Array.isArray(data) && compiledValidate(data);
-        };
+        // PHASE 4: Try to use complete JIT function (includes Array.isArray check)
+        // This eliminates the wrapper function overhead for a single JIT function call
+        const completeJIT = compileArrayValidatorJIT(itemValidator);
+        if (completeJIT !== null) {
+          validator._compiled = completeJIT;
+        } else {
+          // Fallback: Create wrapper that includes Array.isArray check + item validation
+          validator._compiled = (data: unknown): boolean => {
+            return Array.isArray(data) && compiledValidate(data);
+          };
+        }
       }
 
       return validator;
