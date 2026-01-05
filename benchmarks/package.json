@@ -10,6 +10,7 @@
     "bench:fast": "node --import tsx fast-boolean-api.bench.ts"
   },
   "devDependencies": {
+    "@sinclair/typebox": "^0.34.0",
     "tatami-ng": "^0.8.18",
     "tsx": "^4.19.2",
     "valibot": "^0.42.1",
