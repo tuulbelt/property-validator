@@ -178,3 +178,70 @@ jobs:
                 body: summary
               });
             }
+
+      - name: Send Slack notification
+        if: always() && env.SLACK_WEBHOOK_URL != ''
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          OVERALL_STATUS="${{ needs.benchmark.result }}"
+          if [ "$OVERALL_STATUS" = "success" ]; then
+            STATUS_EMOJI="✅"
+            STATUS_TEXT="All benchmarks passed"
+            COLOR="good"
+          elif [ "$OVERALL_STATUS" = "failure" ]; then
+            STATUS_EMOJI="❌"
+            STATUS_TEXT="Regression detected!"
+            COLOR="danger"
+          else
+            STATUS_EMOJI="⚠️"
+            STATUS_TEXT="Benchmark incomplete"
+            COLOR="warning"
+          fi
+
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          PR_URL="${{ github.event.pull_request.html_url }}"
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+          curl -X POST "$SLACK_WEBHOOK_URL" \
+            -H 'Content-Type: application/json' \
+            -d "{
+              \"attachments\": [{
+                \"color\": \"$COLOR\",
+                \"blocks\": [
+                  {
+                    \"type\": \"header\",
+                    \"text\": {
+                      \"type\": \"plain_text\",
+                      \"text\": \"$STATUS_EMOJI Property Validator Benchmark\"
+                    }
+                  },
+                  {
+                    \"type\": \"section\",
+                    \"fields\": [
+                      {
+                        \"type\": \"mrkdwn\",
+                        \"text\": \"*Status:*\n$STATUS_TEXT\"
+                      },
+                      {
+                        \"type\": \"mrkdwn\",
+                        \"text\": \"*PR:*\n<$PR_URL|$PR_TITLE>\"
+                      }
+                    ]
+                  },
+                  {
+                    \"type\": \"actions\",
+                    \"elements\": [
+                      {
+                        \"type\": \"button\",
+                        \"text\": {
+                          \"type\": \"plain_text\",
+                          \"text\": \"View Workflow Run\"
+                        },
+                        \"url\": \"$RUN_URL\"
+                      }
+                    ]
+                  }
+                ]
+              }]
+            }"
