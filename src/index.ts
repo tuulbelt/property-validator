@@ -2389,6 +2389,45 @@ export const v = {
 };
 
 /**
+ * Named exports for tree-shaking support (v0.9.0)
+ *
+ * Instead of importing the entire `v` namespace:
+ *   import { v, validate } from 'property-validator';
+ *   const schema = v.object({ name: v.string() });
+ *
+ * You can import only what you need:
+ *   import { validate, object, string } from 'property-validator';
+ *   const schema = object({ name: string() });
+ *
+ * This enables bundlers to tree-shake unused validators.
+ */
+
+// Primitive validators
+export const string = v.string;
+export const number = v.number;
+export const boolean = v.boolean;
+
+// Composite validators
+export const array = v.array;
+export const tuple = v.tuple;
+export const object = v.object;
+
+// Modifier validators
+export const optional = v.optional;
+export const nullable = v.nullable;
+
+// Union and literal validators
+export const union = v.union;
+export const literal = v.literal;
+
+// Utility validators
+export const lazy = v.lazy;
+
+// Enum validator (renamed to avoid conflict with TS reserved word)
+const enumValidator = v.enum;
+export { enumValidator as enum_ };
+
+/**
  * Parse command line arguments
  */
 interface CliOptions {
