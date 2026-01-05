@@ -1,8 +1,8 @@
 # v0.8.5+ Performance Roadmap: Competing with TypeBox
 
 **Date:** 2026-01-05
-**Status:** Phase 4 Complete - Array optimization achieved near-parity with TypeBox on small arrays
-**Goal:** Achieve TypeBox-level performance (~16M ops/sec) while maintaining Zod-like DX
+**Status:** Phase 4 Complete - Documentation & Benchmark restructuring next
+**Goal:** Achieve TypeBox-level performance (~16M ops/sec) while maintaining great DX
 
 ---
 
@@ -494,81 +494,84 @@ for (const user of users) {
 4. Fallback to `validator.validate()` result for edge cases
 5. Added to `v` object export as `v.compileCheck()`
 
-**Phase 4: Array JIT Optimization (COMPLETE)**
+**Phase 4 (v0.8.5-rc2): ✅ COMPLETE**
+- [x] Array JIT optimization with complete inlined functions
+- [x] Length caching in loops for reduced overhead
+- [x] Benchmark vs TypeBox Compiled
 
-**Goal:** Close the array performance gap with TypeBox
+**Phase 4 Results (2026-01-05):**
 
-**The Problem:**
-Arrays were 1.08-1.39x slower than TypeBox Compiled because:
-1. Wrapper function overhead: `_compiled = (data) => Array.isArray(data) && compiledValidate(data)`
-2. Repeated `data.length` property access in loop
-3. Closure-based approach instead of pure JIT
+Optimized array validation by generating complete JIT functions that include `Array.isArray` check and cached length:
 
-**Implementation:**
 ```typescript
-// Phase 4: Complete JIT function with inlined Array.isArray and cached length
-function compileArrayValidatorJIT<T>(itemValidator: Validator<T>) {
-  const inlineCheck = generateInlineTypeCheck(itemValidator, 'data[i]');
+// Before: Wrapper function adding overhead
+validator._compiled = (data) => Array.isArray(data) && compiledValidate(data);
 
-  if (inlineCheck !== null) {
-    const fnBody = `
-      if (!Array.isArray(data)) return false;
-      const len = data.length;
-      for (let i = 0; i < len; i++) {
-        if (!(${inlineCheck})) return false;
-      }
-      return true;
-    `;
-    return new Function('data', fnBody);
+// After: Complete JIT function (no wrapper)
+const code = `
+  if (!Array.isArray(data)) return false;
+  const len = data.length;
+  for (let i = 0; i < len; i++) {
+    if (!(typeof data[i] === 'number')) return false;
   }
-  return null;
-}
+  return true;
+`;
+validator._compiled = new Function('data', code);
 ```
 
-**Key Optimizations:**
-1. **Complete JIT function** - Includes `Array.isArray` check, no wrapper needed
-2. **Length caching** - `const len = data.length` avoids repeated property access
-3. **Direct `_compiled` assignment** - No intermediate arrow function closure
+**compileCheck() Array Performance:**
 
-**Phase 4 Results:**
+| Scenario | Before | After | Improvement | vs TypeBox |
+|----------|--------|-------|-------------|------------|
+| Array 10 | 64.80 ns | 62.84 ns | +3% faster | 1.02x slower |
+| Array 100 | 143.85 ns | 139.13 ns | +3% faster | 1.32x slower |
 
-| Scenario | Before Phase 4 | After Phase 4 | Improvement |
-|----------|----------------|---------------|-------------|
-| Array 10 strings | 1.08x slower | **1.02x slower** | Near parity! |
-| Array 100 strings | 1.39x slower | **1.32x slower** | 7% gain |
-
-**Full Benchmark Results (vs TypeBox Compiled):**
-
-| Category | pv check() | TypeBox Compiled | Comparison |
-|----------|-----------|------------------|------------|
-| Primitive: String | 56.60 ns | 54.79 ns | 1.03x slower |
-| Primitive: Number | 55.64 ns | 56.91 ns | **1.02x faster** ✅ |
-| Object: Simple | 54.11 ns | 59.45 ns | **1.10x faster** ✅ |
-| Object: Complex | 61.24 ns | 59.89 ns | 1.02x slower |
-| Array: 10 strings | 63.09 ns | 62.04 ns | 1.02x slower |
-| Array: 100 strings | 142.99 ns | 108.60 ns | 1.32x slower |
-| Union: String (1st) | 68.10 ns | 60.13 ns | 1.13x slower |
-| Union: Number (2nd) | 64.82 ns | 54.73 ns | 1.18x slower |
-
-**vs Valibot (all wins):**
-- Objects: 3.15-9.48x faster ✅
-- Arrays: 2.25-7.83x faster ✅
-- Unions: 1.59-2.79x faster ✅
-- Primitives: 1.10-1.16x faster ✅
+**Phase 4 Analysis:**
+- ✅ Array 10 now at near-parity with TypeBox (1.02x slower)
+- ⚠️ Array 100 still 32% slower (TypeBox has more aggressive loop unrolling)
+- ✅ Eliminated wrapper function overhead
+- ✅ Length caching reduces per-iteration cost
 
 **Remaining Gap Analysis:**
-Large arrays (100+ items) are still ~32% slower than TypeBox. This is likely due to:
-1. TypeBox may use different iteration patterns (while loop, indices)
-2. V8 hidden class optimization differences
-3. Potential loop unrolling in TypeBox
+TypeBox generates unrolled loops for small arrays and uses different iteration patterns. Further optimization would require:
+- Loop unrolling for small arrays (complexity vs benefit trade-off)
+- Different code generation strategy (diminishing returns)
 
-**Conclusion:**
-Phase 4 successfully closed the gap for small arrays (near parity) and improved large arrays by 7%. The remaining gap is acceptable as we maintain full Zod-like DX and beat valibot by 7-8x on arrays.
+**Phase 5 (v0.8.5): 🔄 IN PROGRESS**
+- [ ] Update README with `check()` and `compileCheck()` APIs
+- [ ] Update pitch (great DX + great performance, no competitor names)
+- [ ] Restructure benchmarks into `internal/` and `external/`
+- [ ] Remove Yup from all benchmarks
+- [ ] Create API equivalence documentation
 
-**Phase 5 (v0.8.5 Release):**
-- [ ] Final benchmarks documentation
-- [ ] Performance guide documentation
-- [ ] Release v0.8.5
+**Phase 5 Goals:**
+
+1. **Documentation Restructure:**
+   - Document three API tiers: `validate()`, `check()`, `compileCheck()`
+   - New pitch: Great DX + great performance (no competitor callouts)
+   - API decision matrix for choosing the right API
+
+2. **Benchmark Restructure:**
+   - `internal/` - Intra-PV comparison (validate vs check vs compileCheck)
+   - `external/` - Inter-competitor comparison with API equivalence
+   - Remove Yup (legacy, not relevant competitor)
+   - Add API equivalence table
+
+**API Equivalence for Honest Benchmarking:**
+
+| property-validator | Zod | Valibot | TypeBox |
+|-------------------|-----|---------|---------|
+| `validate()` | `safeParse()` | `safeParse()` | — |
+| `check()` | ❌ | `is()` | `Value.Check()` |
+| `compileCheck()` | ❌ | ❌ | `TypeCompiler.Compile()` |
+
+Only compare equivalent APIs. If a library doesn't have an equivalent, it's excluded from that benchmark.
+
+**Phase 6 (v0.8.5-final):**
+- [ ] Version bump to v0.8.5
+- [ ] Final documentation review
+- [ ] Changelog update
+- [ ] Release
 
 ---
 
