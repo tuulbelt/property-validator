@@ -261,6 +261,75 @@ describe('string validators: startsWith(), endsWith(), includes()', () => {
   });
 });
 
+describe('string validators: edge cases', () => {
+  test('uuid: accepts uppercase UUIDs', () => {
+    const validator = v.string().uuid();
+    assert.strictEqual(validate(validator, '550E8400-E29B-41D4-A716-446655440000').ok, true);
+  });
+
+  test('uuid: rejects nil UUID (version 0 - not v1-v5)', () => {
+    // The nil UUID is version 0, our uuid() validates v1-v5 only
+    const validator = v.string().uuid();
+    assert.strictEqual(validate(validator, '00000000-0000-0000-0000-000000000000').ok, false);
+  });
+
+  test('startsWith: empty prefix matches all strings', () => {
+    const validator = v.string().startsWith('');
+    assert.strictEqual(validate(validator, 'anything').ok, true);
+    assert.strictEqual(validate(validator, '').ok, true);
+  });
+
+  test('endsWith: empty suffix matches all strings', () => {
+    const validator = v.string().endsWith('');
+    assert.strictEqual(validate(validator, 'anything').ok, true);
+    assert.strictEqual(validate(validator, '').ok, true);
+  });
+
+  test('includes: empty substring matches all strings', () => {
+    const validator = v.string().includes('');
+    assert.strictEqual(validate(validator, 'anything').ok, true);
+    assert.strictEqual(validate(validator, '').ok, true);
+  });
+
+  test('email: rejects emails with consecutive dots', () => {
+    const validator = v.string().email();
+    assert.strictEqual(validate(validator, 'test..test@example.com').ok, false);
+  });
+
+  test('url: accepts URLs with query params and fragments', () => {
+    const validator = v.string().url();
+    assert.strictEqual(validate(validator, 'https://example.com?foo=bar&baz=qux').ok, true);
+    assert.strictEqual(validate(validator, 'https://example.com#section').ok, true);
+    assert.strictEqual(validate(validator, 'https://example.com/path?query=1#frag').ok, true);
+  });
+
+  test('min: validates boundary exactly', () => {
+    const validator = v.string().min(0);
+    assert.strictEqual(validate(validator, '').ok, true); // 0 length is >= 0
+  });
+
+  test('max: validates boundary exactly', () => {
+    const validator = v.string().max(0);
+    assert.strictEqual(validate(validator, '').ok, true); // 0 length is <= 0
+    assert.strictEqual(validate(validator, 'a').ok, false);
+  });
+
+  test('pattern: preserves regex flags', () => {
+    const validator = v.string().pattern(/^hello$/i); // case insensitive
+    assert.strictEqual(validate(validator, 'hello').ok, true);
+    assert.strictEqual(validate(validator, 'HELLO').ok, true);
+    assert.strictEqual(validate(validator, 'HeLLo').ok, true);
+  });
+
+  test('non-string types are rejected', () => {
+    const validator = v.string().email();
+    assert.strictEqual(validate(validator, 123).ok, false);
+    assert.strictEqual(validate(validator, null).ok, false);
+    assert.strictEqual(validate(validator, undefined).ok, false);
+    assert.strictEqual(validate(validator, {}).ok, false);
+  });
+});
+
 describe('string validators: chaining multiple constraints', () => {
   test('email with length constraints', () => {
     const validator = v.string().email().min(10).max(50);

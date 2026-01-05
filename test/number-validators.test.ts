@@ -301,3 +301,84 @@ describe('number validators: chaining multiple constraints', () => {
     assert.strictEqual(validate(lngValidator, 181).ok, false);
   });
 });
+
+describe('number validators: edge cases', () => {
+  test('negative zero (-0) is treated as zero', () => {
+    const positiveValidator = v.number().positive();
+    const negativeValidator = v.number().negative();
+    const nonnegValidator = v.number().nonnegative();
+    const nonposValidator = v.number().nonpositive();
+
+    // -0 === 0 in JavaScript, so -0 is neither positive nor negative
+    assert.strictEqual(validate(positiveValidator, -0).ok, false);
+    assert.strictEqual(validate(negativeValidator, -0).ok, false);
+    assert.strictEqual(validate(nonnegValidator, -0).ok, true);  // >= 0
+    assert.strictEqual(validate(nonposValidator, -0).ok, true);  // <= 0
+  });
+
+  test('scientific notation is valid', () => {
+    const validator = v.number().positive();
+    assert.strictEqual(validate(validator, 1e10).ok, true);
+    assert.strictEqual(validate(validator, 1e-10).ok, true);
+    assert.strictEqual(validate(validator, 1.5e3).ok, true);
+  });
+
+  test('very large numbers', () => {
+    const validator = v.number().finite();
+    assert.strictEqual(validate(validator, Number.MAX_VALUE).ok, true);
+    assert.strictEqual(validate(validator, -Number.MAX_VALUE).ok, true);
+  });
+
+  test('very small numbers', () => {
+    const validator = v.number().positive();
+    assert.strictEqual(validate(validator, Number.MIN_VALUE).ok, true); // Smallest positive
+    assert.strictEqual(validate(validator, Number.EPSILON).ok, true);
+  });
+
+  test('int() handles edge case integers', () => {
+    const validator = v.number().int();
+    assert.strictEqual(validate(validator, 0).ok, true);
+    assert.strictEqual(validate(validator, -0).ok, true);
+    assert.strictEqual(validate(validator, 1.0).ok, true); // 1.0 is integer
+    assert.strictEqual(validate(validator, 2.00000000001).ok, false);
+  });
+
+  test('NaN is rejected by all number validators', () => {
+    const validators = [
+      v.number(),
+      v.number().int(),
+      v.number().positive(),
+      v.number().finite(),
+    ];
+
+    for (const validator of validators) {
+      const result = validate(validator, NaN);
+      assert.strictEqual(result.ok, false, 'NaN should be rejected');
+    }
+  });
+
+  test('non-number types are rejected', () => {
+    const validator = v.number().positive();
+    assert.strictEqual(validate(validator, '123').ok, false);
+    assert.strictEqual(validate(validator, null).ok, false);
+    assert.strictEqual(validate(validator, undefined).ok, false);
+    assert.strictEqual(validate(validator, {}).ok, false);
+    assert.strictEqual(validate(validator, []).ok, false);
+  });
+
+  test('range with equal min and max', () => {
+    const validator = v.number().range(5, 5);
+    assert.strictEqual(validate(validator, 5).ok, true);
+    assert.strictEqual(validate(validator, 4.9999).ok, false);
+    assert.strictEqual(validate(validator, 5.0001).ok, false);
+  });
+
+  test('min/max with decimal bounds', () => {
+    const validator = v.number().min(0.5).max(1.5);
+    assert.strictEqual(validate(validator, 0.5).ok, true);
+    assert.strictEqual(validate(validator, 1.0).ok, true);
+    assert.strictEqual(validate(validator, 1.5).ok, true);
+    assert.strictEqual(validate(validator, 0.49).ok, false);
+    assert.strictEqual(validate(validator, 1.51).ok, false);
+  });
+});
