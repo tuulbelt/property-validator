@@ -353,3 +353,217 @@ describe('string validators: chaining multiple constraints', () => {
     assert.strictEqual(validate(usernameValidator, 'John_Doe').ok, false); // Uppercase
   });
 });
+
+// ============================================================================
+// New validators: datetime, date, time, ip, ipv4, ipv6
+// ============================================================================
+
+describe('string validators: datetime()', () => {
+  const datetimeValidator = v.string().datetime();
+
+  test('accepts valid ISO 8601 datetimes', () => {
+    const validDatetimes = [
+      '2024-01-15T10:30:00Z',
+      '2024-12-31T23:59:59Z',
+      '2024-01-01T00:00:00Z',
+      '2024-06-15T14:30:00.123Z',
+      '2024-06-15T14:30:00+05:30',
+      '2024-06-15T14:30:00-08:00',
+    ];
+
+    for (const dt of validDatetimes) {
+      const result = validate(datetimeValidator, dt);
+      assert.strictEqual(result.ok, true, `Expected "${dt}" to be valid`);
+    }
+  });
+
+  test('rejects invalid datetimes', () => {
+    const invalidDatetimes = [
+      '2024-01-15',           // Date only
+      '10:30:00',             // Time only
+      '2024-13-01T00:00:00Z', // Invalid month
+      '2024-01-32T00:00:00Z', // Invalid day
+      '2024-01-15T25:00:00Z', // Invalid hour
+      'not-a-datetime',
+      '',
+    ];
+
+    for (const dt of invalidDatetimes) {
+      const result = validate(datetimeValidator, dt);
+      assert.strictEqual(result.ok, false, `Expected "${dt}" to be invalid`);
+    }
+  });
+
+  test('provides clear error message', () => {
+    const result = validate(datetimeValidator, 'invalid');
+    assert.strictEqual(result.ok, false);
+    if (!result.ok) {
+      assert.match(result.error, /ISO 8601 datetime/);
+    }
+  });
+});
+
+describe('string validators: date()', () => {
+  const dateValidator = v.string().date();
+
+  test('accepts valid ISO 8601 dates', () => {
+    const validDates = [
+      '2024-01-15',
+      '2024-12-31',
+      '2024-01-01',
+      '1999-06-30',
+    ];
+
+    for (const d of validDates) {
+      const result = validate(dateValidator, d);
+      assert.strictEqual(result.ok, true, `Expected "${d}" to be valid`);
+    }
+  });
+
+  test('rejects invalid dates', () => {
+    const invalidDates = [
+      '2024-13-01', // Invalid month
+      '2024-01-32', // Invalid day
+      '2024/01/15', // Wrong separator
+      '01-15-2024', // Wrong order
+      '2024-1-15',  // Missing leading zero
+      '',
+    ];
+
+    for (const d of invalidDates) {
+      const result = validate(dateValidator, d);
+      assert.strictEqual(result.ok, false, `Expected "${d}" to be invalid`);
+    }
+  });
+});
+
+describe('string validators: time()', () => {
+  const timeValidator = v.string().time();
+
+  test('accepts valid ISO 8601 times', () => {
+    const validTimes = [
+      '00:00:00',
+      '23:59:59',
+      '12:30:45',
+      '12:30:45.123',
+      '12:30:45.123456',
+    ];
+
+    for (const t of validTimes) {
+      const result = validate(timeValidator, t);
+      assert.strictEqual(result.ok, true, `Expected "${t}" to be valid`);
+    }
+  });
+
+  test('rejects invalid times', () => {
+    const invalidTimes = [
+      '24:00:00', // Invalid hour
+      '12:60:00', // Invalid minute
+      '12:30:60', // Invalid second
+      '12:30',    // Missing seconds
+      '',
+    ];
+
+    for (const t of invalidTimes) {
+      const result = validate(timeValidator, t);
+      assert.strictEqual(result.ok, false, `Expected "${t}" to be invalid`);
+    }
+  });
+});
+
+describe('string validators: ipv4()', () => {
+  const ipv4Validator = v.string().ipv4();
+
+  test('accepts valid IPv4 addresses', () => {
+    const validIps = [
+      '192.168.1.1',
+      '10.0.0.1',
+      '255.255.255.255',
+      '0.0.0.0',
+      '127.0.0.1',
+    ];
+
+    for (const ip of validIps) {
+      const result = validate(ipv4Validator, ip);
+      assert.strictEqual(result.ok, true, `Expected "${ip}" to be valid`);
+    }
+  });
+
+  test('rejects invalid IPv4 addresses', () => {
+    const invalidIps = [
+      '256.1.1.1',      // Octet > 255
+      '192.168.1',      // Missing octet
+      '192.168.1.1.1',  // Extra octet
+      '192.168.1.a',    // Non-numeric
+      '::1',            // IPv6
+      '',
+    ];
+
+    for (const ip of invalidIps) {
+      const result = validate(ipv4Validator, ip);
+      assert.strictEqual(result.ok, false, `Expected "${ip}" to be invalid`);
+    }
+  });
+
+  test('provides clear error message', () => {
+    const result = validate(ipv4Validator, 'invalid');
+    assert.strictEqual(result.ok, false);
+    if (!result.ok) {
+      assert.match(result.error, /IPv4/);
+    }
+  });
+});
+
+describe('string validators: ipv6()', () => {
+  const ipv6Validator = v.string().ipv6();
+
+  test('accepts valid IPv6 addresses', () => {
+    const validIps = [
+      '2001:0db8:85a3:0000:0000:8a2e:0370:7334',
+      '2001:db8:85a3::8a2e:370:7334',
+      '::1',
+      '::',
+      'fe80::1',
+      '2001:db8::',
+    ];
+
+    for (const ip of validIps) {
+      const result = validate(ipv6Validator, ip);
+      assert.strictEqual(result.ok, true, `Expected "${ip}" to be valid`);
+    }
+  });
+
+  test('rejects invalid IPv6 addresses', () => {
+    const invalidIps = [
+      '192.168.1.1',    // IPv4
+      '2001:db8:85a3::8a2e:370g:7334', // Invalid character
+      '2001:db8:85a3:0000:0000:8a2e:0370:7334:extra', // Too long
+      '',
+    ];
+
+    for (const ip of invalidIps) {
+      const result = validate(ipv6Validator, ip);
+      assert.strictEqual(result.ok, false, `Expected "${ip}" to be invalid`);
+    }
+  });
+});
+
+describe('string validators: ip() (IPv4 or IPv6)', () => {
+  const ipValidator = v.string().ip();
+
+  test('accepts valid IPv4 addresses', () => {
+    assert.strictEqual(validate(ipValidator, '192.168.1.1').ok, true);
+    assert.strictEqual(validate(ipValidator, '10.0.0.1').ok, true);
+  });
+
+  test('accepts valid IPv6 addresses', () => {
+    assert.strictEqual(validate(ipValidator, '::1').ok, true);
+    assert.strictEqual(validate(ipValidator, '2001:db8::1').ok, true);
+  });
+
+  test('rejects invalid IP addresses', () => {
+    assert.strictEqual(validate(ipValidator, 'not-an-ip').ok, false);
+    assert.strictEqual(validate(ipValidator, '256.1.1.1').ok, false);
+    assert.strictEqual(validate(ipValidator, '').ok, false);
+  });
+});

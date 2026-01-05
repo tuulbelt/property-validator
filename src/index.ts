@@ -284,6 +284,18 @@ export interface StringValidator extends Validator<string> {
   endsWith(suffix: string): StringValidator;
   /** Must contain substring */
   includes(substring: string): StringValidator;
+  /** Must be valid ISO 8601 datetime (YYYY-MM-DDTHH:MM:SS) */
+  datetime(): StringValidator;
+  /** Must be valid ISO 8601 date (YYYY-MM-DD) */
+  date(): StringValidator;
+  /** Must be valid ISO 8601 time (HH:MM:SS) */
+  time(): StringValidator;
+  /** Must be valid IP address (IPv4 or IPv6) */
+  ip(): StringValidator;
+  /** Must be valid IPv4 address */
+  ipv4(): StringValidator;
+  /** Must be valid IPv6 address */
+  ipv6(): StringValidator;
 }
 
 /**
@@ -310,6 +322,8 @@ export interface NumberValidator extends Validator<number> {
   finite(): NumberValidator;
   /** Must be a safe integer (within Number.MIN_SAFE_INTEGER to MAX) */
   safeInt(): NumberValidator;
+  /** Must be a multiple of n (useful for currency, steps) */
+  multipleOf(n: number): NumberValidator;
 }
 
 /**
@@ -1381,6 +1395,21 @@ const URL_PATTERN = /^https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z
 /** UUID pattern - matches v1-v5 UUIDs */
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+/** ISO 8601 datetime pattern - matches YYYY-MM-DDTHH:MM:SS with optional timezone */
+const DATETIME_PATTERN = /^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)?$/;
+
+/** ISO 8601 date pattern - matches YYYY-MM-DD */
+const DATE_PATTERN = /^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])$/;
+
+/** ISO 8601 time pattern - matches HH:MM:SS with optional milliseconds */
+const TIME_PATTERN = /^(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?$/;
+
+/** IPv4 pattern - matches valid IPv4 addresses */
+const IPV4_PATTERN = /^(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$/;
+
+/** IPv6 pattern - matches valid IPv6 addresses (full and compressed) */
+const IPV6_PATTERN = /^(?:(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|(?:[0-9a-fA-F]{1,4}:){1,7}:|(?:[0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|(?:[0-9a-fA-F]{1,4}:){1,5}(?::[0-9a-fA-F]{1,4}){1,2}|(?:[0-9a-fA-F]{1,4}:){1,4}(?::[0-9a-fA-F]{1,4}){1,3}|(?:[0-9a-fA-F]{1,4}:){1,3}(?::[0-9a-fA-F]{1,4}){1,4}|(?:[0-9a-fA-F]{1,4}:){1,2}(?::[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:(?::[0-9a-fA-F]{1,4}){1,6}|:(?::[0-9a-fA-F]{1,4}){1,7}|::)$/;
+
 /**
  * Create a StringValidator with chainable constraint methods
  * @internal
@@ -1495,6 +1524,48 @@ function createStringValidator(
     }]);
   };
 
+  validator.datetime = (): StringValidator => {
+    return createStringValidator([...refinements, {
+      check: (s) => DATETIME_PATTERN.test(s),
+      message: 'Must be a valid ISO 8601 datetime (YYYY-MM-DDTHH:MM:SS)'
+    }]);
+  };
+
+  validator.date = (): StringValidator => {
+    return createStringValidator([...refinements, {
+      check: (s) => DATE_PATTERN.test(s),
+      message: 'Must be a valid ISO 8601 date (YYYY-MM-DD)'
+    }]);
+  };
+
+  validator.time = (): StringValidator => {
+    return createStringValidator([...refinements, {
+      check: (s) => TIME_PATTERN.test(s),
+      message: 'Must be a valid ISO 8601 time (HH:MM:SS)'
+    }]);
+  };
+
+  validator.ip = (): StringValidator => {
+    return createStringValidator([...refinements, {
+      check: (s) => IPV4_PATTERN.test(s) || IPV6_PATTERN.test(s),
+      message: 'Must be a valid IP address (IPv4 or IPv6)'
+    }]);
+  };
+
+  validator.ipv4 = (): StringValidator => {
+    return createStringValidator([...refinements, {
+      check: (s) => IPV4_PATTERN.test(s),
+      message: 'Must be a valid IPv4 address'
+    }]);
+  };
+
+  validator.ipv6 = (): StringValidator => {
+    return createStringValidator([...refinements, {
+      check: (s) => IPV6_PATTERN.test(s),
+      message: 'Must be a valid IPv6 address'
+    }]);
+  };
+
   return validator;
 }
 
@@ -1605,6 +1676,17 @@ function createNumberValidator(
     return createNumberValidator([...refinements, {
       check: (n) => Number.isSafeInteger(n),
       message: 'Number must be a safe integer'
+    }]);
+  };
+
+  validator.multipleOf = (divisor: number): NumberValidator => {
+    return createNumberValidator([...refinements, {
+      // Handle floating point precision: check if remainder is close to 0 or divisor
+      check: (n) => {
+        const remainder = Math.abs(n % divisor);
+        return remainder < 1e-10 || Math.abs(remainder - Math.abs(divisor)) < 1e-10;
+      },
+      message: `Number must be a multiple of ${divisor}`
     }]);
   };
 

@@ -382,3 +382,67 @@ describe('number validators: edge cases', () => {
     assert.strictEqual(validate(validator, 1.51).ok, false);
   });
 });
+
+// ============================================================================
+// New validator: multipleOf
+// ============================================================================
+
+describe('number validators: multipleOf()', () => {
+  test('validates multiples of integer', () => {
+    const validator = v.number().multipleOf(5);
+    assert.strictEqual(validate(validator, 0).ok, true);
+    assert.strictEqual(validate(validator, 5).ok, true);
+    assert.strictEqual(validate(validator, 10).ok, true);
+    assert.strictEqual(validate(validator, 15).ok, true);
+    assert.strictEqual(validate(validator, -5).ok, true);
+    assert.strictEqual(validate(validator, 3).ok, false);
+    assert.strictEqual(validate(validator, 7).ok, false);
+  });
+
+  test('validates multiples of decimal (currency)', () => {
+    const validator = v.number().multipleOf(0.01);
+    assert.strictEqual(validate(validator, 0).ok, true);
+    assert.strictEqual(validate(validator, 0.01).ok, true);
+    assert.strictEqual(validate(validator, 0.99).ok, true);
+    assert.strictEqual(validate(validator, 1.50).ok, true);
+    assert.strictEqual(validate(validator, 19.99).ok, true);
+    // Due to floating point, 0.001 would be rejected
+  });
+
+  test('validates multiples of 0.5 (half steps)', () => {
+    const validator = v.number().multipleOf(0.5);
+    assert.strictEqual(validate(validator, 0).ok, true);
+    assert.strictEqual(validate(validator, 0.5).ok, true);
+    assert.strictEqual(validate(validator, 1.0).ok, true);
+    assert.strictEqual(validate(validator, 1.5).ok, true);
+    assert.strictEqual(validate(validator, 2.0).ok, true);
+    assert.strictEqual(validate(validator, 0.3).ok, false);
+    assert.strictEqual(validate(validator, 1.7).ok, false);
+  });
+
+  test('handles negative numbers', () => {
+    const validator = v.number().multipleOf(3);
+    assert.strictEqual(validate(validator, -3).ok, true);
+    assert.strictEqual(validate(validator, -6).ok, true);
+    assert.strictEqual(validate(validator, -9).ok, true);
+    assert.strictEqual(validate(validator, -4).ok, false);
+  });
+
+  test('provides clear error message', () => {
+    const validator = v.number().multipleOf(10);
+    const result = validate(validator, 7);
+    assert.strictEqual(result.ok, false);
+    if (!result.ok) {
+      assert.match(result.error, /multiple of 10/);
+    }
+  });
+
+  test('can be chained with other validators', () => {
+    // Price validator: positive, max 2 decimal places, max 1000
+    const priceValidator = v.number().positive().multipleOf(0.01).max(1000);
+    assert.strictEqual(validate(priceValidator, 9.99).ok, true);
+    assert.strictEqual(validate(priceValidator, 100).ok, true);
+    assert.strictEqual(validate(priceValidator, 0).ok, false);     // Not positive
+    assert.strictEqual(validate(priceValidator, 1001).ok, false);  // Too high
+  });
+});
