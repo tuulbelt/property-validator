@@ -5,7 +5,8 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { v, validate } from '../src/index.ts';
+import { v } from '../src/index.js';
+import { validate } from '../src/index.ts';
 
 // Valid unions - primitive types (10 tests)
 test('union: valid primitive unions', async (t) => {

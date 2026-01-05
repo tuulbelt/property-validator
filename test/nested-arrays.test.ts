@@ -9,7 +9,8 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { v, validate } from '../src/index.js';
+import { v } from '../src/index.js';
+import { validate } from '../src/index.js';
 
 // ============================================================================
 // 2D Arrays (Matrices) - 8 tests

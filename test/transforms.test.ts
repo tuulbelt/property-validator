@@ -5,7 +5,8 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { v, validate } from '../src/index.ts';
+import { v } from '../src/index.js';
+import { validate } from '../src/index.ts';
 
 // String transformations (8 tests)
 test('transform: string transformations', async (t) => {

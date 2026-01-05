@@ -9,7 +9,8 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { validate, v } from '../src/index.ts';
+import { v } from '../src/index.js';
+import { validate } from '../src/index.ts';
 
 // ============================================================================
 // Lazy Schema Evaluation (5 tests)

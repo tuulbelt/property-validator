@@ -5,7 +5,8 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { v, validate } from '../src/index.ts';
+import { v } from '../src/index.js';
+import { validate } from '../src/index.ts';
 
 // Static defaults (8 tests)
 test('default: static defaults', async (t) => {

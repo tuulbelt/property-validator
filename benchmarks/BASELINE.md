@@ -1,7 +1,7 @@
-# property-validator v0.8.0 Baseline (tatami-ng)
+# property-validator v0.9.2 Baseline (tatami-ng)
 
-**Date:** 2026-01-04
-**Version:** v0.8.0
+**Date:** 2026-01-05
+**Version:** v0.9.2
 **Tool:** tatami-ng v0.8.18
 **Runtime:** Node.js v22.21.1
 **Platform:** Linux (x86_64)
@@ -15,9 +15,13 @@
 
 ---
 
-## v0.8.0 Key Achievement: JIT Bypass
+## v0.9.2 Key Features
 
-v0.8.0 introduced the `_compiled` property pattern that bypasses `validateWithPath` overhead for objects and arrays. This resulted in **3-45x improvements** over v0.7.5.
+v0.9.2 introduces modular architecture with tree-shakeable imports and multiple entry points:
+- `/v` entry point for fluent API (`v.string().email()`)
+- `/lite` entry point for functional API without `v` namespace
+- `/types` entry point for type definitions only
+- Named exports from main entry for tree-shaking
 
 ---
 
@@ -27,119 +31,122 @@ v0.8.0 introduced the `_compiled` property pattern that bypasses `validateWithPa
 
 | Benchmark | time/iter | ops/sec | Variance |
 |-----------|-----------|---------|----------|
-| string (valid) | 61.86 ns | 16.9M | ±0.34% |
-| number (valid) | 58.74 ns | 17.9M | ±0.42% |
-| boolean (valid) | 65.20 ns | 16.4M | ±2.10% |
-| string (invalid) | 58.71 ns | 18.0M | ±2.14% |
-| number (invalid) | 56.43 ns | 18.7M | ±1.49% |
+| string (valid) | 69 ns | 14.5M | ±0.86% |
+| number (valid) | 66 ns | 15.2M | ±0.93% |
+| boolean (valid) | 68 ns | 14.7M | ±1.07% |
 
 **Key Metrics:**
-- **Average variance:** ±1.30%
-- **Fastest:** number (invalid) at 18.7M ops/sec
-- **vs v0.7.5:** ~3x faster
+- **Average variance:** ±0.95%
+- **Fastest:** number (valid) at 15.2M ops/sec
 
 ### Objects
 
 | Benchmark | time/iter | ops/sec | Variance |
 |-----------|-----------|---------|----------|
-| simple (valid) | 62.14 ns | 16.7M | ±1.13% |
-| simple (invalid) | 321.76 ns | 3.6M | ±1.78% |
-| deeply nested (valid) | 61.64 ns | 17.2M | ±2.53% |
+| simple (valid) | 67 ns | 14.9M | ±1.13% |
+| complex nested (valid) | 162 ns | 6.2M | ±1.54% |
+| invalid data | 384 ns | 2.6M | ±1.07% |
 
 **Key Metrics:**
-- **Average variance:** ±1.81%
-- **Simple object validation:** 16.7M ops/sec
-- **vs v0.7.5:** 5.3x faster (simple), 45x faster (nested)
+- **Simple objects:** 14.9M ops/sec
+- **Complex nested:** 6.2M ops/sec
 
 ### Arrays
 
 | Benchmark | time/iter | ops/sec | Variance |
 |-----------|-----------|---------|----------|
-| small (5 items) | 61.21 ns | 17.4M | ±2.12% |
-| medium (50 items) | 2.54 µs | 407K | ±0.26% |
-| invalid (mixed types) | 178.09 ns | 6.3M | ±1.77% |
+| array (10 items) | 74 ns | 13.5M | ±1.21% |
+| array (100 items) | 197 ns | 5.1M | ±0.86% |
 
-**Key Metrics:**
-- **Small arrays:** Near-instant validation via JIT bypass
-- **Medium arrays:** Linear scaling as expected
+### Unions
+
+| Benchmark | time/iter | ops/sec | Variance |
+|-----------|-----------|---------|----------|
+| union (string match) | 85 ns | 11.8M | ±1.07% |
 
 ---
 
-## Competitive Position (v0.8.0)
+## API Tiers Comparison (v0.9.2)
 
-### vs Valibot
+| Scenario | validate() | check() | compileCheck() |
+|----------|------------|---------|----------------|
+| Primitives (String) | 69 ns | 62 ns | 62 ns |
+| Primitives (Number) | 66 ns | 62 ns | 58 ns |
+| Simple Object | 67 ns | 64 ns | 65 ns |
+| Complex Nested | 162 ns | 145 ns | 138 ns |
+| Array (10) | 74 ns | 68 ns | 68 ns |
+| Array (100) | 197 ns | 183 ns | 180 ns |
+| Union (String) | 85 ns | 76 ns | 63 ns |
+| Invalid Data | 384 ns | 62 ns | 60 ns |
 
-| Category | propval v0.8.0 | valibot | Winner |
-|----------|----------------|---------|--------|
-| string (valid) | 61.86 ns | 80.42 ns | **propval 1.30x** ✅ |
-| number (valid) | 58.74 ns | 84.64 ns | **propval 1.44x** ✅ |
-| object simple | 62.14 ns | 215.22 ns | **propval 3.46x** ✅ |
-| complex nested | 61.64 ns | 1.08 µs | **propval 17.5x** ✅ |
+**Key Insight:** For invalid data, `check()` and `compileCheck()` are **6.2x faster** than `validate()`.
 
-**Score: 4/4 wins** (was 2/6 in v0.7.5)
+---
+
+## Competitive Position (v0.9.2)
 
 ### vs Zod
 
-| Category | propval v0.8.0 | zod | Winner |
-|----------|----------------|-----|--------|
-| string (valid) | 61.86 ns | 115.70 ns | **propval 1.87x** ✅ |
-| number (valid) | 58.74 ns | 123.44 ns | **propval 2.10x** ✅ |
-| object simple | 62.14 ns | 671.77 ns | **propval 10.8x** ✅ |
-| complex nested | 61.64 ns | 3.91 µs | **propval 63.4x** ✅ |
+| Category | propval | zod | Winner |
+|----------|---------|-----|--------|
+| primitives | 69 ns | 120 ns | **propval 1.7x** ✅ |
+| simple object | 67 ns | 668 ns | **propval 10.0x** ✅ |
+| complex nested | 162 ns | 4.14 µs | **propval 25.6x** ✅ |
+| unions | 85 ns | 220 ns | **propval 2.6x** ✅ |
+| arrays (100) | 197 ns | 5.06 µs | **propval 25.7x** ✅ |
 
-**Score: 4/4 wins**
+**Score: 5/5 wins**
 
-### vs Yup
+### vs Valibot
 
-| Category | propval v0.8.0 | yup | Winner |
-|----------|----------------|-----|--------|
-| string (valid) | 61.86 ns | 884.30 ns | **propval 14.3x** ✅ |
-| object simple | 62.14 ns | 6.08 µs | **propval 97.8x** ✅ |
-| complex nested | 61.64 ns | 26.10 µs | **propval 423x** ✅ |
+| Category | propval | valibot | Winner |
+|----------|---------|---------|--------|
+| primitives | 69 ns | 84 ns | **propval 1.2x** ✅ |
+| simple object | 67 ns | 220 ns | **propval 3.3x** ✅ |
+| complex nested | 162 ns | 1.11 µs | **propval 6.9x** ✅ |
+| unions | 85 ns | 93 ns | **propval 1.1x** ✅ |
+| arrays (100) | 197 ns | 1.49 µs | **propval 7.6x** ✅ |
 
-**Score: 3/3 wins**
+**Score: 5/5 wins**
+
+### vs TypeBox JIT
+
+| Category | propval | TypeBox JIT | Winner |
+|----------|---------|-------------|--------|
+| primitives | 69 ns | 58 ns | TypeBox 1.2x |
+| simple object | 67 ns | 59 ns | TypeBox 1.1x |
+| complex nested | 162 ns | 118 ns | TypeBox 1.4x |
+| unions | 85 ns | 60 ns | TypeBox 1.4x |
+| arrays (100) | 197 ns | 122 ns | TypeBox 1.6x |
+
+**Score: 0/5 wins** (TypeBox uses `new Function()` JIT)
+
+**Note:** TypeBox achieves peak performance via `new Function()` JIT compilation, which is blocked in CSP-restricted environments. Property Validator works everywhere.
 
 ---
 
-## Improvement from v0.7.5 to v0.8.0
+## Version History
 
-| Category | v0.7.5 | v0.8.0 | Improvement |
-|----------|--------|--------|-------------|
-| string (valid) | 179.97 ns | 61.86 ns | **2.91x faster** |
-| number (valid) | 186.70 ns | 58.74 ns | **3.18x faster** |
-| boolean (valid) | 193.35 ns | 65.20 ns | **2.97x faster** |
-| object simple | 332.10 ns | 62.14 ns | **5.34x faster** |
-| complex nested | 2.78 µs | 61.64 ns | **45.1x faster** |
-
----
-
-## v0.8.5 Optimization Targets
-
-Based on this baseline, v0.8.5 aims to compete with TypeBox (~16M ops/sec):
-
-### Target APIs
-
-| API | v0.8.0 | v0.8.5 Target | Improvement |
-|-----|--------|---------------|-------------|
-| `v.validate()` | ~17M ops/sec | 17M+ ops/sec | Maintain |
-| `v.check()` | N/A | 12-15M ops/sec | New API |
-| `v.compile()` | Partial | 15-18M ops/sec | TypeBox-level |
-
-### Remaining Gaps
-
-1. **Primitives vs TypeBox:** TypeBox achieves ~16.5M ops/sec via `new Function()` JIT
-2. **Full inlining:** Current JIT bypass still has function call overhead
-3. **CSP compatibility:** Need fallback for environments blocking `new Function()`
+| Version | Key Improvement | Impact |
+|---------|-----------------|--------|
+| v0.7.0 | tatami-ng migration | Reliable benchmarks (<2% variance) |
+| v0.7.5 | Lazy path building | +24-30% on arrays |
+| v0.8.0 | JIT bypass pattern | **3-45x faster** |
+| v0.8.5 | check()/compileCheck() APIs | 6x faster for invalid data |
+| v0.9.0 | Modular architecture | Tree-shakeable imports |
+| v0.9.1 | Functional refinements | `string(email(), minLength(5))` |
+| v0.9.2 | Multiple entry points | `/v`, `/lite`, `/types` |
 
 ---
 
 ## Stability Achievement
 
 - ✅ All benchmarks within target variance (<5%)
+- ✅ Average variance: ~1% (excellent)
 - ✅ Consistent results across runs
 - ✅ Ready for reliable optimization work
 
 ---
 
-**Generated:** 2026-01-04
-**Benchmark command:** `npm run bench` / `npm run bench:compare`
+**Generated:** 2026-01-05
+**Benchmark command:** `npm run bench` / `npm run bench:all`

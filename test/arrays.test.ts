@@ -6,7 +6,8 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { v, validate } from '../src/index.js';
+import { v } from '../src/index.js';
+import { validate } from '../src/index.js';
 
 // ============================================================================
 // Phase 1: Core Array Support (40 tests)

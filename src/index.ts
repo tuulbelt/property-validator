@@ -3,347 +3,55 @@
  * Property Validator
  *
  * Runtime type validation with TypeScript inference.
+ *
+ * v0.9.0: Modular architecture - types extracted to ./types.ts
+ * v0.9.1: Functional refinements API for tree-shaking support
+ * v0.9.2: Entry points for /v (fluent API) and /lite (functional API)
  */
 
 import { realpathSync } from 'node:fs';
 
-/**
- * Structured validation error with formatting support
- *
- * OPTIMIZED: Does not extend Error to avoid stack trace capture overhead.
- * Stack traces are captured lazily only when accessed via .stack getter.
- * This provides 52x faster error creation while keeping all debugging features.
- */
-/**
- * Path segment type - can be string (property name) or number (array index)
- * Numbers are stored raw and only formatted to "[0]" when displaying errors
- * This avoids string allocation on every array iteration (hot path optimization)
- */
-export type PathSegment = string | number;
+// Re-export ValidationError class (runtime value)
+export { ValidationError } from './types.js';
 
-export class ValidationError {
-  public readonly message: string;
-  public readonly path: PathSegment[];
-  public readonly value: unknown;
-  public readonly expected: string;
-  public readonly code: string;
-  private _stack?: string;
+// Re-export all types from types.ts for backwards compatibility
+export type {
+  PathSegment,
+  Result,
+  ValidationOptions,
+  Validator,
+  ArrayValidator,
+  StringValidator,
+  NumberValidator,
+  TupleType,
+  UnionType,
+  CompiledValidator,
+  CompiledCheck,
+  StringRefinement,
+  NumberRefinement,
+  ArrayRefinement,
+} from './types.js';
 
-  constructor(options: {
-    message: string;
-    path?: readonly PathSegment[] | PathSegment[];
-    value?: unknown;
-    expected?: string;
-    code?: string;
-  }) {
-    this.message = options.message;
-    this.path = options.path ? [...options.path] : []; // Convert readonly to mutable copy
-    this.value = options.value;
-    this.expected = options.expected || '';
-    this.code = options.code || 'VALIDATION_ERROR';
-  }
+// Import types for internal use
+import type {
+  PathSegment,
+  Result,
+  ValidationOptions,
+  Validator,
+  ArrayValidator,
+  StringValidator,
+  NumberValidator,
+  TupleType,
+  UnionType,
+  CompiledValidator,
+  CompiledCheck,
+  StringRefinement,
+  NumberRefinement,
+  ArrayRefinement,
+} from './types.js';
 
-  /**
-   * Format path segments into a readable string
-   * Numbers become [0], [1], etc. Strings are joined with dots.
-   * Examples:
-   *   ['name'] → 'name'
-   *   ['users', 0] → 'users[0]'
-   *   ['users', 0, 'email'] → 'users[0].email'
-   *   [0, 'name'] → '[0].name'
-   * @internal
-   */
-  private formatPathString(): string {
-    if (this.path.length === 0) return '';
-
-    let result = '';
-    for (let i = 0; i < this.path.length; i++) {
-      const segment = this.path[i]!;
-      if (typeof segment === 'number') {
-        // Numbers always become [n] - no separator needed before them
-        result += `[${segment}]`;
-      } else {
-        // String segment - add dot separator if not first element
-        if (i > 0) {
-          result += '.';
-        }
-        result += segment;
-      }
-    }
-    return result;
-  }
-
-  /**
-   * Lazy stack trace - only captured when accessed
-   * This avoids the expensive Error() constructor in the hot path
-   */
-  get stack(): string {
-    if (!this._stack) {
-      const err = new Error(this.message);
-      err.name = 'ValidationError';
-      this._stack = err.stack || '';
-    }
-    return this._stack;
-  }
-
-  /**
-   * For compatibility with Error interface
-   */
-  get name(): string {
-    return 'ValidationError';
-  }
-
-  /**
-   * Format error in different styles
-   */
-  format(style: 'json' | 'text' | 'color'): string {
-    switch (style) {
-      case 'json':
-        return this.formatJSON();
-      case 'text':
-        return this.formatText();
-      case 'color':
-        return this.formatColor();
-      default:
-        return this.message;
-    }
-  }
-
-  /**
-   * Format as JSON
-   */
-  private formatJSON(): string {
-    const pathStr = this.formatPathString();
-    return JSON.stringify(
-      {
-        error: this.code,
-        message: this.message,
-        path: pathStr || undefined,
-        expected: this.expected || undefined,
-        received: this.getTypeName(this.value),
-      },
-      null,
-      2
-    );
-  }
-
-  /**
-   * Format as plain text
-   */
-  private formatText(): string {
-    const parts: string[] = [];
-    const pathStr = this.formatPathString();
-
-    if (pathStr) {
-      parts.push(`At path: ${pathStr}`);
-    }
-
-    parts.push(`Error: ${this.message}`);
-
-    if (this.expected) {
-      parts.push(`Expected: ${this.expected}`);
-    }
-
-    parts.push(`Received: ${this.getTypeName(this.value)}`);
-
-    return parts.join('\n');
-  }
-
-  /**
-   * Format with ANSI colors for terminal output
-   */
-  private formatColor(): string {
-    const red = '\x1b[31m';
-    const yellow = '\x1b[33m';
-    const blue = '\x1b[34m';
-    const gray = '\x1b[90m';
-    const reset = '\x1b[0m';
-    const bold = '\x1b[1m';
-
-    const parts: string[] = [];
-    const pathStr = this.formatPathString();
-
-    if (pathStr) {
-      parts.push(`${gray}At path:${reset} ${blue}${pathStr}${reset}`);
-    }
-
-    parts.push(`${red}${bold}Error:${reset} ${this.message}`);
-
-    if (this.expected) {
-      parts.push(`${gray}Expected:${reset} ${this.expected}`);
-    }
-
-    parts.push(`${gray}Received:${reset} ${yellow}${this.getTypeName(this.value)}${reset}`);
-
-    return parts.join('\n');
-  }
-
-  /**
-   * Get type name for error messages
-   */
-  private getTypeName(value: unknown): string {
-    if (value === null) return 'null';
-    if (value === undefined) return 'undefined';
-    if (Number.isNaN(value)) return 'NaN';
-    if (Array.isArray(value)) return 'array';
-    return typeof value;
-  }
-}
-
-/**
- * Validation result
- */
-export type Result<T> =
-  | { ok: true; value: T }
-  | { ok: false; error: string; details?: ValidationError };
-
-/**
- * Validation options for security limits
- */
-export interface ValidationOptions {
-  /**
-   * Maximum nesting depth for objects and arrays (prevents stack overflow)
-   * @default Infinity
-   */
-  maxDepth?: number;
-
-  /**
-   * Maximum number of properties in an object (prevents DoS attacks)
-   * @default Infinity
-   */
-  maxProperties?: number;
-
-  /**
-   * Maximum number of items in an array (prevents DoS attacks)
-   * @default Infinity
-   */
-  maxItems?: number;
-
-  /**
-   * Enable circular reference detection (uses WeakSet tracking)
-   * When false, circular references will cause stack overflow
-   * @default false (for performance)
-   */
-  checkCircular?: boolean;
-}
-
-/**
- * Validator interface
- */
-export interface Validator<T> {
-  validate(data: unknown): data is T;
-  error(data: unknown): string;
-  refine(predicate: (value: T) => boolean, message: string): Validator<T>;
-  transform<U>(fn: (value: T) => U): Validator<U>;
-  optional(): Validator<T | undefined>;
-  nullable(): Validator<T | null>;
-  nullish(): Validator<T | undefined | null>;
-  default(value: T | (() => T)): Validator<T>;
-  _transform?: (value: any) => T;  // Internal: transformation function
-  _default?: T | (() => T);  // Internal: default value or function
-  _type?: string;  // Internal: validator type for optimizations
-  _hasRefinements?: boolean;  // Internal: whether validator has refinements
-  _validateWithPath?: (data: unknown, path: readonly PathSegment[] | PathSegment[], seen: WeakSet<object>, depth: number, options: ValidationOptions) => Result<T>;  // Internal: path-aware validation
-  _compiled?: (data: unknown) => boolean;  // Internal: JIT-compiled validator for fast path (v0.8.0)
-}
-
-/**
- * Array validator with length constraints
- */
-export interface ArrayValidator<T> extends Validator<T[]> {
-  min(n: number): ArrayValidator<T>;
-  max(n: number): ArrayValidator<T>;
-  length(n: number): ArrayValidator<T>;
-  nonempty(): ArrayValidator<T>;
-  // Inherit refine and transform from Validator
-}
-
-/**
- * String validator with built-in constraints (v0.8.5)
- */
-export interface StringValidator extends Validator<string> {
-  /** Minimum string length */
-  min(length: number): StringValidator;
-  /** Maximum string length */
-  max(length: number): StringValidator;
-  /** Exact string length */
-  length(length: number): StringValidator;
-  /** Non-empty string (min length 1) */
-  nonempty(): StringValidator;
-  /** Must be valid email format */
-  email(): StringValidator;
-  /** Must be valid URL format */
-  url(): StringValidator;
-  /** Must be valid UUID format (v1-v5) */
-  uuid(): StringValidator;
-  /** Must match custom regex pattern */
-  pattern(regex: RegExp, message?: string): StringValidator;
-  /** Must start with prefix */
-  startsWith(prefix: string): StringValidator;
-  /** Must end with suffix */
-  endsWith(suffix: string): StringValidator;
-  /** Must contain substring */
-  includes(substring: string): StringValidator;
-  /** Must be valid ISO 8601 datetime (YYYY-MM-DDTHH:MM:SS) */
-  datetime(): StringValidator;
-  /** Must be valid ISO 8601 date (YYYY-MM-DD) */
-  date(): StringValidator;
-  /** Must be valid ISO 8601 time (HH:MM:SS) */
-  time(): StringValidator;
-  /** Must be valid IP address (IPv4 or IPv6) */
-  ip(): StringValidator;
-  /** Must be valid IPv4 address */
-  ipv4(): StringValidator;
-  /** Must be valid IPv6 address */
-  ipv6(): StringValidator;
-}
-
-/**
- * Number validator with built-in constraints (v0.8.5)
- */
-export interface NumberValidator extends Validator<number> {
-  /** Must be an integer */
-  int(): NumberValidator;
-  /** Must be positive (> 0) */
-  positive(): NumberValidator;
-  /** Must be negative (< 0) */
-  negative(): NumberValidator;
-  /** Must be non-negative (>= 0) */
-  nonnegative(): NumberValidator;
-  /** Must be non-positive (<= 0) */
-  nonpositive(): NumberValidator;
-  /** Minimum value (inclusive) */
-  min(n: number): NumberValidator;
-  /** Maximum value (inclusive) */
-  max(n: number): NumberValidator;
-  /** Must be within range [min, max] (inclusive) */
-  range(min: number, max: number): NumberValidator;
-  /** Must be a finite number */
-  finite(): NumberValidator;
-  /** Must be a safe integer (within Number.MIN_SAFE_INTEGER to MAX) */
-  safeInt(): NumberValidator;
-  /** Must be a multiple of n (useful for currency, steps) */
-  multipleOf(n: number): NumberValidator;
-}
-
-/**
- * Tuple type inference helper
- */
-type TupleType<T extends readonly Validator<any>[]> = {
-  [K in keyof T]: T[K] extends Validator<infer U> ? U : never;
-};
-
-/**
- * Union type inference helper
- */
-type UnionType<T extends readonly Validator<any>[]> = T extends readonly [
-  Validator<infer U>,
-  ...infer Rest
-]
-  ? Rest extends readonly Validator<any>[]
-    ? U | UnionType<Rest>
-    : U
-  : never;
+// Import ValidationError class for runtime use
+import { ValidationError } from './types.js';
 
 /**
  * Get a clear type name for error messages
@@ -707,11 +415,6 @@ export function check<T>(validator: Validator<T>, data: unknown): boolean {
 }
 
 /**
- * Compiled validator type - a function that validates data
- */
-export type CompiledValidator<T> = (data: unknown) => Result<T>;
-
-/**
  * Cache for compiled validators (WeakMap to allow garbage collection)
  */
 const compiledCache = new WeakMap<Validator<any>, CompiledValidator<any>>();
@@ -786,11 +489,6 @@ export function compile<T>(validator: Validator<T>): CompiledValidator<T> {
 
   return compiled;
 }
-
-/**
- * Compiled check type - a function that validates data and returns boolean
- */
-export type CompiledCheck = (data: unknown) => boolean;
 
 /**
  * Cache for compiled check functions (WeakMap to allow garbage collection)
@@ -1696,6 +1394,8 @@ function createNumberValidator(
 /**
  * Validator builders
  */
+// v namespace provides fluent API for schema building
+// Also available via @tuulbelt/property-validator/v for explicit imports
 export const v = {
   /**
    * String validator with built-in constraints
@@ -2701,6 +2401,376 @@ export const v = {
 };
 
 /**
+ * Named exports for tree-shaking support (v0.9.0)
+ *
+ * Instead of importing the entire `v` namespace:
+ *   import { v, validate } from 'property-validator';
+ *   const schema = v.object({ name: v.string() });
+ *
+ * You can import only what you need:
+ *   import { validate, object, string } from 'property-validator';
+ *   const schema = object({ name: string() });
+ *
+ * This enables bundlers to tree-shake unused validators.
+ */
+
+// ============================================================================
+// Tree-Shakeable Primitive Validators (v0.9.1)
+// ============================================================================
+
+/**
+ * String validator - accepts optional refinements for tree-shaking
+ *
+ * @example
+ * // Without refinements (backwards compatible, has chainable methods)
+ * const s = string();
+ * const email = string().email();
+ *
+ * @example
+ * // With refinements (tree-shakeable, no chainable methods)
+ * import { string, email, minLength } from 'property-validator';
+ * const emailSchema = string(email(), minLength(5));
+ */
+export function string(...refinements: StringRefinement[]): StringValidator | Validator<string> {
+  if (refinements.length === 0) {
+    // No refinements: return chainable StringValidator (backwards compatible)
+    // Use createStringValidator directly to avoid pulling in v namespace
+    return createStringValidator();
+  }
+
+  // With refinements: create optimized validator without chainable methods
+  // This enables tree-shaking since we only import the refinements we use
+  const internalRefinements = refinements.map(r => ({
+    check: r.check,
+    message: r.message,
+  }));
+
+  // Use internal createStringValidator but return as plain Validator
+  // (chainable methods are excluded for tree-shaking)
+  const validateFn = (data: unknown): data is string => {
+    if (typeof data !== 'string') return false;
+    return internalRefinements.every(r => r.check(data));
+  };
+
+  const errorFn = (data: unknown): string => {
+    if (typeof data !== 'string') {
+      return `Expected string, got ${data === null ? 'null' : data === undefined ? 'undefined' : typeof data}`;
+    }
+    for (const r of internalRefinements) {
+      if (!r.check(data)) {
+        return r.message;
+      }
+    }
+    return 'String validation failed';
+  };
+
+  const validator: Validator<string> = {
+    validate: validateFn,
+    error: errorFn,
+    refine(predicate: (value: string) => boolean, message: string): Validator<string> {
+      return string(...refinements, {
+        _kind: 'string-refinement',
+        check: predicate,
+        message,
+      });
+    },
+    transform<U>(fn: (value: string) => U): Validator<U> {
+      // Use createStringValidator directly to avoid pulling in v namespace
+      const transformedValidator = createStringValidator().transform(fn);
+      return transformedValidator;
+    },
+    optional(): Validator<string | undefined> {
+      // Use createValidator directly to avoid pulling in v namespace
+      return createValidator(
+        (data): data is string | undefined => data === undefined || this.validate(data),
+        (data) => this.error(data)
+      );
+    },
+    nullable(): Validator<string | null> {
+      // Use createValidator directly to avoid pulling in v namespace
+      return createValidator(
+        (data): data is string | null => data === null || this.validate(data),
+        (data) => this.error(data)
+      );
+    },
+    nullish(): Validator<string | undefined | null> {
+      const base = this;
+      return {
+        validate: (data): data is string | undefined | null =>
+          data === undefined || data === null || base.validate(data),
+        error: (data) => base.error(data),
+        refine: (pred, msg) => base.refine(pred as any, msg) as any,
+        transform: (fn) => base.transform(fn as any) as any,
+        optional: () => base.optional() as any,
+        nullable: () => base.nullable() as any,
+        nullish: () => base.nullish() as any,
+        default: (val) => base.default(val as any) as any,
+      };
+    },
+    default(value: string | (() => string)): Validator<string> {
+      // Use createStringValidator directly to avoid pulling in v namespace
+      const defaultValidator = createStringValidator().default(value);
+      return defaultValidator;
+    },
+  };
+
+  validator._type = 'string';
+
+  // Enable JIT bypass for fast path
+  if (internalRefinements.length === 0) {
+    validator._compiled = (data: unknown) => typeof data === 'string';
+  }
+
+  return validator;
+}
+
+/**
+ * Number validator - accepts optional refinements for tree-shaking
+ *
+ * @example
+ * // Without refinements (backwards compatible, has chainable methods)
+ * const n = number();
+ * const age = number().int().positive();
+ *
+ * @example
+ * // With refinements (tree-shakeable, no chainable methods)
+ * import { number, int, positive, min } from 'property-validator';
+ * const ageSchema = number(int(), positive());
+ * const priceSchema = number(min(0));
+ */
+export function number(...refinements: NumberRefinement[]): NumberValidator | Validator<number> {
+  if (refinements.length === 0) {
+    // No refinements: return chainable NumberValidator (backwards compatible)
+    // Use createNumberValidator directly to avoid pulling in v namespace
+    return createNumberValidator();
+  }
+
+  // With refinements: create optimized validator without chainable methods
+  const internalRefinements = refinements.map(r => ({
+    check: r.check,
+    message: r.message,
+  }));
+
+  const validateFn = (data: unknown): data is number => {
+    if (typeof data !== 'number' || Number.isNaN(data)) return false;
+    return internalRefinements.every(r => r.check(data));
+  };
+
+  const errorFn = (data: unknown): string => {
+    if (typeof data !== 'number') {
+      return `Expected number, got ${data === null ? 'null' : data === undefined ? 'undefined' : typeof data}`;
+    }
+    if (Number.isNaN(data)) {
+      return 'Expected number, got NaN';
+    }
+    for (const r of internalRefinements) {
+      if (!r.check(data)) {
+        return r.message;
+      }
+    }
+    return 'Number validation failed';
+  };
+
+  const validator: Validator<number> = {
+    validate: validateFn,
+    error: errorFn,
+    refine(predicate: (value: number) => boolean, message: string): Validator<number> {
+      return number(...refinements, {
+        _kind: 'number-refinement',
+        check: predicate,
+        message,
+      });
+    },
+    transform<U>(fn: (value: number) => U): Validator<U> {
+      // Use createNumberValidator directly to avoid pulling in v namespace
+      const transformedValidator = createNumberValidator().transform(fn);
+      return transformedValidator;
+    },
+    optional(): Validator<number | undefined> {
+      // Use createValidator directly to avoid pulling in v namespace
+      return createValidator(
+        (data): data is number | undefined => data === undefined || this.validate(data),
+        (data) => this.error(data)
+      );
+    },
+    nullable(): Validator<number | null> {
+      // Use createValidator directly to avoid pulling in v namespace
+      return createValidator(
+        (data): data is number | null => data === null || this.validate(data),
+        (data) => this.error(data)
+      );
+    },
+    nullish(): Validator<number | undefined | null> {
+      const base = this;
+      return {
+        validate: (data): data is number | undefined | null =>
+          data === undefined || data === null || base.validate(data),
+        error: (data) => base.error(data),
+        refine: (pred, msg) => base.refine(pred as any, msg) as any,
+        transform: (fn) => base.transform(fn as any) as any,
+        optional: () => base.optional() as any,
+        nullable: () => base.nullable() as any,
+        nullish: () => base.nullish() as any,
+        default: (val) => base.default(val as any) as any,
+      };
+    },
+    default(value: number | (() => number)): Validator<number> {
+      // Use createNumberValidator directly to avoid pulling in v namespace
+      const defaultValidator = createNumberValidator().default(value);
+      return defaultValidator;
+    },
+  };
+
+  validator._type = 'number';
+
+  // Enable JIT bypass for fast path
+  if (internalRefinements.length === 0) {
+    validator._compiled = (data: unknown) => typeof data === 'number' && !Number.isNaN(data);
+  }
+
+  return validator;
+}
+
+// ============================================================================
+// Named Validator Exports (v0.9.2 - Tree-Shakeable)
+// These are standalone implementations that don't reference the v namespace,
+// enabling bundlers to tree-shake unused validators.
+// ============================================================================
+
+/**
+ * Boolean validator - standalone implementation for tree-shaking
+ */
+export function boolean(): Validator<boolean> {
+  const validator = createValidator(validateBoolean, booleanError);
+  validator._type = 'boolean';
+  validator._compiled = validateBoolean;
+  return validator;
+}
+
+/**
+ * Array validator - delegates to v.array for full implementation
+ * Note: This is a function wrapper to enable tree-shaking of v namespace
+ */
+export function array<T>(itemValidator: Validator<T>): ArrayValidator<T> {
+  return v.array(itemValidator);
+}
+
+/**
+ * Tuple validator - delegates to v.tuple for full implementation
+ */
+export function tuple<T extends readonly Validator<any>[]>(
+  validators: T
+): Validator<TupleType<T>> {
+  return v.tuple(validators);
+}
+
+/**
+ * Object validator - delegates to v.object for full implementation
+ */
+export function object<T extends Record<string, unknown>>(
+  shape: { [K in keyof T]: Validator<T[K]> }
+): Validator<T> {
+  return v.object(shape);
+}
+
+/**
+ * Optional validator - standalone implementation for tree-shaking
+ */
+export function optional<T>(validator: Validator<T>): Validator<T | undefined> {
+  return createValidator(
+    (data): data is T | undefined => data === undefined || validator.validate(data),
+    (data) => validator.error(data)
+  );
+}
+
+/**
+ * Nullable validator - standalone implementation for tree-shaking
+ */
+export function nullable<T>(validator: Validator<T>): Validator<T | null> {
+  return createValidator(
+    (data): data is T | null => data === null || validator.validate(data),
+    (data) => validator.error(data)
+  );
+}
+
+/**
+ * Union validator - delegates to v.union for full implementation
+ */
+export function union<T extends readonly Validator<any>[]>(
+  validators: T
+): Validator<UnionType<T>> {
+  return v.union(validators);
+}
+
+/**
+ * Literal validator - delegates to v.literal for full implementation
+ */
+export function literal<T extends string | number | boolean | null>(
+  value: T
+): Validator<T> {
+  return v.literal(value);
+}
+
+/**
+ * Lazy validator - delegates to v.lazy for full implementation
+ */
+export function lazy<T>(fn: () => Validator<T>): Validator<T> {
+  return v.lazy(fn);
+}
+
+/**
+ * Enum validator - delegates to v.enum for full implementation
+ */
+export function enum_<T extends readonly string[]>(
+  values: T
+): Validator<T[number]> {
+  return v.enum(values);
+}
+
+// ============================================================================
+// Tree-Shakeable Refinement Functions (v0.9.1)
+// ============================================================================
+
+// Re-export all refinement functions for tree-shaking
+export {
+  // String refinements
+  minLength,
+  maxLength,
+  length,
+  nonempty,
+  email,
+  url,
+  uuid,
+  pattern,
+  startsWith,
+  endsWith,
+  includes,
+  datetime,
+  date,
+  time,
+  ip,
+  ipv4,
+  ipv6,
+  // Number refinements
+  int,
+  safeInt,
+  positive,
+  negative,
+  nonnegative,
+  nonpositive,
+  min,
+  max,
+  range,
+  finite,
+  multipleOf,
+  // Array refinements
+  minItems,
+  maxItems,
+  itemCount,
+  nonemptyArray,
+} from './refinements/index.js';
+
+/**
  * Parse command line arguments
  */
 interface CliOptions {
@@ -2727,13 +2797,13 @@ function parseArgs(args: string[]): CliOptions {
     } else if (arg === '--api') {
       showApi = true;
     } else if (arg === '--version' || arg === '-V') {
-      console.log('property-validator v0.8.5');
+      console.log('property-validator v0.9.1');
       console.log('Runtime type validation with TypeScript inference');
       process.exit(0);
     } else if (arg === '--help' || arg === '-h') {
       console.log(`Usage: propval [options] <json-data>
 
-Property Validator v0.8.5 - Runtime type validation with TypeScript inference.
+Property Validator v0.9.1 - Runtime type validation with TypeScript inference.
 
 Options:
   -v, --verbose  Enable verbose output
@@ -2779,7 +2849,7 @@ Library Usage:
 
 function showApi(): void {
   console.log(`
-Property Validator v0.8.5 - API Reference
+Property Validator v0.9.1 - API Reference
 
 ═══════════════════════════════════════════════════════════════════
  Validation Functions

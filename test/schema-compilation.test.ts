@@ -5,12 +5,13 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { v, compile, type CompiledValidator } from '../src/index.ts';
+import { v } from '../src/index.js';
+import { compile, type CompiledValidator } from '../src/index.ts';
 
 // Compiled validators for primitives (8 tests)
 test('compilation: primitives', async (t) => {
   await t.test('compiles string validator', () => {
-    const validateString = v.compile(v.string());
+    const validateString = compile(v.string());
     const result1 = validateString('hello');
     const result2 = validateString(123);
 
@@ -23,7 +24,7 @@ test('compilation: primitives', async (t) => {
   });
 
   await t.test('compiles number validator', () => {
-    const validateNumber = v.compile(v.number());
+    const validateNumber = compile(v.number());
     const result1 = validateNumber(42);
     const result2 = validateNumber('42');
 
@@ -36,7 +37,7 @@ test('compilation: primitives', async (t) => {
   });
 
   await t.test('compiles boolean validator', () => {
-    const validateBoolean = v.compile(v.boolean());
+    const validateBoolean = compile(v.boolean());
     const result1 = validateBoolean(true);
     const result2 = validateBoolean('true');
 
@@ -49,7 +50,7 @@ test('compilation: primitives', async (t) => {
   });
 
   await t.test('compiled validator can be called multiple times', () => {
-    const validateString = v.compile(v.string());
+    const validateString = compile(v.string());
 
     const result1 = validateString('first');
     const result2 = validateString('second');
@@ -62,7 +63,7 @@ test('compilation: primitives', async (t) => {
 
   await t.test('compiles refined validator', () => {
     const PositiveNumber = v.number().refine(n => n > 0, 'Must be positive');
-    const validatePositive = v.compile(PositiveNumber);
+    const validatePositive = compile(PositiveNumber);
 
     const result1 = validatePositive(5);
     const result2 = validatePositive(-5);
@@ -75,7 +76,7 @@ test('compilation: primitives', async (t) => {
 
   await t.test('compiles transformed validator', () => {
     const ParsedInt = v.string().transform(s => parseInt(s, 10));
-    const validateParsed = v.compile(ParsedInt);
+    const validateParsed = compile(ParsedInt);
 
     const result1 = validateParsed('42');
     const result2 = validateParsed(42);
@@ -91,7 +92,7 @@ test('compilation: primitives', async (t) => {
 
   await t.test('compiles optional validator', () => {
     const OptionalString = v.string().optional();
-    const validateOptional = v.compile(OptionalString);
+    const validateOptional = compile(OptionalString);
 
     const result1 = validateOptional('hello');
     const result2 = validateOptional(undefined);
@@ -104,7 +105,7 @@ test('compilation: primitives', async (t) => {
 
   await t.test('compiles validator with default', () => {
     const WithDefault = v.string().default('default-value');
-    const validateWithDefault = v.compile(WithDefault);
+    const validateWithDefault = compile(WithDefault);
 
     const result1 = validateWithDefault('custom');
     const result2 = validateWithDefault(undefined);
@@ -128,7 +129,7 @@ test('compilation: objects', async (t) => {
       name: v.string(),
       age: v.number()
     });
-    const validateUser = v.compile(UserValidator);
+    const validateUser = compile(UserValidator);
 
     const result1 = validateUser({ name: 'Alice', age: 30 });
     const result2 = validateUser({ name: 'Bob' });
@@ -147,7 +148,7 @@ test('compilation: objects', async (t) => {
       }),
       city: v.string()
     });
-    const validateAddress = v.compile(AddressValidator);
+    const validateAddress = compile(AddressValidator);
 
     const result1 = validateAddress({
       user: { name: 'Alice', email: 'alice@example.com' },
@@ -167,7 +168,7 @@ test('compilation: objects', async (t) => {
       name: v.string(),
       email: v.string().optional()
     });
-    const validateUser = v.compile(UserValidator);
+    const validateUser = compile(UserValidator);
 
     const result1 = validateUser({ name: 'Alice', email: 'alice@example.com' });
     const result2 = validateUser({ name: 'Bob', email: undefined });
@@ -187,7 +188,7 @@ test('compilation: objects', async (t) => {
       name: v.string(),
       price: v.number().refine(n => n > 0, 'Price must be positive')
     });
-    const validateProduct = v.compile(ProductValidator);
+    const validateProduct = compile(ProductValidator);
 
     const result1 = validateProduct({ name: 'Widget', price: 9.99 });
     const result2 = validateProduct({ name: 'Gadget', price: -5 });
@@ -201,7 +202,7 @@ test('compilation: objects', async (t) => {
       port: v.string().transform(s => parseInt(s, 10)),
       debug: v.string().transform(s => s === 'true')
     });
-    const validateConfig = v.compile(ConfigValidator);
+    const validateConfig = compile(ConfigValidator);
 
     const result = validateConfig({ port: '3000', debug: 'true' });
 
@@ -214,7 +215,7 @@ test('compilation: objects', async (t) => {
 
   await t.test('compiles empty object validator', () => {
     const EmptyValidator = v.object({});
-    const validateEmpty = v.compile(EmptyValidator);
+    const validateEmpty = compile(EmptyValidator);
 
     const result1 = validateEmpty({});
     const result2 = validateEmpty({ extra: 'field' });
@@ -234,7 +235,7 @@ test('compilation: objects', async (t) => {
       field7: v.string(),
       field8: v.number()
     });
-    const validateLarge = v.compile(LargeObjectValidator);
+    const validateLarge = compile(LargeObjectValidator);
 
     const validData = {
       field1: 'a', field2: 1, field3: true, field4: 'b',
@@ -257,7 +258,7 @@ test('compilation: objects', async (t) => {
       port: v.number().default(3000),
       host: v.string().default('localhost')
     });
-    const validateConfig = v.compile(ConfigValidator);
+    const validateConfig = compile(ConfigValidator);
 
     const result = validateConfig({ port: undefined, host: undefined });
 
@@ -273,7 +274,7 @@ test('compilation: objects', async (t) => {
       status: v.union([v.literal('success'), v.literal('error')]),
       data: v.string()
     });
-    const validateResponse = v.compile(ResponseValidator);
+    const validateResponse = compile(ResponseValidator);
 
     const result1 = validateResponse({ status: 'success', data: 'OK' });
     const result2 = validateResponse({ status: 'pending', data: 'Wait' });
@@ -292,7 +293,7 @@ test('compilation: objects', async (t) => {
         })
       })
     });
-    const validateDeep = v.compile(DeepValidator);
+    const validateDeep = compile(DeepValidator);
 
     const result1 = validateDeep({
       level1: { level2: { level3: { value: 'deep' } } }
@@ -310,7 +311,7 @@ test('compilation: objects', async (t) => {
 test('compilation: arrays', async (t) => {
   await t.test('compiles simple array validator', () => {
     const NumberArrayValidator = v.array(v.number());
-    const validateNumbers = v.compile(NumberArrayValidator);
+    const validateNumbers = compile(NumberArrayValidator);
 
     const result1 = validateNumbers([1, 2, 3]);
     const result2 = validateNumbers([1, '2', 3]);
@@ -323,7 +324,7 @@ test('compilation: arrays', async (t) => {
 
   await t.test('compiles array with constraints', () => {
     const ConstrainedArrayValidator = v.array(v.string()).min(1).max(3);
-    const validateConstrained = v.compile(ConstrainedArrayValidator);
+    const validateConstrained = compile(ConstrainedArrayValidator);
 
     const result1 = validateConstrained(['a', 'b']);
     const result2 = validateConstrained([]);
@@ -339,7 +340,7 @@ test('compilation: arrays', async (t) => {
       name: v.string(),
       age: v.number()
     }));
-    const validateUsers = v.compile(UserArrayValidator);
+    const validateUsers = compile(UserArrayValidator);
 
     const result1 = validateUsers([
       { name: 'Alice', age: 30 },
@@ -356,7 +357,7 @@ test('compilation: arrays', async (t) => {
 
   await t.test('compiles nested arrays (2D array)', () => {
     const MatrixValidator = v.array(v.array(v.number()));
-    const validateMatrix = v.compile(MatrixValidator);
+    const validateMatrix = compile(MatrixValidator);
 
     const result1 = validateMatrix([[1, 2], [3, 4]]);
     const result2 = validateMatrix([[1, 2], [3, '4']]);
@@ -367,7 +368,7 @@ test('compilation: arrays', async (t) => {
 
   await t.test('compiles empty array validator', () => {
     const EmptyArrayValidator = v.array(v.string()).max(0);
-    const validateEmpty = v.compile(EmptyArrayValidator);
+    const validateEmpty = compile(EmptyArrayValidator);
 
     const result1 = validateEmpty([]);
     const result2 = validateEmpty(['a']);
@@ -378,7 +379,7 @@ test('compilation: arrays', async (t) => {
 
   await t.test('compiles tuple validator', () => {
     const TupleValidator = v.tuple([v.string(), v.number(), v.boolean()]);
-    const validateTuple = v.compile(TupleValidator);
+    const validateTuple = compile(TupleValidator);
 
     const result1 = validateTuple(['hello', 42, true]);
     const result2 = validateTuple(['hello', 42]);
@@ -393,7 +394,7 @@ test('compilation: arrays', async (t) => {
     const PositiveNumbersValidator = v.array(
       v.number().refine(n => n > 0, 'Must be positive')
     );
-    const validatePositives = v.compile(PositiveNumbersValidator);
+    const validatePositives = compile(PositiveNumbersValidator);
 
     const result1 = validatePositives([1, 2, 3]);
     const result2 = validatePositives([1, -2, 3]);
@@ -406,7 +407,7 @@ test('compilation: arrays', async (t) => {
     const ParsedIntsValidator = v.array(
       v.string().transform(s => parseInt(s, 10))
     );
-    const validateParsed = v.compile(ParsedIntsValidator);
+    const validateParsed = compile(ParsedIntsValidator);
 
     const result = validateParsed(['1', '2', '3']);
 
@@ -421,8 +422,8 @@ test('compilation: arrays', async (t) => {
 test('compilation: cache', async (t) => {
   await t.test('returns cached compiled validator on second call', () => {
     const StringValidator = v.string();
-    const compiled1 = v.compile(StringValidator);
-    const compiled2 = v.compile(StringValidator);
+    const compiled1 = compile(StringValidator);
+    const compiled2 = compile(StringValidator);
 
     // Should return the exact same function reference
     assert.strictEqual(compiled1, compiled2);
@@ -432,8 +433,8 @@ test('compilation: cache', async (t) => {
     const StringValidator = v.string();
     const NumberValidator = v.number();
 
-    const compiledString = v.compile(StringValidator);
-    const compiledNumber = v.compile(NumberValidator);
+    const compiledString = compile(StringValidator);
+    const compiledNumber = compile(NumberValidator);
 
     // Should be different functions
     assert.notStrictEqual(compiledString, compiledNumber);
@@ -443,9 +444,9 @@ test('compilation: cache', async (t) => {
     const UserValidator = v.object({ name: v.string(), age: v.number() });
 
     // Compile multiple times
-    const compiled1 = v.compile(UserValidator);
-    const compiled2 = v.compile(UserValidator);
-    const compiled3 = v.compile(UserValidator);
+    const compiled1 = compile(UserValidator);
+    const compiled2 = compile(UserValidator);
+    const compiled3 = compile(UserValidator);
 
     // All should be the same reference
     assert.strictEqual(compiled1, compiled2);
@@ -456,10 +457,10 @@ test('compilation: cache', async (t) => {
     assert.strictEqual(result.ok, true);
   });
 
-  await t.test('standalone compile function has same cache as v.compile', () => {
+  await t.test('standalone compile function has same cache as compile', () => {
     const StringValidator = v.string();
 
-    const compiled1 = v.compile(StringValidator);
+    const compiled1 = compile(StringValidator);
     const compiled2 = compile(StringValidator);
 
     // Should return the same cached function

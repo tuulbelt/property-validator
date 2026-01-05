@@ -11,7 +11,8 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { validate, v, ValidationError } from '../src/index.ts';
+import { v } from '../src/index.js';
+import { validate, ValidationError } from '../src/index.ts';
 
 // ============================================================================
 // JSON Formatting (5 tests)

@@ -1,10 +1,10 @@
 # Property Validator / `propval`
 
 [![Tests](https://github.com/tuulbelt/property-validator/actions/workflows/test.yml/badge.svg)](https://github.com/tuulbelt/property-validator/actions/workflows/test.yml)
-![Version](https://img.shields.io/badge/version-0.8.5-blue)
+![Version](https://img.shields.io/badge/version-0.9.2-blue)
 ![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)
 ![Dogfooded](https://img.shields.io/badge/dogfooded-🐕-purple)
-![Tests](https://img.shields.io/badge/tests-595%20passing-success)
+![Tests](https://img.shields.io/badge/tests-680%20passing-success)
 ![Zero Dependencies](https://img.shields.io/badge/dependencies-0-success)
 ![Performance](https://img.shields.io/badge/performance-high-brightgreen)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -64,8 +64,9 @@ npx tsx src/index.ts --help
 
 ### As a Library
 
+**Fluent API** (v namespace):
 ```typescript
-import { validate, v } from '@tuulbelt/property-validator';
+import { v, validate } from '@tuulbelt/property-validator';
 
 // Define validators with built-in constraints
 const userValidator = v.object({
@@ -88,6 +89,20 @@ if (result.ok) {
 }
 ```
 
+**Named imports** (tree-shakeable):
+```typescript
+// Import named validators from main entry point
+import { validate, string, number, object, email, int, positive } from '@tuulbelt/property-validator';
+
+const userValidator = object({
+  name: string(),
+  age: number(int(), positive()),
+  email: string(email())
+});
+
+const result = validate(userValidator, data);
+```
+
 ### As a CLI
 
 Using short name (recommended after `npm link`):
@@ -108,6 +123,151 @@ Using long name:
 ```bash
 property-validator --schema user.schema.json data.json
 ```
+
+## Modular Imports (v0.9.0+)
+
+Property Validator supports tree-shaking for smaller bundle sizes. Import only what you need:
+
+```typescript
+// Named exports (tree-shakeable)
+import { string, number, object, validate } from '@tuulbelt/property-validator';
+
+const userValidator = object({
+  name: string().min(1),
+  age: number().positive()
+});
+
+const result = validate(userValidator, data);
+```
+
+**Available named exports (main entry):**
+- Validators: `string`, `number`, `boolean`, `array`, `tuple`, `object`, `optional`, `nullable`, `union`, `literal`, `lazy`, `enum_`
+- Functions: `validate`, `check`, `compile`, `compileCheck`
+- Class: `ValidationError`
+
+**Fluent API** (v namespace from main entry):
+```typescript
+// v namespace is available from the main entry point
+import { v, validate } from '@tuulbelt/property-validator';
+
+const schema = v.object({ name: v.string() });
+```
+
+**Type-only imports:**
+```typescript
+import type { Validator, Result, ValidationOptions } from '@tuulbelt/property-validator/types';
+```
+
+### Entry Points (v0.9.2+)
+
+Property Validator provides multiple entry points for different use cases:
+
+| Entry Point | Import From | Use Case |
+|-------------|-------------|----------|
+| Main | `@tuulbelt/property-validator` | Full API (v namespace + named exports) |
+| /types | `@tuulbelt/property-validator/types` | Type definitions only |
+
+**Example: Main entry point (all APIs):**
+```typescript
+import { v, validate, check, string, number, object } from '@tuulbelt/property-validator';
+
+// Fluent API with v namespace
+const UserSchema = v.object({
+  name: v.string().email(),
+  age: v.number().positive()
+});
+
+// Or functional API with named exports
+const AgeSchema = number(int(), positive());
+
+const result = validate(UserSchema, data);
+```
+
+**Both styles from one import:**
+- **Fluent API**: `v.string().email()` — Compact, chainable syntax
+- **Functional API**: `string(email())` — Explicit imports, tree-shakeable refinements
+
+### Functional Refinement API (v0.9.1+)
+
+For maximum tree-shaking potential, use the functional refinement pattern inspired by Valibot:
+
+```typescript
+import { string, number, email, minLength, int, positive, validate } from '@tuulbelt/property-validator';
+
+// Refinements are separate function exports - bundlers can exclude unused ones
+const EmailSchema = string(email(), minLength(5));
+const AgeSchema = number(int(), positive());
+
+validate(EmailSchema, 'test@example.com'); // ✓
+validate(AgeSchema, 25); // ✓
+```
+
+**Available refinement exports:**
+
+**String refinements:**
+- Length: `minLength(n)`, `maxLength(n)`, `length(n)`, `nonempty()`
+- Format: `email()`, `url()`, `uuid()`, `pattern(regex, message?)`
+- Content: `startsWith(prefix)`, `endsWith(suffix)`, `includes(substring)`
+- Date/Time: `datetime()`, `date()`, `time()`
+- Network: `ip()`, `ipv4()`, `ipv6()`
+
+**Number refinements:**
+- Type: `int()`, `safeInt()`, `finite()`
+- Sign: `positive()`, `negative()`, `nonnegative()`, `nonpositive()`
+- Range: `min(n)`, `max(n)`, `range(min, max)`, `multipleOf(n)`
+
+**Array refinements:**
+- Length: `minItems(n)`, `maxItems(n)`, `itemCount(n)`, `nonemptyArray()`
+
+**Comparison: Chainable vs Functional API:**
+
+```typescript
+// Chainable API (compact, all methods bundled)
+const schema1 = v.string().email().min(5);
+
+// Functional API (tree-shakeable, explicit imports)
+import { string, email, minLength } from '@tuulbelt/property-validator';
+const schema2 = string(email(), minLength(5));
+
+// Both produce equivalent validators!
+```
+
+**When to use which:**
+- **Chainable API** (`v.string().email()`): Compact syntax, great for quick prototyping
+- **Functional API** (`string(email())`): Maximum tree-shaking, explicit about what's used
+
+### Bundle Size & Design Philosophy
+
+| Import Style | Size (minified) | Size (gzipped) |
+|--------------|-----------------|----------------|
+| Full bundle | 30 KB | 8 KB |
+
+**Why 30KB? — Performance-First Architecture**
+
+Property Validator prioritizes **validation speed over bundle size**. The bundle includes:
+
+- **JIT Compilation Engine** — Validators compile to optimized functions at schema definition time, not at first validation. This means zero startup cost when validating.
+
+- **Pre-computed Fast Paths** — `check()` and `compileCheck()` bypass error handling entirely, achieving sub-100ns validation for most schemas.
+
+- **Unified Validation Machinery** — All validator types share optimized internals. This enables consistent ~60ns validation across primitives, objects, arrays, and unions.
+
+**The Trade-off:**
+
+| Approach | Bundle Size | Validation Speed |
+|----------|-------------|------------------|
+| Minimal validators (lazy compilation) | ~15 KB | 200-500 ns (first call compiles) |
+| **Property Validator** | 30 KB | **55-170 ns** (pre-compiled) |
+
+We chose speed. For applications validating API responses, form inputs, or processing data pipelines, the 15KB difference (~2KB gzipped) is negligible compared to React (~40KB), but the 3-5x speed improvement compounds across every validation call.
+
+**Tree-Shaking Benefits:**
+
+Named exports provide organizational clarity and some bundle reduction:
+
+1. **Refinements are tree-shakeable** — Only imported refinements like `email()`, `uuid()`, `minLength()` are bundled
+2. **Type definitions excluded** — Import from `/types` for zero runtime cost
+3. **Code organization** — Explicit imports make dependencies clear
 
 ## API
 
@@ -149,7 +309,7 @@ Fast boolean-only validation. Skips error path computation entirely.
 **Best for:** Conditionals, filtering, type guards, anywhere you only need pass/fail.
 
 ```typescript
-import { v, check } from 'property-validator';
+import { v, check } from '@tuulbelt/property-validator';
 
 const UserSchema = v.object({ name: v.string(), age: v.number() });
 
@@ -175,7 +335,7 @@ Pre-compile a validator for maximum-speed boolean validation. Returns a cached f
 **Best for:** Hot paths, large datasets, performance-critical loops.
 
 ```typescript
-import { v, compileCheck } from 'property-validator';
+import { v, compileCheck } from '@tuulbelt/property-validator';
 
 const UserSchema = v.object({ name: v.string(), age: v.number() });
 const isValidUser = compileCheck(UserSchema);  // Compile once
@@ -428,7 +588,8 @@ validate(configValidator, { port: undefined, host: undefined, debug: undefined }
 ### Custom Validators
 
 ```typescript
-import { v, Validator } from '@tuulbelt/property-validator';
+import { v } from '@tuulbelt/property-validator';
+import type { Validator } from '@tuulbelt/property-validator/types';
 
 // Create custom validator
 const emailValidator: Validator<string> = {
@@ -570,10 +731,10 @@ If you're migrating from another validation library, see [MIGRATION.md](./MIGRAT
 
 ## Roadmap
 
-### Next Up (v0.9.0)
-- **Modular design**: Tree-shakable API for smaller bundles
-- **String constraints**: `.pattern()`, `.email()`, `.url()` validators
-- **Number constraints**: `.int()`, `.positive()`, `.negative()` validators
+### Next Up (v0.9.5)
+- **Extended String Validators**: `cuid()`, `cuid2()`, `ulid()`, `nanoid()`, `base64()`, `hex()`, `jwt()`
+- **Extended Number Validators**: `port()`, `latitude()`, `longitude()`, `percentage()`
+- **JIT Phase 2**: Inlined primitive JIT for TypeBox-level performance
 
 ### Future (v1.0.0+)
 - Schema generation from existing TypeScript types
@@ -584,11 +745,23 @@ If you're migrating from another validation library, see [MIGRATION.md](./MIGRAT
 
 ### Recently Completed
 
+**v0.9.1:**
+- ✅ **Functional refinement API** — `string(email(), minLength(5))` pattern
+- ✅ **Tree-shakeable refinements** — 32 refinement functions as separate exports
+- ✅ **Backwards compatible** — Chainable API still works unchanged
+- ✅ **44 new tests** — Full test coverage for functional API
+
+**v0.9.0:**
+- ✅ **Modular architecture** — Tree-shakeable named exports
+- ✅ **Separate types module** — `@tuulbelt/property-validator/types`
+- ✅ **Package.json exports** — Proper bundler support
+- ✅ **sideEffects: false** — Bundle optimization enabled
+
 **v0.8.5:**
 - ✅ `check()` API — Boolean-only validation (~3x faster than validate)
 - ✅ `compileCheck()` API — Pre-compiled for hot paths
-- ✅ JIT compilation for unions, primitives, arrays
-- ✅ Inlined type checks using `new Function()`
+- ✅ Built-in string validators (email, url, uuid, pattern, etc.)
+- ✅ Built-in number validators (int, positive, negative, range, etc.)
 - ✅ Restructured benchmarks with API equivalence methodology
 
 **v0.8.0:**

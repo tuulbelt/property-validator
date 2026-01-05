@@ -4,7 +4,8 @@
  */
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { v, validate } from '../src/index.ts';
+import { v } from '../src/index.js';
+import { validate } from '../src/index.ts';
 
 describe('string validators: email()', () => {
   const emailValidator = v.string().email();
