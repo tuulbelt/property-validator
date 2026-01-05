@@ -2705,7 +2705,7 @@ export function union<T extends readonly Validator<any>[]>(
 /**
  * Literal validator - delegates to v.literal for full implementation
  */
-export function literal<T extends string | number | boolean | null | undefined>(
+export function literal<T extends string | number | boolean | null>(
   value: T
 ): Validator<T> {
   return v.literal(value);
@@ -2721,7 +2721,7 @@ export function lazy<T>(fn: () => Validator<T>): Validator<T> {
 /**
  * Enum validator - delegates to v.enum for full implementation
  */
-export function enum_<T extends readonly (string | number)[]>(
+export function enum_<T extends readonly string[]>(
   values: T
 ): Validator<T[number]> {
   return v.enum(values);

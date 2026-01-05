@@ -47,12 +47,8 @@ import type {
   StringValidator,
   NumberValidator,
   ArrayValidator,
+  UnionType,
 } from './types.js';
-
-// Type helper for union
-type UnionType<T extends readonly Validator<any>[]> = {
-  [K in keyof T]: T[K] extends Validator<infer U> ? U : never;
-}[number];
 
 // Type helper for tuple
 type TupleType<T extends readonly Validator<any>[]> = {
@@ -144,7 +140,7 @@ export const v = {
   /**
    * Literal validator
    */
-  literal<T extends string | number | boolean | null | undefined>(
+  literal<T extends string | number | boolean | null>(
     value: T
   ): Validator<T> {
     return literal(value);
@@ -160,7 +156,7 @@ export const v = {
   /**
    * Enum validator
    */
-  enum<T extends readonly (string | number)[]>(
+  enum<T extends readonly string[]>(
     values: T
   ): Validator<T[number]> {
     return enum_(values);
