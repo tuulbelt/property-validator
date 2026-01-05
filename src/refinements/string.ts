@@ -24,6 +24,17 @@ const TIME_PATTERN = /^\d{2}:\d{2}:\d{2}(?:\.\d+)?$/;
 const IPV4_PATTERN = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
 const IPV6_PATTERN = /^(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$|^(?:[0-9a-fA-F]{1,4}:){1,7}:$|^(?:[0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}$|^(?:[0-9a-fA-F]{1,4}:){1,5}(?::[0-9a-fA-F]{1,4}){1,2}$|^(?:[0-9a-fA-F]{1,4}:){1,4}(?::[0-9a-fA-F]{1,4}){1,3}$|^(?:[0-9a-fA-F]{1,4}:){1,3}(?::[0-9a-fA-F]{1,4}){1,4}$|^(?:[0-9a-fA-F]{1,4}:){1,2}(?::[0-9a-fA-F]{1,4}){1,5}$|^[0-9a-fA-F]{1,4}:(?::[0-9a-fA-F]{1,4}){1,6}$|^:(?::[0-9a-fA-F]{1,4}){1,7}$|^::$/;
 
+// ID Format Patterns (v0.9.5)
+const CUID_PATTERN = /^c[^\s-]{8,}$/;
+const CUID2_PATTERN = /^[0-9a-z]+$/;
+const ULID_PATTERN = /^[0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{26}$/;
+const NANOID_PATTERN = /^[A-Za-z0-9_-]{21}$/;
+
+// Encoding Patterns (v0.9.5)
+const BASE64_PATTERN = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
+const HEX_PATTERN = /^[0-9a-fA-F]+$/;
+const JWT_PATTERN = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
+
 // ============================================================================
 // Length Refinements
 // ============================================================================
@@ -245,5 +256,102 @@ export function ipv6(): StringRefinement {
     _kind: 'string-refinement',
     check: (s) => IPV6_PATTERN.test(s),
     message: 'Must be a valid IPv6 address',
+  };
+}
+
+// ============================================================================
+// ID Format Refinements (v0.9.5)
+// ============================================================================
+
+/**
+ * Valid CUID (Collision-resistant Unique ID)
+ * @example string(cuid())
+ * @see https://github.com/paralleldrive/cuid
+ */
+export function cuid(): StringRefinement {
+  return {
+    _kind: 'string-refinement',
+    check: (s) => CUID_PATTERN.test(s),
+    message: 'Must be a valid CUID',
+  };
+}
+
+/**
+ * Valid CUID2 (Collision-resistant Unique ID v2)
+ * @example string(cuid2())
+ * @see https://github.com/paralleldrive/cuid2
+ */
+export function cuid2(): StringRefinement {
+  return {
+    _kind: 'string-refinement',
+    check: (s) => s.length > 0 && CUID2_PATTERN.test(s),
+    message: 'Must be a valid CUID2',
+  };
+}
+
+/**
+ * Valid ULID (Universally Unique Lexicographically Sortable Identifier)
+ * @example string(ulid())
+ * @see https://github.com/ulid/spec
+ */
+export function ulid(): StringRefinement {
+  return {
+    _kind: 'string-refinement',
+    check: (s) => ULID_PATTERN.test(s),
+    message: 'Must be a valid ULID',
+  };
+}
+
+/**
+ * Valid NanoID (URL-friendly unique ID, default 21 characters)
+ * @example string(nanoid())
+ * @see https://github.com/ai/nanoid
+ */
+export function nanoid(): StringRefinement {
+  return {
+    _kind: 'string-refinement',
+    check: (s) => NANOID_PATTERN.test(s),
+    message: 'Must be a valid NanoID',
+  };
+}
+
+// ============================================================================
+// Encoding Refinements (v0.9.5)
+// ============================================================================
+
+/**
+ * Valid Base64 encoded string
+ * @example string(base64())
+ */
+export function base64(): StringRefinement {
+  return {
+    _kind: 'string-refinement',
+    check: (s) => s.length === 0 || BASE64_PATTERN.test(s),
+    message: 'Must be a valid Base64 string',
+  };
+}
+
+/**
+ * Valid hexadecimal string
+ * @example string(hex())
+ */
+export function hex(): StringRefinement {
+  return {
+    _kind: 'string-refinement',
+    check: (s) => s.length > 0 && HEX_PATTERN.test(s),
+    message: 'Must be a valid hexadecimal string',
+  };
+}
+
+/**
+ * Valid JWT (JSON Web Token)
+ * @example string(jwt())
+ * @see https://jwt.io
+ */
+export function jwt(): StringRefinement {
+  return {
+    _kind: 'string-refinement',
+    check: (s) => JWT_PATTERN.test(s),
+    message: 'Must be a valid JWT',
   };
 }

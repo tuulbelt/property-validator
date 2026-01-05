@@ -307,6 +307,22 @@ export interface StringValidator extends Validator<string> {
   ipv4(): StringValidator;
   /** Must be valid IPv6 address */
   ipv6(): StringValidator;
+  // v0.9.5: ID format validators
+  /** Must be valid CUID (Collision-resistant Unique ID) */
+  cuid(): StringValidator;
+  /** Must be valid CUID2 (Collision-resistant Unique ID v2) */
+  cuid2(): StringValidator;
+  /** Must be valid ULID (Universally Unique Lexicographically Sortable ID) */
+  ulid(): StringValidator;
+  /** Must be valid NanoID (URL-friendly unique ID, 21 chars) */
+  nanoid(): StringValidator;
+  // v0.9.5: Encoding validators
+  /** Must be valid Base64 encoded string */
+  base64(): StringValidator;
+  /** Must be valid hexadecimal string */
+  hex(): StringValidator;
+  /** Must be valid JWT (JSON Web Token) */
+  jwt(): StringValidator;
 }
 
 /**

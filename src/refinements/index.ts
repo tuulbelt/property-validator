@@ -30,6 +30,15 @@ export {
   ip,
   ipv4,
   ipv6,
+  // ID format refinements (v0.9.5)
+  cuid,
+  cuid2,
+  ulid,
+  nanoid,
+  // Encoding refinements (v0.9.5)
+  base64,
+  hex,
+  jwt,
 } from './string.js';
 
 // Number refinements

@@ -1108,6 +1108,29 @@ const IPV4_PATTERN = /^(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(?:25[0-5]|2[
 /** IPv6 pattern - matches valid IPv6 addresses (full and compressed) */
 const IPV6_PATTERN = /^(?:(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|(?:[0-9a-fA-F]{1,4}:){1,7}:|(?:[0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|(?:[0-9a-fA-F]{1,4}:){1,5}(?::[0-9a-fA-F]{1,4}){1,2}|(?:[0-9a-fA-F]{1,4}:){1,4}(?::[0-9a-fA-F]{1,4}){1,3}|(?:[0-9a-fA-F]{1,4}:){1,3}(?::[0-9a-fA-F]{1,4}){1,4}|(?:[0-9a-fA-F]{1,4}:){1,2}(?::[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:(?::[0-9a-fA-F]{1,4}){1,6}|:(?::[0-9a-fA-F]{1,4}){1,7}|::)$/;
 
+// v0.9.5: ID Format Patterns
+/** CUID pattern - starts with 'c', followed by 8+ alphanumeric chars */
+const CUID_PATTERN = /^c[^\s-]{8,}$/;
+
+/** CUID2 pattern - lowercase alphanumeric only */
+const CUID2_PATTERN = /^[0-9a-z]+$/;
+
+/** ULID pattern - 26 Crockford Base32 characters */
+const ULID_PATTERN = /^[0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{26}$/;
+
+/** NanoID pattern - 21 URL-safe characters */
+const NANOID_PATTERN = /^[A-Za-z0-9_-]{21}$/;
+
+// v0.9.5: Encoding Patterns
+/** Base64 pattern - standard base64 with padding */
+const BASE64_PATTERN = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
+
+/** Hex pattern - hexadecimal string (non-empty) */
+const HEX_PATTERN = /^[0-9a-fA-F]+$/;
+
+/** JWT pattern - three non-empty base64url segments separated by dots */
+const JWT_PATTERN = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
+
 /**
  * Create a StringValidator with chainable constraint methods
  * @internal
@@ -1261,6 +1284,57 @@ function createStringValidator(
     return createStringValidator([...refinements, {
       check: (s) => IPV6_PATTERN.test(s),
       message: 'Must be a valid IPv6 address'
+    }]);
+  };
+
+  // v0.9.5: ID format validators
+  validator.cuid = (): StringValidator => {
+    return createStringValidator([...refinements, {
+      check: (s) => CUID_PATTERN.test(s),
+      message: 'Must be a valid CUID'
+    }]);
+  };
+
+  validator.cuid2 = (): StringValidator => {
+    return createStringValidator([...refinements, {
+      check: (s) => s.length > 0 && CUID2_PATTERN.test(s),
+      message: 'Must be a valid CUID2'
+    }]);
+  };
+
+  validator.ulid = (): StringValidator => {
+    return createStringValidator([...refinements, {
+      check: (s) => ULID_PATTERN.test(s),
+      message: 'Must be a valid ULID'
+    }]);
+  };
+
+  validator.nanoid = (): StringValidator => {
+    return createStringValidator([...refinements, {
+      check: (s) => NANOID_PATTERN.test(s),
+      message: 'Must be a valid NanoID'
+    }]);
+  };
+
+  // v0.9.5: Encoding validators
+  validator.base64 = (): StringValidator => {
+    return createStringValidator([...refinements, {
+      check: (s) => s.length === 0 || BASE64_PATTERN.test(s),
+      message: 'Must be a valid Base64 string'
+    }]);
+  };
+
+  validator.hex = (): StringValidator => {
+    return createStringValidator([...refinements, {
+      check: (s) => s.length > 0 && HEX_PATTERN.test(s),
+      message: 'Must be a valid hexadecimal string'
+    }]);
+  };
+
+  validator.jwt = (): StringValidator => {
+    return createStringValidator([...refinements, {
+      check: (s) => JWT_PATTERN.test(s),
+      message: 'Must be a valid JWT'
     }]);
   };
 
@@ -2751,6 +2825,15 @@ export {
   ip,
   ipv4,
   ipv6,
+  // ID format refinements (v0.9.5)
+  cuid,
+  cuid2,
+  ulid,
+  nanoid,
+  // Encoding refinements (v0.9.5)
+  base64,
+  hex,
+  jwt,
   // Number refinements
   int,
   safeInt,
