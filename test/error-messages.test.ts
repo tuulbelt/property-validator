@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { v } from '../src/v.js';
+import { v } from '../src/index.js';
 import { validate } from '../src/index.js';
 
 test('error messages - string validator', async (t) => {

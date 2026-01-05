@@ -5,7 +5,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { v } from '../src/v.ts';
+import { v } from '../src/index.js';
 import { validate } from '../src/index.ts';
 
 // Single refinement pass/fail (10 tests)

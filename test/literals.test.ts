@@ -5,7 +5,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { v } from '../src/v.ts';
+import { v } from '../src/index.js';
 import { validate } from '../src/index.ts';
 
 // Literal validation - all types (10 tests)

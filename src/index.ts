@@ -1394,9 +1394,9 @@ function createNumberValidator(
 /**
  * Validator builders
  */
-// v namespace is NOT exported from main - use @tuulbelt/property-validator/v for fluent API
-// This enables tree-shaking: named imports like string(), number() won't pull in the entire v object
-const v = {
+// v namespace provides fluent API for schema building
+// Also available via @tuulbelt/property-validator/v for explicit imports
+export const v = {
   /**
    * String validator with built-in constraints
    * @example
