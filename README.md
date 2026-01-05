@@ -1,10 +1,10 @@
 # Property Validator / `propval`
 
 [![Tests](https://github.com/tuulbelt/property-validator/actions/workflows/test.yml/badge.svg)](https://github.com/tuulbelt/property-validator/actions/workflows/test.yml)
-![Version](https://img.shields.io/badge/version-0.9.0-blue)
+![Version](https://img.shields.io/badge/version-0.9.1-blue)
 ![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)
 ![Dogfooded](https://img.shields.io/badge/dogfooded-🐕-purple)
-![Tests](https://img.shields.io/badge/tests-636%20passing-success)
+![Tests](https://img.shields.io/badge/tests-680%20passing-success)
 ![Zero Dependencies](https://img.shields.io/badge/dependencies-0-success)
 ![Performance](https://img.shields.io/badge/performance-high-brightgreen)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -142,6 +142,55 @@ const schema = v.object({ name: v.string() });
 import type { Validator, Result, ValidationOptions } from '@tuulbelt/property-validator/types';
 ```
 
+### Functional Refinement API (v0.9.1+)
+
+For maximum tree-shaking potential, use the functional refinement pattern inspired by Valibot:
+
+```typescript
+import { string, number, email, minLength, int, positive, validate } from '@tuulbelt/property-validator';
+
+// Refinements are separate function exports - bundlers can exclude unused ones
+const EmailSchema = string(email(), minLength(5));
+const AgeSchema = number(int(), positive());
+
+validate(EmailSchema, 'test@example.com'); // ✓
+validate(AgeSchema, 25); // ✓
+```
+
+**Available refinement exports:**
+
+**String refinements:**
+- Length: `minLength(n)`, `maxLength(n)`, `length(n)`, `nonempty()`
+- Format: `email()`, `url()`, `uuid()`, `pattern(regex, message?)`
+- Content: `startsWith(prefix)`, `endsWith(suffix)`, `includes(substring)`
+- Date/Time: `datetime()`, `date()`, `time()`
+- Network: `ip()`, `ipv4()`, `ipv6()`
+
+**Number refinements:**
+- Type: `int()`, `safeInt()`, `finite()`
+- Sign: `positive()`, `negative()`, `nonnegative()`, `nonpositive()`
+- Range: `min(n)`, `max(n)`, `range(min, max)`, `multipleOf(n)`
+
+**Array refinements:**
+- Length: `minItems(n)`, `maxItems(n)`, `itemCount(n)`, `nonemptyArray()`
+
+**Comparison: Chainable vs Functional API:**
+
+```typescript
+// Chainable API (compact, all methods bundled)
+const schema1 = v.string().email().min(5);
+
+// Functional API (tree-shakeable, explicit imports)
+import { string, email, minLength } from '@tuulbelt/property-validator';
+const schema2 = string(email(), minLength(5));
+
+// Both produce equivalent validators!
+```
+
+**When to use which:**
+- **Chainable API** (`v.string().email()`): Compact syntax, great for quick prototyping
+- **Functional API** (`string(email())`): Maximum tree-shaking, explicit about what's used
+
 ### Bundle Size
 
 | Import Style | Size (minified) | Size (gzipped) |
@@ -154,7 +203,7 @@ While named exports are available for all validator types, the current architect
 
 1. **Core validators are tree-shakeable**: If you only import `{ string, object, validate }`, bundlers can potentially exclude unused validator types
 
-2. **Built-in validators are NOT tree-shakeable**: Methods like `.email()`, `.url()`, `.int()`, `.positive()` are attached to validator instances, not exported separately. If you import `string()`, all string methods are included.
+2. **Refinements are tree-shakeable (v0.9.1+)**: Using the functional API, bundlers can exclude unused refinements like `uuid()` if you only use `email()`
 
 3. **Shared internals**: Validators share common validation machinery, so eliminating a single validator type doesn't significantly reduce bundle size
 
@@ -634,6 +683,12 @@ If you're migrating from another validation library, see [MIGRATION.md](./MIGRAT
 - Streaming validation for large files
 
 ### Recently Completed
+
+**v0.9.1:**
+- ✅ **Functional refinement API** — `string(email(), minLength(5))` pattern
+- ✅ **Tree-shakeable refinements** — 32 refinement functions as separate exports
+- ✅ **Backwards compatible** — Chainable API still works unchanged
+- ✅ **44 new tests** — Full test coverage for functional API
 
 **v0.9.0:**
 - ✅ **Modular architecture** — Tree-shakeable named exports

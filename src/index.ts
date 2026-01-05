@@ -5,6 +5,7 @@
  * Runtime type validation with TypeScript inference.
  *
  * v0.9.0: Modular architecture - types extracted to ./types.ts
+ * v0.9.1: Functional refinements API for tree-shaking support
  */
 
 import { realpathSync } from 'node:fs';
@@ -25,6 +26,9 @@ export type {
   UnionType,
   CompiledValidator,
   CompiledCheck,
+  StringRefinement,
+  NumberRefinement,
+  ArrayRefinement,
 } from './types.js';
 
 // Import types for internal use
@@ -36,8 +40,13 @@ import type {
   ArrayValidator,
   StringValidator,
   NumberValidator,
+  TupleType,
+  UnionType,
   CompiledValidator,
   CompiledCheck,
+  StringRefinement,
+  NumberRefinement,
+  ArrayRefinement,
 } from './types.js';
 
 // Import ValidationError class for runtime use
@@ -2402,9 +2411,202 @@ export const v = {
  * This enables bundlers to tree-shake unused validators.
  */
 
-// Primitive validators
-export const string = v.string;
-export const number = v.number;
+// ============================================================================
+// Tree-Shakeable Primitive Validators (v0.9.1)
+// ============================================================================
+
+/**
+ * String validator - accepts optional refinements for tree-shaking
+ *
+ * @example
+ * // Without refinements (backwards compatible, has chainable methods)
+ * const s = string();
+ * const email = string().email();
+ *
+ * @example
+ * // With refinements (tree-shakeable, no chainable methods)
+ * import { string, email, minLength } from 'property-validator';
+ * const emailSchema = string(email(), minLength(5));
+ */
+export function string(...refinements: StringRefinement[]): StringValidator | Validator<string> {
+  if (refinements.length === 0) {
+    // No refinements: return chainable StringValidator (backwards compatible)
+    return v.string();
+  }
+
+  // With refinements: create optimized validator without chainable methods
+  // This enables tree-shaking since we only import the refinements we use
+  const internalRefinements = refinements.map(r => ({
+    check: r.check,
+    message: r.message,
+  }));
+
+  // Use internal createStringValidator but return as plain Validator
+  // (chainable methods are excluded for tree-shaking)
+  const validateFn = (data: unknown): data is string => {
+    if (typeof data !== 'string') return false;
+    return internalRefinements.every(r => r.check(data));
+  };
+
+  const errorFn = (data: unknown): string => {
+    if (typeof data !== 'string') {
+      return `Expected string, got ${data === null ? 'null' : data === undefined ? 'undefined' : typeof data}`;
+    }
+    for (const r of internalRefinements) {
+      if (!r.check(data)) {
+        return r.message;
+      }
+    }
+    return 'String validation failed';
+  };
+
+  const validator: Validator<string> = {
+    validate: validateFn,
+    error: errorFn,
+    refine(predicate: (value: string) => boolean, message: string): Validator<string> {
+      return string(...refinements, {
+        _kind: 'string-refinement',
+        check: predicate,
+        message,
+      });
+    },
+    transform<U>(fn: (value: string) => U): Validator<U> {
+      const transformedValidator = v.string().transform(fn);
+      return transformedValidator;
+    },
+    optional(): Validator<string | undefined> {
+      return v.optional(this);
+    },
+    nullable(): Validator<string | null> {
+      return v.nullable(this);
+    },
+    nullish(): Validator<string | undefined | null> {
+      const base = this;
+      return {
+        validate: (data): data is string | undefined | null =>
+          data === undefined || data === null || base.validate(data),
+        error: (data) => base.error(data),
+        refine: (pred, msg) => base.refine(pred as any, msg) as any,
+        transform: (fn) => base.transform(fn as any) as any,
+        optional: () => base.optional() as any,
+        nullable: () => base.nullable() as any,
+        nullish: () => base.nullish() as any,
+        default: (val) => base.default(val as any) as any,
+      };
+    },
+    default(value: string | (() => string)): Validator<string> {
+      const defaultValidator = v.string().default(value);
+      return defaultValidator;
+    },
+  };
+
+  validator._type = 'string';
+
+  // Enable JIT bypass for fast path
+  if (internalRefinements.length === 0) {
+    validator._compiled = (data: unknown) => typeof data === 'string';
+  }
+
+  return validator;
+}
+
+/**
+ * Number validator - accepts optional refinements for tree-shaking
+ *
+ * @example
+ * // Without refinements (backwards compatible, has chainable methods)
+ * const n = number();
+ * const age = number().int().positive();
+ *
+ * @example
+ * // With refinements (tree-shakeable, no chainable methods)
+ * import { number, int, positive, min } from 'property-validator';
+ * const ageSchema = number(int(), positive());
+ * const priceSchema = number(min(0));
+ */
+export function number(...refinements: NumberRefinement[]): NumberValidator | Validator<number> {
+  if (refinements.length === 0) {
+    // No refinements: return chainable NumberValidator (backwards compatible)
+    return v.number();
+  }
+
+  // With refinements: create optimized validator without chainable methods
+  const internalRefinements = refinements.map(r => ({
+    check: r.check,
+    message: r.message,
+  }));
+
+  const validateFn = (data: unknown): data is number => {
+    if (typeof data !== 'number' || Number.isNaN(data)) return false;
+    return internalRefinements.every(r => r.check(data));
+  };
+
+  const errorFn = (data: unknown): string => {
+    if (typeof data !== 'number') {
+      return `Expected number, got ${data === null ? 'null' : data === undefined ? 'undefined' : typeof data}`;
+    }
+    if (Number.isNaN(data)) {
+      return 'Expected number, got NaN';
+    }
+    for (const r of internalRefinements) {
+      if (!r.check(data)) {
+        return r.message;
+      }
+    }
+    return 'Number validation failed';
+  };
+
+  const validator: Validator<number> = {
+    validate: validateFn,
+    error: errorFn,
+    refine(predicate: (value: number) => boolean, message: string): Validator<number> {
+      return number(...refinements, {
+        _kind: 'number-refinement',
+        check: predicate,
+        message,
+      });
+    },
+    transform<U>(fn: (value: number) => U): Validator<U> {
+      const transformedValidator = v.number().transform(fn);
+      return transformedValidator;
+    },
+    optional(): Validator<number | undefined> {
+      return v.optional(this);
+    },
+    nullable(): Validator<number | null> {
+      return v.nullable(this);
+    },
+    nullish(): Validator<number | undefined | null> {
+      const base = this;
+      return {
+        validate: (data): data is number | undefined | null =>
+          data === undefined || data === null || base.validate(data),
+        error: (data) => base.error(data),
+        refine: (pred, msg) => base.refine(pred as any, msg) as any,
+        transform: (fn) => base.transform(fn as any) as any,
+        optional: () => base.optional() as any,
+        nullable: () => base.nullable() as any,
+        nullish: () => base.nullish() as any,
+        default: (val) => base.default(val as any) as any,
+      };
+    },
+    default(value: number | (() => number)): Validator<number> {
+      const defaultValidator = v.number().default(value);
+      return defaultValidator;
+    },
+  };
+
+  validator._type = 'number';
+
+  // Enable JIT bypass for fast path
+  if (internalRefinements.length === 0) {
+    validator._compiled = (data: unknown) => typeof data === 'number' && !Number.isNaN(data);
+  }
+
+  return validator;
+}
+
+// Other primitive validators (backwards compatible)
 export const boolean = v.boolean;
 
 // Composite validators
@@ -2426,6 +2628,49 @@ export const lazy = v.lazy;
 // Enum validator (renamed to avoid conflict with TS reserved word)
 const enumValidator = v.enum;
 export { enumValidator as enum_ };
+
+// ============================================================================
+// Tree-Shakeable Refinement Functions (v0.9.1)
+// ============================================================================
+
+// Re-export all refinement functions for tree-shaking
+export {
+  // String refinements
+  minLength,
+  maxLength,
+  length,
+  nonempty,
+  email,
+  url,
+  uuid,
+  pattern,
+  startsWith,
+  endsWith,
+  includes,
+  datetime,
+  date,
+  time,
+  ip,
+  ipv4,
+  ipv6,
+  // Number refinements
+  int,
+  safeInt,
+  positive,
+  negative,
+  nonnegative,
+  nonpositive,
+  min,
+  max,
+  range,
+  finite,
+  multipleOf,
+  // Array refinements
+  minItems,
+  maxItems,
+  itemCount,
+  nonemptyArray,
+} from './refinements/index.js';
 
 /**
  * Parse command line arguments
@@ -2454,13 +2699,13 @@ function parseArgs(args: string[]): CliOptions {
     } else if (arg === '--api') {
       showApi = true;
     } else if (arg === '--version' || arg === '-V') {
-      console.log('property-validator v0.8.5');
+      console.log('property-validator v0.9.1');
       console.log('Runtime type validation with TypeScript inference');
       process.exit(0);
     } else if (arg === '--help' || arg === '-h') {
       console.log(`Usage: propval [options] <json-data>
 
-Property Validator v0.8.5 - Runtime type validation with TypeScript inference.
+Property Validator v0.9.1 - Runtime type validation with TypeScript inference.
 
 Options:
   -v, --verbose  Enable verbose output
@@ -2506,7 +2751,7 @@ Library Usage:
 
 function showApi(): void {
   console.log(`
-Property Validator v0.8.5 - API Reference
+Property Validator v0.9.1 - API Reference
 
 ═══════════════════════════════════════════════════════════════════
  Validation Functions

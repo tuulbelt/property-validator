@@ -365,3 +365,37 @@ export type CompiledValidator<T> = (data: unknown) => Result<T>;
  * Compiled check type - boolean-only validation
  */
 export type CompiledCheck = (data: unknown) => boolean;
+
+// ============================================================================
+// Tree-Shakeable Refinement Types (v0.9.1)
+// ============================================================================
+
+/**
+ * String refinement - a constraint that can be applied to string validators
+ * Each refinement is a separate export, enabling tree-shaking
+ */
+export interface StringRefinement {
+  readonly _kind: 'string-refinement';
+  readonly check: (value: string) => boolean;
+  readonly message: string;
+}
+
+/**
+ * Number refinement - a constraint that can be applied to number validators
+ * Each refinement is a separate export, enabling tree-shaking
+ */
+export interface NumberRefinement {
+  readonly _kind: 'number-refinement';
+  readonly check: (value: number) => boolean;
+  readonly message: string;
+}
+
+/**
+ * Array refinement - a constraint that can be applied to array validators
+ * Each refinement is a separate export, enabling tree-shaking
+ */
+export interface ArrayRefinement<T = unknown> {
+  readonly _kind: 'array-refinement';
+  readonly check: (value: T[]) => boolean;
+  readonly message: string;
+}
