@@ -17,6 +17,7 @@
     "bench:ci": "node --import tsx benchmarks/ci/bench-ci.ts",
     "bench:compare": "node --import tsx benchmarks/ci/compare-baseline.ts",
     "bench:save-baseline": "npm run --silent bench:ci | npm run --silent bench:compare -- --save",
+    "bench:dashboard": "node --import tsx benchmarks/ci/generate-dashboard.ts",
     "dogfood": "npm run dogfood:flaky && npm run dogfood:diff",
     "dogfood:flaky": "flaky --test 'npm test' --runs 10",
     "dogfood:diff": "bash scripts/dogfood-diff.sh"
