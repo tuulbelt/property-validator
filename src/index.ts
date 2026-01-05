@@ -894,6 +894,103 @@ function generatePropertyCheck(
 }
 
 /**
+ * Generate inline type check code for a validator.
+ * Used by JIT union compilation to generate fast inline checks.
+ *
+ * @param validator - The validator to generate code for
+ * @param valueExpr - The expression representing the value (e.g., 'data')
+ * @returns Inline check code string, or null if cannot be inlined
+ * @internal
+ */
+function generateInlineTypeCheck(validator: Validator<any>, valueExpr: string): string | null {
+  const validatorType = validator._type;
+  const hasRefinements = validator._hasRefinements;
+  const hasTransform = validator._transform !== undefined;
+  const hasDefault = validator._default !== undefined;
+
+  // Only inline plain validators (no refinements, transforms, or defaults)
+  if (hasRefinements || hasTransform || hasDefault) {
+    return null;
+  }
+
+  // Primitives - inline type checks
+  if (validatorType === 'string') {
+    return `typeof ${valueExpr} === 'string'`;
+  } else if (validatorType === 'number') {
+    return `(typeof ${valueExpr} === 'number' && !Number.isNaN(${valueExpr}))`;
+  } else if (validatorType === 'boolean') {
+    return `typeof ${valueExpr} === 'boolean'`;
+  }
+
+  // Literals - inline equality check
+  const literalValue = (validator as any)._literalValue;
+  if (literalValue !== undefined) {
+    if (typeof literalValue === 'string') {
+      return `${valueExpr} === '${literalValue.replace(/'/g, "\\'")}'`;
+    } else {
+      return `${valueExpr} === ${JSON.stringify(literalValue)}`;
+    }
+  }
+
+  // Cannot inline this validator type
+  return null;
+}
+
+/**
+ * Compile a union validator using new Function() for maximum speed.
+ *
+ * Generates code like: `return (typeof data === 'string') || (typeof data === 'number');`
+ * This eliminates loop overhead and function call overhead per validator.
+ *
+ * @param validators - Array of validators in the union
+ * @returns Compiled union check function, or null if cannot compile
+ * @internal
+ */
+function compileUnionValidator(validators: readonly Validator<any>[]): ((data: unknown) => boolean) | null {
+  // Check if code generation is available (CSP check)
+  if (!canUseCodeGeneration()) {
+    return null;
+  }
+
+  const checks: string[] = [];
+  const closures: Record<string, (value: unknown) => boolean> = {};
+  let closureIndex = 0;
+
+  for (const validator of validators) {
+    // Try to generate inline code first
+    const inlineCode = generateInlineTypeCheck(validator, 'data');
+
+    if (inlineCode !== null) {
+      checks.push(`(${inlineCode})`);
+    } else if (validator._compiled && !validator._hasRefinements) {
+      // Use closure for complex validators that have _compiled
+      const closureName = `c${closureIndex++}`;
+      closures[closureName] = validator._compiled;
+      checks.push(`closures.${closureName}(data)`);
+    } else {
+      // Cannot compile this union - fall back to loop-based approach
+      return null;
+    }
+  }
+
+  // Generate the union check function
+  const code = `return ${checks.join(' || ')};`;
+
+  try {
+    const fn = new Function('closures', `
+      return function(data) {
+        ${code}
+      }
+    `)(closures) as (data: unknown) => boolean;
+
+    return fn;
+  } catch {
+    // Fallback if code generation fails
+    return null;
+  }
+}
+
+/**
  * Compile-time optimization for array validators.
  *
  * Pre-compiles specialized validators at construction time to eliminate
@@ -1859,26 +1956,38 @@ export const v = {
   union<T extends readonly Validator<any>[]>(
     validators: T
   ): Validator<UnionType<T>> {
-    // v0.8.0 OPTIMIZATION: Check if all child validators have _compiled for JIT bypass
-    const allHaveCompiled = validators.every((v) => v._compiled !== undefined);
     const noneHaveRefinements = validators.every((v) => !v._hasRefinements);
 
-    // Create compiled validation function that uses child _compiled if available
-    const compiledValidate = allHaveCompiled && noneHaveRefinements
-      ? (data: unknown): boolean => {
-          // Fast path: use _compiled for each child validator
-          for (const v of validators) {
-            if (v._compiled!(data)) return true;
+    // v0.8.5 OPTIMIZATION: Try JIT compilation first (generates inline OR expression)
+    // This eliminates loop overhead: `typeof data === 'string' || typeof data === 'number'`
+    const jitCompiled = noneHaveRefinements ? compileUnionValidator(validators) : null;
+
+    // Create compiled validation function
+    let compiledValidate: (data: unknown) => boolean;
+
+    if (jitCompiled !== null) {
+      // Best path: JIT-compiled inline checks (no loop, no function calls for primitives)
+      compiledValidate = jitCompiled;
+    } else {
+      // v0.8.0 fallback: Check if all child validators have _compiled for loop-based bypass
+      const allHaveCompiled = validators.every((v) => v._compiled !== undefined);
+
+      compiledValidate = allHaveCompiled && noneHaveRefinements
+        ? (data: unknown): boolean => {
+            // Fast path: use _compiled for each child validator
+            for (const v of validators) {
+              if (v._compiled!(data)) return true;
+            }
+            return false;
           }
-          return false;
-        }
-      : (data: unknown): boolean => {
-          // Fallback: use .validate() method
-          for (const v of validators) {
-            if (v.validate(data)) return true;
-          }
-          return false;
-        };
+        : (data: unknown): boolean => {
+            // Fallback: use .validate() method
+            for (const v of validators) {
+              if (v.validate(data)) return true;
+            }
+            return false;
+          };
+    }
 
     const validator = createValidator(
       (data): data is UnionType<T> => compiledValidate(data),
@@ -1920,6 +2029,9 @@ export const v = {
 
     // Expose _compiled for unions to chain JIT bypass
     validator._compiled = compiledValidate;
+
+    // v0.8.5: Store literal value for JIT union inlining
+    (validator as any)._literalValue = value;
 
     return validator;
   },
