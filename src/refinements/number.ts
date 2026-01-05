@@ -165,3 +165,56 @@ export function multipleOf(n: number): NumberRefinement {
     message: `Number must be a multiple of ${n}`,
   };
 }
+
+// ============================================================================
+// v0.9.5: Extended Number Validators
+// ============================================================================
+
+/**
+ * Must be a valid network port number (0-65535)
+ * @example number(port())
+ * @example number(int(), port()) // Integer port
+ */
+export function port(): NumberRefinement {
+  return {
+    _kind: 'number-refinement',
+    check: (n) => Number.isInteger(n) && n >= 0 && n <= 65535,
+    message: 'Must be a valid port number (0-65535)',
+  };
+}
+
+/**
+ * Must be a valid latitude (-90 to 90)
+ * @example number(latitude())
+ */
+export function latitude(): NumberRefinement {
+  return {
+    _kind: 'number-refinement',
+    check: (n) => n >= -90 && n <= 90,
+    message: 'Must be a valid latitude (-90 to 90)',
+  };
+}
+
+/**
+ * Must be a valid longitude (-180 to 180)
+ * @example number(longitude())
+ */
+export function longitude(): NumberRefinement {
+  return {
+    _kind: 'number-refinement',
+    check: (n) => n >= -180 && n <= 180,
+    message: 'Must be a valid longitude (-180 to 180)',
+  };
+}
+
+/**
+ * Must be a percentage value (0 to 100)
+ * @example number(percentage())
+ */
+export function percentage(): NumberRefinement {
+  return {
+    _kind: 'number-refinement',
+    check: (n) => n >= 0 && n <= 100,
+    message: 'Must be a valid percentage (0-100)',
+  };
+}

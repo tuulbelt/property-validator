@@ -54,6 +54,11 @@ export {
   range,
   finite,
   multipleOf,
+  // Extended number refinements (v0.9.5)
+  port,
+  latitude,
+  longitude,
+  percentage,
 } from './number.js';
 
 // Array refinements

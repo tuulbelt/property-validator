@@ -447,3 +447,223 @@ describe('number validators: multipleOf()', () => {
     assert.strictEqual(validate(priceValidator, 1001).ok, false);  // Too high
   });
 });
+
+// ============================================================================
+// v0.9.5: Extended Number Validators
+// ============================================================================
+
+describe('number validators: port()', () => {
+  test('accepts valid port numbers (0-65535)', () => {
+    const validator = v.number().port();
+    const validPorts = [0, 1, 80, 443, 3000, 8080, 65535];
+
+    for (const port of validPorts) {
+      const result = validate(validator, port);
+      assert.strictEqual(result.ok, true, `Expected ${port} to be valid port`);
+    }
+  });
+
+  test('rejects invalid port numbers', () => {
+    const validator = v.number().port();
+    const invalidPorts = [-1, 65536, 70000, 1.5, 3.14];
+
+    for (const port of invalidPorts) {
+      const result = validate(validator, port);
+      assert.strictEqual(result.ok, false, `Expected ${port} to be invalid port`);
+    }
+  });
+
+  test('port requires integer (rejects decimals)', () => {
+    const validator = v.number().port();
+    assert.strictEqual(validate(validator, 80.5).ok, false);
+    assert.strictEqual(validate(validator, 443.99).ok, false);
+  });
+
+  test('provides clear error message', () => {
+    const validator = v.number().port();
+    const result = validate(validator, 70000);
+    assert.strictEqual(result.ok, false);
+    if (!result.ok) {
+      assert.match(result.error, /port/);
+    }
+  });
+});
+
+describe('number validators: latitude()', () => {
+  test('accepts valid latitudes (-90 to 90)', () => {
+    const validator = v.number().latitude();
+    const validLats = [-90, -45.5, 0, 45.5, 90, 51.5074, -33.8688];
+
+    for (const lat of validLats) {
+      const result = validate(validator, lat);
+      assert.strictEqual(result.ok, true, `Expected ${lat} to be valid latitude`);
+    }
+  });
+
+  test('rejects invalid latitudes', () => {
+    const validator = v.number().latitude();
+    const invalidLats = [-91, 91, -180, 180, 100, -100];
+
+    for (const lat of invalidLats) {
+      const result = validate(validator, lat);
+      assert.strictEqual(result.ok, false, `Expected ${lat} to be invalid latitude`);
+    }
+  });
+
+  test('accepts decimal latitudes', () => {
+    const validator = v.number().latitude();
+    assert.strictEqual(validate(validator, 40.7128).ok, true);  // New York
+    assert.strictEqual(validate(validator, -34.6037).ok, true); // Buenos Aires
+  });
+
+  test('provides clear error message', () => {
+    const validator = v.number().latitude();
+    const result = validate(validator, 95);
+    assert.strictEqual(result.ok, false);
+    if (!result.ok) {
+      assert.match(result.error, /latitude/);
+    }
+  });
+});
+
+describe('number validators: longitude()', () => {
+  test('accepts valid longitudes (-180 to 180)', () => {
+    const validator = v.number().longitude();
+    const validLngs = [-180, -90, 0, 90, 180, -122.4194, 139.6917];
+
+    for (const lng of validLngs) {
+      const result = validate(validator, lng);
+      assert.strictEqual(result.ok, true, `Expected ${lng} to be valid longitude`);
+    }
+  });
+
+  test('rejects invalid longitudes', () => {
+    const validator = v.number().longitude();
+    const invalidLngs = [-181, 181, -200, 200, 360, -360];
+
+    for (const lng of invalidLngs) {
+      const result = validate(validator, lng);
+      assert.strictEqual(result.ok, false, `Expected ${lng} to be invalid longitude`);
+    }
+  });
+
+  test('accepts decimal longitudes', () => {
+    const validator = v.number().longitude();
+    assert.strictEqual(validate(validator, -74.006).ok, true);   // New York
+    assert.strictEqual(validate(validator, 151.2093).ok, true);  // Sydney
+  });
+
+  test('provides clear error message', () => {
+    const validator = v.number().longitude();
+    const result = validate(validator, 200);
+    assert.strictEqual(result.ok, false);
+    if (!result.ok) {
+      assert.match(result.error, /longitude/);
+    }
+  });
+});
+
+describe('number validators: percentage()', () => {
+  test('accepts valid percentages (0 to 100)', () => {
+    const validator = v.number().percentage();
+    const validPcts = [0, 25, 50, 75, 100, 33.33, 66.67];
+
+    for (const pct of validPcts) {
+      const result = validate(validator, pct);
+      assert.strictEqual(result.ok, true, `Expected ${pct} to be valid percentage`);
+    }
+  });
+
+  test('rejects invalid percentages', () => {
+    const validator = v.number().percentage();
+    const invalidPcts = [-1, -0.1, 100.1, 101, 200];
+
+    for (const pct of invalidPcts) {
+      const result = validate(validator, pct);
+      assert.strictEqual(result.ok, false, `Expected ${pct} to be invalid percentage`);
+    }
+  });
+
+  test('accepts decimal percentages', () => {
+    const validator = v.number().percentage();
+    assert.strictEqual(validate(validator, 0.5).ok, true);
+    assert.strictEqual(validate(validator, 99.9).ok, true);
+  });
+
+  test('provides clear error message', () => {
+    const validator = v.number().percentage();
+    const result = validate(validator, 150);
+    assert.strictEqual(result.ok, false);
+    if (!result.ok) {
+      assert.match(result.error, /percentage/);
+    }
+  });
+});
+
+// ============================================================================
+// v0.9.5: Functional API tests (tree-shakeable)
+// ============================================================================
+
+import { number, port, latitude, longitude, percentage, int } from '../src/index.js';
+
+describe('v0.9.5 functional API: number validators', () => {
+  test('port() as functional refinement', () => {
+    const validator = number(port());
+    assert.strictEqual(validate(validator, 8080).ok, true);
+    assert.strictEqual(validate(validator, 70000).ok, false);
+  });
+
+  test('latitude() as functional refinement', () => {
+    const validator = number(latitude());
+    assert.strictEqual(validate(validator, 45.5).ok, true);
+    assert.strictEqual(validate(validator, 95).ok, false);
+  });
+
+  test('longitude() as functional refinement', () => {
+    const validator = number(longitude());
+    assert.strictEqual(validate(validator, -122.4).ok, true);
+    assert.strictEqual(validate(validator, 200).ok, false);
+  });
+
+  test('percentage() as functional refinement', () => {
+    const validator = number(percentage());
+    assert.strictEqual(validate(validator, 50).ok, true);
+    assert.strictEqual(validate(validator, 150).ok, false);
+  });
+});
+
+describe('v0.9.5: chaining new number validators', () => {
+  test('port with additional constraints', () => {
+    // Well-known ports (1-1023) require root
+    const wellKnownPort = v.number().port().max(1023);
+    assert.strictEqual(validate(wellKnownPort, 80).ok, true);
+    assert.strictEqual(validate(wellKnownPort, 443).ok, true);
+    assert.strictEqual(validate(wellKnownPort, 8080).ok, false); // Too high
+  });
+
+  test('coordinates as combined validator', () => {
+    // Create a coordinate pair validator
+    const latValidator = v.number().latitude();
+    const lngValidator = v.number().longitude();
+
+    // Test some real cities
+    assert.strictEqual(validate(latValidator, 51.5074).ok, true);  // London lat
+    assert.strictEqual(validate(lngValidator, -0.1278).ok, true);  // London lng
+    assert.strictEqual(validate(latValidator, 35.6762).ok, true);  // Tokyo lat
+    assert.strictEqual(validate(lngValidator, 139.6503).ok, true); // Tokyo lng
+  });
+
+  test('percentage as integer only', () => {
+    // Some systems require integer percentages
+    const intPercentage = v.number().percentage().int();
+    assert.strictEqual(validate(intPercentage, 50).ok, true);
+    assert.strictEqual(validate(intPercentage, 50.5).ok, false); // Must be integer
+  });
+
+  test('functional API: combining refinements', () => {
+    // Port that's also positive (redundant but demonstrates chaining)
+    const validator = number(port(), int());
+    assert.strictEqual(validate(validator, 8080).ok, true);
+    assert.strictEqual(validate(validator, 80.5).ok, false);
+  });
+});

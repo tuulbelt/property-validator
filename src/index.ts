@@ -1462,6 +1462,35 @@ function createNumberValidator(
     }]);
   };
 
+  // v0.9.5: Extended number validators
+  validator.port = (): NumberValidator => {
+    return createNumberValidator([...refinements, {
+      check: (n) => Number.isInteger(n) && n >= 0 && n <= 65535,
+      message: 'Must be a valid port number (0-65535)'
+    }]);
+  };
+
+  validator.latitude = (): NumberValidator => {
+    return createNumberValidator([...refinements, {
+      check: (n) => n >= -90 && n <= 90,
+      message: 'Must be a valid latitude (-90 to 90)'
+    }]);
+  };
+
+  validator.longitude = (): NumberValidator => {
+    return createNumberValidator([...refinements, {
+      check: (n) => n >= -180 && n <= 180,
+      message: 'Must be a valid longitude (-180 to 180)'
+    }]);
+  };
+
+  validator.percentage = (): NumberValidator => {
+    return createNumberValidator([...refinements, {
+      check: (n) => n >= 0 && n <= 100,
+      message: 'Must be a valid percentage (0-100)'
+    }]);
+  };
+
   return validator;
 }
 
@@ -2846,6 +2875,11 @@ export {
   range,
   finite,
   multipleOf,
+  // Extended number refinements (v0.9.5)
+  port,
+  latitude,
+  longitude,
+  percentage,
   // Array refinements
   minItems,
   maxItems,

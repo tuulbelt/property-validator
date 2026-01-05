@@ -351,6 +351,16 @@ export interface NumberValidator extends Validator<number> {
   safeInt(): NumberValidator;
   /** Must be a multiple of n (useful for currency, steps) */
   multipleOf(n: number): NumberValidator;
+
+  // v0.9.5: Extended number validators
+  /** Must be a valid network port number (0-65535) */
+  port(): NumberValidator;
+  /** Must be a valid latitude (-90 to 90) */
+  latitude(): NumberValidator;
+  /** Must be a valid longitude (-180 to 180) */
+  longitude(): NumberValidator;
+  /** Must be a percentage value (0 to 100) */
+  percentage(): NumberValidator;
 }
 
 /**
