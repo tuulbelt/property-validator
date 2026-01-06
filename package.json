@@ -25,8 +25,8 @@
   },
   "sideEffects": false,
   "bin": {
-    "propval": "./src/index.ts",
-    "property-validator": "./src/index.ts"
+    "propval": "./src/cli.ts",
+    "property-validator": "./src/cli.ts"
   },
   "scripts": {
     "build": "tsc",
