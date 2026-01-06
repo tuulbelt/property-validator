@@ -4,14 +4,16 @@
  * Converts property-validator schemas to JSON Schema Draft 7.
  * Enables OpenAPI ecosystem compatibility.
  *
- * Supported with Functional API (full introspection):
- *   - Refinements: `string(email(), minLength(5))` → format: 'email', minLength: 5
- *   - Optional: `optional(string())` → property not in required array
- *   - Nullable: `nullable(string())` → type: ['string', 'null']
+ * Both APIs support full introspection:
  *
- * Chainable API Limitation:
- *   - `v.string().email().min(5)` - refinements NOT exported (no introspection)
- *   - `.optional()` / `.nullable()` methods on chainable validators also not introspectable
+ * Functional API:
+ *   - `string(email(), minLength(5))` → format: 'email', minLength: 5
+ *   - `optional(string())` → property not in required array
+ *   - `nullable(string())` → type: ['string', 'null']
+ *
+ * Chainable API:
+ *   - `v.string().email().min(5)` → format: 'email', minLength: 5
+ *   - `.optional()` / `.nullable()` methods also supported
  *
  * @example
  * ```typescript

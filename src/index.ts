@@ -691,7 +691,7 @@ function booleanError(data: unknown): string {
  * @internal
  */
 function createStringValidator(
-  refinements: Array<{ check: (s: string) => boolean; message: string }> = []
+  refinements: Array<{ check: (s: string) => boolean; message: string; jsonSchema?: { type: string; value?: unknown; format?: string } }> = []
 ): StringValidator {
   // Base validation: typeof + all refinements
   const validateFn = (data: unknown): data is string => {
@@ -720,34 +720,44 @@ function createStringValidator(
     validator._compiled = validateString;
   } else {
     validator._hasRefinements = true;
+    // Expose refinements for JSON Schema introspection
+    validator._refinements = refinements as any;
   }
 
   // Add chainable methods
   validator.min = (length: number): StringValidator => {
     return createStringValidator([...refinements, {
       check: (s) => s.length >= length,
-      message: `String must be at least ${length} character(s)`
+      message: `String must be at least ${length} character(s)`,
+      jsonSchema: { type: 'minLength', value: length }
     }]);
   };
 
   validator.max = (length: number): StringValidator => {
     return createStringValidator([...refinements, {
       check: (s) => s.length <= length,
-      message: `String must be at most ${length} character(s)`
+      message: `String must be at most ${length} character(s)`,
+      jsonSchema: { type: 'maxLength', value: length }
     }]);
   };
 
   validator.length = (length: number): StringValidator => {
     return createStringValidator([...refinements, {
       check: (s) => s.length === length,
-      message: `String must be exactly ${length} character(s)`
+      message: `String must be exactly ${length} character(s)`,
+      jsonSchema: { type: 'minLength', value: length }  // minLength + maxLength = exact
+    }, {
+      check: () => true,  // No-op check, just adds maxLength
+      message: '',
+      jsonSchema: { type: 'maxLength', value: length }
     }]);
   };
 
   validator.nonempty = (): StringValidator => {
     return createStringValidator([...refinements, {
       check: (s) => s.length > 0,
-      message: 'String cannot be empty'
+      message: 'String cannot be empty',
+      jsonSchema: { type: 'minLength', value: 1 }
     }]);
   };
 
@@ -755,7 +765,8 @@ function createStringValidator(
     return createStringValidator([...refinements, {
       // RFC 5321: max 254 chars - length check prevents ReDoS
       check: (s) => s.length <= 254 && EMAIL_PATTERN.test(s),
-      message: 'Must be a valid email address'
+      message: 'Must be a valid email address',
+      jsonSchema: { type: 'format', format: 'email' }
     }]);
   };
 
@@ -763,63 +774,72 @@ function createStringValidator(
     return createStringValidator([...refinements, {
       // Practical limit of 2083 chars - length check prevents ReDoS
       check: (s) => s.length <= 2083 && URL_PATTERN.test(s),
-      message: 'Must be a valid URL'
+      message: 'Must be a valid URL',
+      jsonSchema: { type: 'format', format: 'uri' }
     }]);
   };
 
   validator.uuid = (): StringValidator => {
     return createStringValidator([...refinements, {
       check: (s) => UUID_PATTERN.test(s),
-      message: 'Must be a valid UUID'
+      message: 'Must be a valid UUID',
+      jsonSchema: { type: 'format', format: 'uuid' }
     }]);
   };
 
   validator.pattern = (regex: RegExp, message?: string): StringValidator => {
     return createStringValidator([...refinements, {
       check: (s) => regex.test(s),
-      message: message ? `Must be a valid ${message}` : `String must match pattern ${regex}`
+      message: message ? `Must be a valid ${message}` : `String must match pattern ${regex}`,
+      jsonSchema: { type: 'pattern', value: regex.source }
     }]);
   };
 
   validator.startsWith = (prefix: string): StringValidator => {
     return createStringValidator([...refinements, {
       check: (s) => s.startsWith(prefix),
-      message: `String must start with "${prefix}"`
+      message: `String must start with "${prefix}"`,
+      jsonSchema: { type: 'pattern', value: `^${escapeRegex(prefix)}` }
     }]);
   };
 
   validator.endsWith = (suffix: string): StringValidator => {
     return createStringValidator([...refinements, {
       check: (s) => s.endsWith(suffix),
-      message: `String must end with "${suffix}"`
+      message: `String must end with "${suffix}"`,
+      jsonSchema: { type: 'pattern', value: `${escapeRegex(suffix)}$` }
     }]);
   };
 
   validator.includes = (substring: string): StringValidator => {
     return createStringValidator([...refinements, {
       check: (s) => s.includes(substring),
-      message: `String must contain "${substring}"`
+      message: `String must contain "${substring}"`,
+      jsonSchema: { type: 'pattern', value: escapeRegex(substring) }
     }]);
   };
 
   validator.datetime = (): StringValidator => {
     return createStringValidator([...refinements, {
       check: (s) => DATETIME_PATTERN.test(s),
-      message: 'Must be a valid ISO 8601 datetime (YYYY-MM-DDTHH:MM:SS)'
+      message: 'Must be a valid ISO 8601 datetime (YYYY-MM-DDTHH:MM:SS)',
+      jsonSchema: { type: 'format', format: 'date-time' }
     }]);
   };
 
   validator.date = (): StringValidator => {
     return createStringValidator([...refinements, {
       check: (s) => DATE_PATTERN.test(s),
-      message: 'Must be a valid ISO 8601 date (YYYY-MM-DD)'
+      message: 'Must be a valid ISO 8601 date (YYYY-MM-DD)',
+      jsonSchema: { type: 'format', format: 'date' }
     }]);
   };
 
   validator.time = (): StringValidator => {
     return createStringValidator([...refinements, {
       check: (s) => TIME_PATTERN.test(s),
-      message: 'Must be a valid ISO 8601 time (HH:MM:SS)'
+      message: 'Must be a valid ISO 8601 time (HH:MM:SS)',
+      jsonSchema: { type: 'format', format: 'time' }
     }]);
   };
 
@@ -828,6 +848,7 @@ function createStringValidator(
       // Max 45 chars (IPv6) - length check prevents ReDoS
       check: (s) => s.length <= 45 && (IPV4_PATTERN.test(s) || IPV6_PATTERN.test(s)),
       message: 'Must be a valid IP address (IPv4 or IPv6)'
+      // No standard JSON Schema format for ip (could be ipv4 or ipv6)
     }]);
   };
 
@@ -835,7 +856,8 @@ function createStringValidator(
     return createStringValidator([...refinements, {
       // Max 15 chars (xxx.xxx.xxx.xxx) - length check prevents ReDoS
       check: (s) => s.length <= 15 && IPV4_PATTERN.test(s),
-      message: 'Must be a valid IPv4 address'
+      message: 'Must be a valid IPv4 address',
+      jsonSchema: { type: 'format', format: 'ipv4' }
     }]);
   };
 
@@ -843,7 +865,8 @@ function createStringValidator(
     return createStringValidator([...refinements, {
       // Max 45 chars - length check prevents ReDoS
       check: (s) => s.length <= 45 && IPV6_PATTERN.test(s),
-      message: 'Must be a valid IPv6 address'
+      message: 'Must be a valid IPv6 address',
+      jsonSchema: { type: 'format', format: 'ipv6' }
     }]);
   };
 
@@ -852,6 +875,7 @@ function createStringValidator(
     return createStringValidator([...refinements, {
       check: (s) => CUID_PATTERN.test(s),
       message: 'Must be a valid CUID'
+      // No standard JSON Schema format for cuid
     }]);
   };
 
@@ -859,6 +883,7 @@ function createStringValidator(
     return createStringValidator([...refinements, {
       check: (s) => s.length > 0 && CUID2_PATTERN.test(s),
       message: 'Must be a valid CUID2'
+      // No standard JSON Schema format for cuid2
     }]);
   };
 
@@ -866,6 +891,7 @@ function createStringValidator(
     return createStringValidator([...refinements, {
       check: (s) => ULID_PATTERN.test(s),
       message: 'Must be a valid ULID'
+      // No standard JSON Schema format for ulid
     }]);
   };
 
@@ -873,6 +899,7 @@ function createStringValidator(
     return createStringValidator([...refinements, {
       check: (s) => NANOID_PATTERN.test(s),
       message: 'Must be a valid NanoID'
+      // No standard JSON Schema format for nanoid
     }]);
   };
 
@@ -881,6 +908,7 @@ function createStringValidator(
     return createStringValidator([...refinements, {
       check: (s) => s.length === 0 || BASE64_PATTERN.test(s),
       message: 'Must be a valid Base64 string'
+      // No standard JSON Schema format for base64 (contentEncoding is draft-07+)
     }]);
   };
 
@@ -888,6 +916,7 @@ function createStringValidator(
     return createStringValidator([...refinements, {
       check: (s) => s.length > 0 && HEX_PATTERN.test(s),
       message: 'Must be a valid hexadecimal string'
+      // No standard JSON Schema format for hex
     }]);
   };
 
@@ -895,10 +924,16 @@ function createStringValidator(
     return createStringValidator([...refinements, {
       check: (s) => JWT_PATTERN.test(s),
       message: 'Must be a valid JWT'
+      // No standard JSON Schema format for jwt
     }]);
   };
 
   return validator;
+}
+
+// Helper to escape regex special characters for pattern generation
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /**
@@ -906,7 +941,7 @@ function createStringValidator(
  * @internal
  */
 function createNumberValidator(
-  refinements: Array<{ check: (n: number) => boolean; message: string }> = []
+  refinements: Array<{ check: (n: number) => boolean; message: string; jsonSchema?: { type: string; value?: unknown } }> = []
 ): NumberValidator {
   // Base validation: typeof + not NaN + all refinements
   const validateFn = (data: unknown): data is number => {
@@ -938,6 +973,8 @@ function createNumberValidator(
     validator._compiled = validateNumber;
   } else {
     validator._hasRefinements = true;
+    // Expose refinements for JSON Schema introspection
+    validator._refinements = refinements as any;
   }
 
   // Add chainable methods
@@ -945,55 +982,67 @@ function createNumberValidator(
     return createNumberValidator([...refinements, {
       check: (n) => Number.isInteger(n),
       message: 'Number must be an integer'
+      // No standard JSON Schema keyword for integer type (would need "type": "integer")
     }]);
   };
 
   validator.positive = (): NumberValidator => {
     return createNumberValidator([...refinements, {
       check: (n) => n > 0,
-      message: 'Number must be positive'
+      message: 'Number must be positive',
+      jsonSchema: { type: 'exclusiveMinimum', value: 0 }
     }]);
   };
 
   validator.negative = (): NumberValidator => {
     return createNumberValidator([...refinements, {
       check: (n) => n < 0,
-      message: 'Number must be negative'
+      message: 'Number must be negative',
+      jsonSchema: { type: 'exclusiveMaximum', value: 0 }
     }]);
   };
 
   validator.nonnegative = (): NumberValidator => {
     return createNumberValidator([...refinements, {
       check: (n) => n >= 0,
-      message: 'Number must be non-negative'
+      message: 'Number must be non-negative',
+      jsonSchema: { type: 'minimum', value: 0 }
     }]);
   };
 
   validator.nonpositive = (): NumberValidator => {
     return createNumberValidator([...refinements, {
       check: (n) => n <= 0,
-      message: 'Number must be non-positive'
+      message: 'Number must be non-positive',
+      jsonSchema: { type: 'maximum', value: 0 }
     }]);
   };
 
   validator.min = (minVal: number): NumberValidator => {
     return createNumberValidator([...refinements, {
       check: (n) => n >= minVal,
-      message: `Number must be at least ${minVal}`
+      message: `Number must be at least ${minVal}`,
+      jsonSchema: { type: 'minimum', value: minVal }
     }]);
   };
 
   validator.max = (maxVal: number): NumberValidator => {
     return createNumberValidator([...refinements, {
       check: (n) => n <= maxVal,
-      message: `Number must be at most ${maxVal}`
+      message: `Number must be at most ${maxVal}`,
+      jsonSchema: { type: 'maximum', value: maxVal }
     }]);
   };
 
   validator.range = (minVal: number, maxVal: number): NumberValidator => {
     return createNumberValidator([...refinements, {
       check: (n) => n >= minVal && n <= maxVal,
-      message: `Number must be between ${minVal} and ${maxVal}`
+      message: `Number must be between ${minVal} and ${maxVal}`,
+      jsonSchema: { type: 'minimum', value: minVal }
+    }, {
+      check: () => true,  // No-op check, just adds maximum
+      message: '',
+      jsonSchema: { type: 'maximum', value: maxVal }
     }]);
   };
 
@@ -1001,6 +1050,7 @@ function createNumberValidator(
     return createNumberValidator([...refinements, {
       check: (n) => Number.isFinite(n),
       message: 'Number must be finite'
+      // No standard JSON Schema keyword for finite
     }]);
   };
 
@@ -1008,6 +1058,7 @@ function createNumberValidator(
     return createNumberValidator([...refinements, {
       check: (n) => Number.isSafeInteger(n),
       message: 'Number must be a safe integer'
+      // No standard JSON Schema keyword for safe integer
     }]);
   };
 
@@ -1018,7 +1069,8 @@ function createNumberValidator(
         const remainder = Math.abs(n % divisor);
         return remainder < 1e-10 || Math.abs(remainder - Math.abs(divisor)) < 1e-10;
       },
-      message: `Number must be a multiple of ${divisor}`
+      message: `Number must be a multiple of ${divisor}`,
+      jsonSchema: { type: 'multipleOf', value: divisor }
     }]);
   };
 
@@ -1026,28 +1078,48 @@ function createNumberValidator(
   validator.port = (): NumberValidator => {
     return createNumberValidator([...refinements, {
       check: (n) => Number.isInteger(n) && n >= 0 && n <= 65535,
-      message: 'Must be a valid port number (0-65535)'
+      message: 'Must be a valid port number (0-65535)',
+      jsonSchema: { type: 'minimum', value: 0 }
+    }, {
+      check: () => true,
+      message: '',
+      jsonSchema: { type: 'maximum', value: 65535 }
     }]);
   };
 
   validator.latitude = (): NumberValidator => {
     return createNumberValidator([...refinements, {
       check: (n) => n >= -90 && n <= 90,
-      message: 'Must be a valid latitude (-90 to 90)'
+      message: 'Must be a valid latitude (-90 to 90)',
+      jsonSchema: { type: 'minimum', value: -90 }
+    }, {
+      check: () => true,
+      message: '',
+      jsonSchema: { type: 'maximum', value: 90 }
     }]);
   };
 
   validator.longitude = (): NumberValidator => {
     return createNumberValidator([...refinements, {
       check: (n) => n >= -180 && n <= 180,
-      message: 'Must be a valid longitude (-180 to 180)'
+      message: 'Must be a valid longitude (-180 to 180)',
+      jsonSchema: { type: 'minimum', value: -180 }
+    }, {
+      check: () => true,
+      message: '',
+      jsonSchema: { type: 'maximum', value: 180 }
     }]);
   };
 
   validator.percentage = (): NumberValidator => {
     return createNumberValidator([...refinements, {
       check: (n) => n >= 0 && n <= 100,
-      message: 'Must be a valid percentage (0-100)'
+      message: 'Must be a valid percentage (0-100)',
+      jsonSchema: { type: 'minimum', value: 0 }
+    }, {
+      check: () => true,
+      message: '',
+      jsonSchema: { type: 'maximum', value: 100 }
     }]);
   };
 

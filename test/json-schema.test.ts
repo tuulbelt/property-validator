@@ -3,14 +3,16 @@
  *
  * Tests for converting property-validator schemas to JSON Schema Draft 7.
  *
- * Functional API (full introspection support):
- *   - `string(email(), minLength(5))` - refinements ARE exported
- *   - `optional(string())` - property not in required array
- *   - `nullable(string())` - type: ['string', 'null']
+ * Both APIs support full introspection:
  *
- * Chainable API (limited introspection):
- *   - `v.string().email().min(5)` - refinements NOT exported (closure-based)
- *   - `.optional()` / `.nullable()` methods also not introspectable
+ * Functional API:
+ *   - `string(email(), minLength(5))` → format: 'email', minLength: 5
+ *   - `optional(string())` → property not in required array
+ *   - `nullable(string())` → type: ['string', 'null']
+ *
+ * Chainable API:
+ *   - `v.string().email().min(5)` → format: 'email', minLength: 5
+ *   - `.optional()` / `.nullable()` methods also supported
  */
 
 import { test } from 'node:test';
@@ -58,27 +60,26 @@ test('JSON Schema: primitives', async (t) => {
     assert.strictEqual(jsonSchema.type, 'string');
   });
 
-  await t.test('chainable string refinements NOT exported (closure-based)', () => {
-    // Chainable methods create closures, not introspectable refinements
+  await t.test('chainable string refinements ARE exported', () => {
+    // Chainable methods now include jsonSchema metadata
     const schema = v.string().min(5).max(100).email();
     const jsonSchema = toJsonSchema(schema);
 
     assert.strictEqual(jsonSchema.type, 'string');
-    // Note: minLength, maxLength, format are NOT included for chainable API
-    assert.strictEqual(jsonSchema.minLength, undefined);
-    assert.strictEqual(jsonSchema.maxLength, undefined);
-    assert.strictEqual(jsonSchema.format, undefined);
+    assert.strictEqual(jsonSchema.minLength, 5);
+    assert.strictEqual(jsonSchema.maxLength, 100);
+    assert.strictEqual(jsonSchema.format, 'email');
   });
 
-  await t.test('chainable number refinements NOT exported (closure-based)', () => {
-    // Chainable methods create closures, not introspectable refinements
-    const schema = v.number().int().positive().min(0).max(100);
+  await t.test('chainable number refinements ARE exported', () => {
+    // Chainable methods now include jsonSchema metadata
+    const schema = v.number().positive().min(0).max(100);
     const jsonSchema = toJsonSchema(schema);
 
     assert.strictEqual(jsonSchema.type, 'number');
-    // Note: minimum, maximum are NOT included for chainable API
-    assert.strictEqual(jsonSchema.minimum, undefined);
-    assert.strictEqual(jsonSchema.maximum, undefined);
+    assert.strictEqual(jsonSchema.exclusiveMinimum, 0);  // positive()
+    assert.strictEqual(jsonSchema.minimum, 0);           // min(0)
+    assert.strictEqual(jsonSchema.maximum, 100);         // max(100)
   });
 });
 
