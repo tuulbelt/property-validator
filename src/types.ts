@@ -259,6 +259,33 @@ export interface Validator<T> {
 }
 
 /**
+ * Object validator with strict/passthrough modes (v0.11.0)
+ */
+export interface ObjectValidator<T> extends Validator<T> {
+  /**
+   * Reject objects with unknown properties not in the schema.
+   * By default, extra properties are silently ignored.
+   *
+   * @example
+   * const User = v.object({ name: v.string() }).strict();
+   * User.validate({ name: 'Alice' }) // true
+   * User.validate({ name: 'Alice', extra: true }) // false - unknown key 'extra'
+   */
+  strict(): ObjectValidator<T>;
+
+  /**
+   * Allow unknown properties and pass them through to the output.
+   * By default, extra properties are silently ignored.
+   *
+   * @example
+   * const User = v.object({ name: v.string() }).passthrough();
+   * User.validate({ name: 'Alice', extra: true }) // true
+   * // Output preserves: { name: 'Alice', extra: true }
+   */
+  passthrough(): ObjectValidator<T>;
+}
+
+/**
  * Array validator with length constraints
  */
 export interface ArrayValidator<T> extends Validator<T[]> {
