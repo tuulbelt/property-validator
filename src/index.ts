@@ -2759,29 +2759,643 @@ export function boolean(): Validator<boolean> {
 }
 
 /**
- * Array validator - delegates to v.array for full implementation
- * Note: This is a function wrapper to enable tree-shaking of v namespace
+ * Array validator - standalone implementation for tree-shaking
  */
 export function array<T>(itemValidator: Validator<T>): ArrayValidator<T> {
-  return v.array(itemValidator);
+  // COMPILE-TIME: Pre-compile validators ONCE at construction
+  const compiledValidate = compileArrayValidator(itemValidator);
+  const compiledTransform = compileArrayTransform(itemValidator);
+
+  const createArrayValidator = (
+    minLength?: number,
+    maxLength?: number,
+    exactLength?: number,
+    refinements: Array<{ predicate: (value: T[]) => boolean; message: string }> = []
+  ): ArrayValidator<T> => {
+    const validator: ArrayValidator<T> = {
+      validate(data: unknown): data is T[] {
+        if (!Array.isArray(data)) return false;
+
+        // Check length constraints
+        if (minLength !== undefined && data.length < minLength) return false;
+        if (maxLength !== undefined && data.length > maxLength) return false;
+        if (exactLength !== undefined && data.length !== exactLength) return false;
+
+        // RUNTIME: Use pre-compiled validator
+        if (!compiledValidate(data)) return false;
+
+        // Check all refinements
+        if (refinements.length === 0) {
+          return true;
+        }
+        return refinements.every((refinement) => refinement.predicate(data));
+      },
+
+      error(data: unknown): string {
+        if (!Array.isArray(data)) {
+          return `Expected array, got ${getTypeName(data)}`;
+        }
+
+        // Check length constraints first
+        if (minLength !== undefined && data.length < minLength) {
+          return `Array must have at least ${minLength} element(s), got ${data.length}`;
+        }
+        if (maxLength !== undefined && data.length > maxLength) {
+          return `Array must have at most ${maxLength} element(s), got ${data.length}`;
+        }
+        if (exactLength !== undefined && data.length !== exactLength) {
+          return `Array must have exactly ${exactLength} element(s), got ${data.length}`;
+        }
+
+        // Find first invalid item
+        const invalidIndex = data.findIndex((item) => !validate(itemValidator, item).ok);
+        if (invalidIndex !== -1) {
+          return `Invalid item at index ${invalidIndex}: ${itemValidator.error(data[invalidIndex])}`;
+        }
+
+        // Check refinements
+        const failedRefinement = refinements.find(
+          (refinement) => !refinement.predicate(data)
+        );
+        if (failedRefinement) {
+          return failedRefinement.message;
+        }
+
+        return 'Array validation failed';
+      },
+
+      min(n: number): ArrayValidator<T> {
+        return createArrayValidator(n, maxLength, exactLength, refinements);
+      },
+
+      max(n: number): ArrayValidator<T> {
+        return createArrayValidator(minLength, n, exactLength, refinements);
+      },
+
+      length(n: number): ArrayValidator<T> {
+        return createArrayValidator(undefined, undefined, n, refinements);
+      },
+
+      nonempty(): ArrayValidator<T> {
+        return createArrayValidator(1, maxLength, exactLength, refinements);
+      },
+
+      refine(predicate: (value: T[]) => boolean, message: string): ArrayValidator<T> {
+        return createArrayValidator(minLength, maxLength, exactLength, [
+          ...refinements,
+          { predicate, message },
+        ]);
+      },
+
+      transform<U>(fn: (value: T[]) => U): Validator<U> {
+        const baseValidator = createValidator<T[]>(
+          (data): data is T[] => {
+            const arrayValidator = createArrayValidator(minLength, maxLength, exactLength, refinements);
+            return arrayValidator.validate(data);
+          },
+          (data) => {
+            const arrayValidator = createArrayValidator(minLength, maxLength, exactLength, refinements);
+            return arrayValidator.error(data);
+          }
+        );
+        return baseValidator.transform(fn);
+      },
+
+      optional(): Validator<T[] | undefined> {
+        const baseValidator = createValidator<T[]>(
+          (data): data is T[] => {
+            const arrayValidator = createArrayValidator(minLength, maxLength, exactLength, refinements);
+            return arrayValidator.validate(data);
+          },
+          (data) => {
+            const arrayValidator = createArrayValidator(minLength, maxLength, exactLength, refinements);
+            return arrayValidator.error(data);
+          }
+        );
+        return baseValidator.optional();
+      },
+
+      nullable(): Validator<T[] | null> {
+        const baseValidator = createValidator<T[]>(
+          (data): data is T[] => {
+            const arrayValidator = createArrayValidator(minLength, maxLength, exactLength, refinements);
+            return arrayValidator.validate(data);
+          },
+          (data) => {
+            const arrayValidator = createArrayValidator(minLength, maxLength, exactLength, refinements);
+            return arrayValidator.error(data);
+          }
+        );
+        return baseValidator.nullable();
+      },
+
+      nullish(): Validator<T[] | undefined | null> {
+        const baseValidator = createValidator<T[]>(
+          (data): data is T[] => {
+            const arrayValidator = createArrayValidator(minLength, maxLength, exactLength, refinements);
+            return arrayValidator.validate(data);
+          },
+          (data) => {
+            const arrayValidator = createArrayValidator(minLength, maxLength, exactLength, refinements);
+            return arrayValidator.error(data);
+          }
+        );
+        return baseValidator.nullish();
+      },
+
+      default(value: T[] | (() => T[])): Validator<T[]> {
+        const baseValidator = createValidator<T[]>(
+          (data): data is T[] => {
+            const arrayValidator = createArrayValidator(minLength, maxLength, exactLength, refinements);
+            return arrayValidator.validate(data);
+          },
+          (data) => {
+            const arrayValidator = createArrayValidator(minLength, maxLength, exactLength, refinements);
+            return arrayValidator.error(data);
+          }
+        );
+        return baseValidator.default(value);
+      },
+
+      _validateWithPath(data: unknown, path: readonly PathSegment[] | PathSegment[], seen: WeakSet<object>, depth: number, options: ValidationOptions): Result<T[]> {
+        if (!Array.isArray(data)) {
+          const details = new ValidationError({
+            message: `Expected array, got ${getTypeName(data)}`,
+            path: path,
+            value: data,
+            expected: 'array',
+            code: 'VALIDATION_ERROR',
+          });
+          return { ok: false, error: details.message, details };
+        }
+
+        // Check maximum items limit
+        const maxItems = options.maxItems ?? Infinity;
+        if (data.length > maxItems) {
+          const message = `Array exceeds maximum items limit (${maxItems})`;
+          const details = new ValidationError({
+            message,
+            path,
+            value: data,
+            expected: `array with at most ${maxItems} items`,
+            code: 'MAX_ITEMS_EXCEEDED',
+          });
+          return { ok: false, error: message, details };
+        }
+
+        // Check for circular references
+        if (options.checkCircular !== false) {
+          if (seen.has(data)) {
+            const details = new ValidationError({
+              message: 'Circular reference detected',
+              path,
+              value: data,
+              expected: 'non-circular structure',
+              code: 'CIRCULAR_REFERENCE',
+            });
+            return { ok: false, error: 'Circular reference detected', details };
+          }
+          seen.add(data);
+        }
+
+        // Check length constraints
+        if (minLength !== undefined && data.length < minLength) {
+          const message = `Array must have at least ${minLength} element(s), got ${data.length}`;
+          const details = new ValidationError({
+            message,
+            path,
+            value: data,
+            expected: `array with min length ${minLength}`,
+            code: 'VALIDATION_ERROR',
+          });
+          return { ok: false, error: message, details };
+        }
+        if (maxLength !== undefined && data.length > maxLength) {
+          const message = `Array must have at most ${maxLength} element(s), got ${data.length}`;
+          const details = new ValidationError({
+            message,
+            path,
+            value: data,
+            expected: `array with max length ${maxLength}`,
+            code: 'VALIDATION_ERROR',
+          });
+          return { ok: false, error: message, details };
+        }
+        if (exactLength !== undefined && data.length !== exactLength) {
+          const message = `Array must have exactly ${exactLength} element(s), got ${data.length}`;
+          const details = new ValidationError({
+            message,
+            path,
+            value: data,
+            expected: `array with length ${exactLength}`,
+            code: 'VALIDATION_ERROR',
+          });
+          return { ok: false, error: message, details };
+        }
+
+        // OPTIMIZATION: Fast-path for plain primitive validators
+        const isPlainPrimitive = itemValidator._type && !itemValidator._transform && !itemValidator._default && !itemValidator._hasRefinements;
+
+        // Check depth limit
+        const maxDepth = options.maxDepth ?? Infinity;
+        if (depth + 1 > maxDepth) {
+          const message = `Maximum nesting depth exceeded (${maxDepth})`;
+          const details = new ValidationError({
+            message,
+            path,
+            value: data,
+            expected: `depth <= ${maxDepth}`,
+            code: 'MAX_DEPTH_EXCEEDED',
+          });
+          return { ok: false, error: message, details };
+        }
+
+        let mutablePath = ensureMutablePath(path);
+
+        if (isPlainPrimitive) {
+          const primitiveType = itemValidator._type;
+
+          for (let i = 0; i < data.length; i++) {
+            if (!(i in data)) continue;
+
+            const item = data[i];
+            let isValid = false;
+
+            if (primitiveType === 'string') {
+              isValid = typeof item === 'string';
+            } else if (primitiveType === 'number') {
+              isValid = typeof item === 'number' && !Number.isNaN(item);
+            } else if (primitiveType === 'boolean') {
+              isValid = typeof item === 'boolean';
+            }
+
+            if (!isValid) {
+              mutablePath.push(i);
+              const message = `Invalid item at index ${i}: Expected ${primitiveType}, got ${getTypeName(item)}`;
+              const details = new ValidationError({
+                message,
+                path: mutablePath,
+                value: item,
+                expected: primitiveType,
+                code: 'VALIDATION_ERROR',
+              });
+              return { ok: false, error: message, details };
+            }
+          }
+        } else {
+          for (let i = 0; i < data.length; i++) {
+            if (!(i in data)) continue;
+
+            mutablePath.push(i);
+            const result = validateWithPath(itemValidator, data[i], mutablePath, seen, depth + 1, options);
+
+            if (!result.ok) {
+              const wrappedError = `Invalid item at index ${i}: ${result.error}`;
+              if (result.details) {
+                const details = new ValidationError({
+                  message: wrappedError,
+                  path: result.details.path,
+                  value: result.details.value,
+                  expected: result.details.expected,
+                  code: result.details.code,
+                });
+                return { ok: false, error: wrappedError, details };
+              }
+              return { ok: false, error: wrappedError };
+            }
+
+            mutablePath.pop();
+          }
+        }
+
+        // Check refinements
+        const failedRefinement = refinements.find((r) => !r.predicate(data));
+        if (failedRefinement) {
+          const details = new ValidationError({
+            message: failedRefinement.message,
+            path,
+            value: data,
+            expected: 'valid array',
+            code: 'VALIDATION_ERROR',
+          });
+          return { ok: false, error: failedRefinement.message, details };
+        }
+
+        // Apply transform if needed
+        const transformed = validator._transform ? validator._transform(data) : data;
+        return { ok: true, value: transformed as T[] };
+      },
+    };
+
+    // Only assign _transform when item validators need transforms
+    const hasItemTransform = itemValidator._transform !== undefined;
+    const hasItemDefault = itemValidator._default !== undefined;
+    const itemNeedsTransform = hasItemTransform || hasItemDefault;
+
+    if (itemNeedsTransform) {
+      validator._transform = (data: any): T[] => {
+        return compiledTransform(data);
+      };
+    }
+
+    // Expose compiled validator for validateFast() bypass
+    const isPlainArray = minLength === undefined && maxLength === undefined &&
+                         exactLength === undefined && refinements.length === 0 &&
+                         !itemNeedsTransform;
+    if (isPlainArray) {
+      const completeJIT = compileArrayValidatorJIT(itemValidator);
+      if (completeJIT !== null) {
+        validator._compiled = completeJIT;
+      } else {
+        validator._compiled = (data: unknown): boolean => {
+          return Array.isArray(data) && compiledValidate(data);
+        };
+      }
+    }
+
+    return validator;
+  };
+
+  return createArrayValidator();
 }
 
 /**
- * Tuple validator - delegates to v.tuple for full implementation
+ * Tuple validator - standalone implementation for tree-shaking
+ * Fixed-length array with per-index types
  */
 export function tuple<T extends readonly Validator<any>[]>(
   validators: T
 ): Validator<TupleType<T>> {
-  return v.tuple(validators);
+  const validator = createValidator(
+    (data): data is TupleType<T> => {
+      if (!Array.isArray(data)) return false;
+      if (data.length !== validators.length) return false;
+      return validators.every((validator, index) =>
+        validator.validate(data[index])
+      );
+    },
+    (data) => {
+      if (!Array.isArray(data)) {
+        return `Expected tuple (array), got ${getTypeName(data)}`;
+      }
+      if (data.length !== validators.length) {
+        return `Tuple must have exactly ${validators.length} element(s), got ${data.length}`;
+      }
+      const invalidIndex = validators.findIndex(
+        (validator, index) => !validator.validate(data[index])
+      );
+      if (invalidIndex !== -1) {
+        const v = validators[invalidIndex];
+        return `Invalid element at index ${invalidIndex}: ${v!.error(data[invalidIndex])}`;
+      }
+      return 'Tuple validation failed';
+    }
+  );
+
+  // Path-aware validation for tuple elements
+  validator._validateWithPath = (data: unknown, path: readonly PathSegment[] | PathSegment[], seen: WeakSet<object>, depth: number, options: ValidationOptions): Result<TupleType<T>> => {
+    if (!Array.isArray(data)) {
+      const details = new ValidationError({
+        message: `Expected tuple (array), got ${getTypeName(data)}`,
+        path: path,
+        value: data,
+        expected: 'tuple',
+        code: 'VALIDATION_ERROR',
+      });
+      return { ok: false, error: details.message, details };
+    }
+
+    // Check for circular references before recursing (only if enabled)
+    if (options.checkCircular !== false) {
+      if (seen.has(data)) {
+        const details = new ValidationError({
+          message: 'Circular reference detected',
+          path,
+          value: data,
+          expected: 'non-circular structure',
+          code: 'CIRCULAR_REFERENCE',
+        });
+        return { ok: false, error: 'Circular reference detected', details };
+      }
+      seen.add(data);
+    }
+
+    // Check length
+    if (data.length !== validators.length) {
+      const message = `Tuple must have exactly ${validators.length} element(s), got ${data.length}`;
+      const details = new ValidationError({
+        message,
+        path,
+        value: data,
+        expected: `tuple with ${validators.length} elements`,
+        code: 'VALIDATION_ERROR',
+      });
+      return { ok: false, error: message, details };
+    }
+
+    // Validate each element with index in path
+    let mutablePath = ensureMutablePath(path);
+    for (let i = 0; i < validators.length; i++) {
+      mutablePath.push(i);
+      const result = validateWithPath(validators[i]!, data[i], mutablePath, seen, depth + 1, options);
+
+      if (!result.ok) {
+        const wrappedError = `Invalid element at index ${i}: ${result.error}`;
+        if (result.details) {
+          const details = new ValidationError({
+            message: wrappedError,
+            path: result.details.path,
+            value: result.details.value,
+            expected: result.details.expected,
+            code: result.details.code,
+          });
+          return { ok: false, error: wrappedError, details };
+        }
+        return { ok: false, error: wrappedError };
+      }
+
+      mutablePath.pop();
+    }
+
+    return { ok: true, value: data as TupleType<T> };
+  };
+
+  return validator;
 }
 
 /**
- * Object validator - delegates to v.object for full implementation
+ * Object validator - standalone implementation for tree-shaking
  */
 export function object<T extends Record<string, unknown>>(
   shape: { [K in keyof T]: Validator<T[K]> }
 ): Validator<T> {
-  return v.object(shape);
+  const validator = createValidator(
+    (data): data is T => {
+      if (typeof data !== 'object' || data === null) {
+        return false;
+      }
+      const obj = data as Record<string, unknown>;
+      return Object.entries(shape).every(([key, fieldValidator]) =>
+        validate(fieldValidator, obj[key]).ok
+      );
+    },
+    (data) => {
+      if (typeof data !== 'object' || data === null) {
+        return `Expected object, got ${getTypeName(data)}`;
+      }
+      const obj = data as Record<string, unknown>;
+      for (const [key, fieldValidator] of Object.entries(shape)) {
+        const result = validate(fieldValidator, obj[key]);
+        if (!result.ok) {
+          return `Invalid property '${key}': ${result.error}`;
+        }
+      }
+      return 'Unknown validation error';
+    }
+  );
+
+  // PHASE 1 OPTIMIZATION: Only set _transform if properties actually have transforms/defaults
+  const hasTransforms = Object.values(shape).some(
+    (fieldValidator) => fieldValidator._transform !== undefined || fieldValidator._default !== undefined
+  );
+
+  // PHASE 6 OPTIMIZATION: Pre-compile object validator for fast path
+  const compiledValidator = compileObjectValidator(shape);
+  const hasFieldRefinements = Object.values(shape).some(
+    (fieldValidator) => fieldValidator._hasRefinements === true
+  );
+  const isPlainObject = !hasTransforms && !hasFieldRefinements;
+
+  // v0.8.0 OPTIMIZATION: Expose compiled validator for validateFast() bypass
+  if (isPlainObject) {
+    validator._compiled = compiledValidator;
+  }
+
+  if (hasTransforms) {
+    // Store transformation function to apply transforms/defaults to object properties
+    validator._transform = (data: any): T => {
+      const obj = data as Record<string, unknown>;
+      let result: Record<string, unknown> | null = null;
+
+      for (const [key, fieldValidator] of Object.entries(shape)) {
+        const fieldResult = validate(fieldValidator, obj[key]);
+        if (fieldResult.ok) {
+          const originalValue = obj[key];
+          const transformedValue = fieldResult.value;
+
+          if (originalValue !== transformedValue) {
+            if (result === null) {
+              result = { ...obj };
+            }
+            result[key] = transformedValue;
+          }
+        }
+      }
+
+      return (result ?? obj) as T;
+    };
+  }
+
+  // Path-aware validation for nested errors
+  validator._validateWithPath = (data: unknown, path: readonly PathSegment[] | PathSegment[], seen: WeakSet<object>, depth: number, options: ValidationOptions): Result<T> => {
+    if (typeof data !== 'object' || data === null) {
+      const details = new ValidationError({
+        message: `Expected object, got ${getTypeName(data)}`,
+        path: path,
+        value: data,
+        expected: 'object',
+        code: 'VALIDATION_ERROR',
+      });
+      return { ok: false, error: details.message, details };
+    }
+
+    // PHASE 6 OPTIMIZATION: Fast path for plain objects with valid data
+    if (isPlainObject &&
+        !validator._hasRefinements &&
+        options.checkCircular === false &&
+        options.maxProperties === undefined) {
+      if (compiledValidator(data)) {
+        return { ok: true, value: data as T };
+      }
+    }
+
+    // Check maximum properties limit
+    const maxProperties = options.maxProperties ?? Infinity;
+    const propertyCount = Object.keys(data).length;
+    if (propertyCount > maxProperties) {
+      const message = `Object exceeds maximum properties limit (${maxProperties})`;
+      const details = new ValidationError({
+        message,
+        path,
+        value: data,
+        expected: `object with at most ${maxProperties} properties`,
+        code: 'MAX_PROPERTIES_EXCEEDED',
+      });
+      return { ok: false, error: message, details };
+    }
+
+    // Check for circular references before recursing
+    if (options.checkCircular !== false) {
+      if (seen.has(data)) {
+        const details = new ValidationError({
+          message: 'Circular reference detected',
+          path,
+          value: data,
+          expected: 'non-circular structure',
+          code: 'CIRCULAR_REFERENCE',
+        });
+        return { ok: false, error: 'Circular reference detected', details };
+      }
+      seen.add(data);
+    }
+
+    const obj = data as Record<string, unknown>;
+    let mutablePath = ensureMutablePath(path);
+    for (const [key, fieldValidator] of Object.entries(shape)) {
+      mutablePath.push(key);
+      const result = validateWithPath(fieldValidator, obj[key], mutablePath, seen, depth + 1, options);
+
+      if (!result.ok) {
+        const wrappedError = `Invalid property '${key}': ${result.error}`;
+        if (result.details) {
+          const details = new ValidationError({
+            message: wrappedError,
+            path: result.details.path,
+            value: result.details.value,
+            expected: result.details.expected,
+            code: result.details.code,
+          });
+          return { ok: false, error: wrappedError, details };
+        }
+        return { ok: false, error: wrappedError };
+      }
+
+      mutablePath.pop();
+    }
+
+    // Check refinements if present
+    if (validator._hasRefinements && !validator.validate(data)) {
+      const errorMessage = validator.error(data);
+      const details = new ValidationError({
+        message: errorMessage,
+        path,
+        value: data,
+        expected: 'valid object',
+        code: 'VALIDATION_ERROR',
+      });
+      return { ok: false, error: errorMessage, details };
+    }
+
+    // All fields valid, apply transform if needed
+    const transformed = validator._transform ? validator._transform(data) : data;
+
+    return { ok: true, value: transformed as T };
+  };
+
+  // Store shape for compilation optimization
+  (validator as any)._shape = shape;
+
+  return validator;
 }
 
 /**
@@ -2805,37 +3419,142 @@ export function nullable<T>(validator: Validator<T>): Validator<T | null> {
 }
 
 /**
- * Union validator - delegates to v.union for full implementation
+ * Union validator - standalone implementation for tree-shaking
+ * Validates if data matches any of the provided schemas
  */
 export function union<T extends readonly Validator<any>[]>(
   validators: T
 ): Validator<UnionType<T>> {
-  return v.union(validators);
+  const noneHaveRefinements = validators.every((v) => !v._hasRefinements);
+
+  // v0.8.5 OPTIMIZATION: Try JIT compilation first (generates inline OR expression)
+  // This eliminates loop overhead: `typeof data === 'string' || typeof data === 'number'`
+  const jitCompiled = noneHaveRefinements ? compileUnionValidator(validators) : null;
+
+  // Create compiled validation function
+  let compiledValidate: (data: unknown) => boolean;
+
+  if (jitCompiled !== null) {
+    // Best path: JIT-compiled inline checks (no loop, no function calls for primitives)
+    compiledValidate = jitCompiled;
+  } else {
+    // v0.8.0 fallback: Check if all child validators have _compiled for loop-based bypass
+    const allHaveCompiled = validators.every((v) => v._compiled !== undefined);
+
+    compiledValidate = allHaveCompiled && noneHaveRefinements
+      ? (data: unknown): boolean => {
+          // Fast path: use _compiled for each child validator
+          for (const childValidator of validators) {
+            if (childValidator._compiled!(data)) return true;
+          }
+          return false;
+        }
+      : (data: unknown): boolean => {
+          // Fallback: use .validate() method
+          for (const childValidator of validators) {
+            if (childValidator.validate(data)) return true;
+          }
+          return false;
+        };
+  }
+
+  const validator = createValidator(
+    (data): data is UnionType<T> => compiledValidate(data),
+    (data) => {
+      // If validation failed, collect errors from all validators
+      const errors = validators.map((validator) => validator.error(data));
+
+      // Return aggregated error message
+      if (errors.length === 1) {
+        return errors[0] || 'Union validation failed';
+      }
+
+      return `Expected one of:\n  - ${errors.join('\n  - ')}`;
+    }
+  );
+
+  // v0.8.0 OPTIMIZATION: Expose _compiled for validateFast() bypass
+  // Only when no child validators have refinements
+  if (noneHaveRefinements) {
+    validator._compiled = compiledValidate;
+  }
+
+  return validator;
 }
 
 /**
- * Literal validator - delegates to v.literal for full implementation
+ * Literal validator - standalone implementation for tree-shaking
  */
 export function literal<T extends string | number | boolean | null>(
   value: T
 ): Validator<T> {
-  return v.literal(value);
+  // v0.8.0 OPTIMIZATION: Create compiled validation function for JIT bypass
+  const compiledValidate = (data: unknown): boolean => data === value;
+
+  const validator = createValidator(
+    (data): data is T => compiledValidate(data),
+    (data) => `Expected literal value ${JSON.stringify(value)}, got ${getTypeName(data)}`
+  );
+
+  // Expose _compiled for unions to chain JIT bypass
+  validator._compiled = compiledValidate;
+
+  // v0.8.5: Store literal value for JIT union inlining
+  (validator as any)._literalValue = value;
+
+  return validator;
 }
 
 /**
- * Lazy validator - delegates to v.lazy for full implementation
+ * Lazy validator - standalone implementation for tree-shaking
+ * Defers validator creation for recursive schemas
  */
 export function lazy<T>(fn: () => Validator<T>): Validator<T> {
-  return v.lazy(fn);
+  // Cache the validator once it's created
+  let cachedValidator: Validator<T> | null = null;
+
+  const getValidator = (): Validator<T> => {
+    if (cachedValidator === null) {
+      cachedValidator = fn();
+    }
+    return cachedValidator;
+  };
+
+  const lazyValidator = createValidator(
+    (data): data is T => {
+      const validator = getValidator();
+      return validator.validate(data);
+    },
+    (data) => {
+      const validator = getValidator();
+      return validator.error(data);
+    }
+  );
+
+  // Delegate path-aware validation to the wrapped validator
+  lazyValidator._validateWithPath = (data: unknown, path: readonly PathSegment[] | PathSegment[], seen: WeakSet<object>, depth: number, options: ValidationOptions): Result<T> => {
+    const validator = getValidator();
+    return validateWithPath(validator, data, path, seen, depth, options);
+  };
+
+  return lazyValidator;
 }
 
 /**
- * Enum validator - delegates to v.enum for full implementation
+ * Enum validator - standalone implementation for tree-shaking
+ * Sugar for union of literals
  */
 export function enum_<T extends readonly string[]>(
   values: T
 ): Validator<T[number]> {
-  return v.enum(values);
+  // Use standalone literal() and union() to avoid pulling in v namespace
+  const literals = values.map((value) => literal(value));
+  const unionValidator = union(literals as any);
+
+  return createValidator(
+    (data): data is T[number] => unionValidator.validate(data),
+    (data) => `Expected one of ${JSON.stringify(values)}, got ${JSON.stringify(data)}`
+  );
 }
 
 // ============================================================================
