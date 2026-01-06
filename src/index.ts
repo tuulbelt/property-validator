@@ -763,6 +763,38 @@ function generateInlineTypeCheck(validator: Validator<any>, valueExpr: string): 
     }
   }
 
+  // Objects with shape - inline property checks
+  // PHASE 3: Array JIT for objects - generate inline object validation
+  // Note: Object validators may not have _type set, so check _shape directly
+  const shape = (validator as any)._shape;
+  if (shape && typeof shape === 'object') {
+    const checks: string[] = [];
+
+    // Object null/type check
+    checks.push(`typeof ${valueExpr} === 'object'`);
+    checks.push(`${valueExpr} !== null`);
+
+    // Generate inline checks for each property
+    for (const [key, propValidator] of Object.entries(shape)) {
+      // Escape property key for safe access
+      const propExpr = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(key)
+        ? `${valueExpr}.${key}`
+        : `${valueExpr}[${JSON.stringify(key)}]`;
+
+      const propCheck = generateInlineTypeCheck(propValidator as Validator<any>, propExpr);
+
+      if (propCheck === null) {
+        // Cannot inline this property - fall back to closure
+        return null;
+      }
+
+      checks.push(propCheck);
+    }
+
+    // Combine all checks with &&
+    return `(${checks.join(' && ')})`;
+  }
+
   // Cannot inline this validator type
   return null;
 }
@@ -846,7 +878,8 @@ function compileArrayValidatorJIT<T>(itemValidator: Validator<T>): ((data: unkno
     return null;
   }
 
-  // Try to generate inline code for item validation
+  // Try to generate inline code for item validation (primitives, literals, objects)
+  // PHASE 3: generateInlineTypeCheck now supports objects with _shape
   const inlineCheck = generateInlineTypeCheck(itemValidator, 'data[i]');
 
   if (inlineCheck !== null) {
