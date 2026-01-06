@@ -11,6 +11,9 @@
 
 import { realpathSync } from 'node:fs';
 
+// Version constant - update here when releasing
+const VERSION = '0.9.5';
+
 // Re-export ValidationError class (runtime value)
 export { ValidationError } from './types.js';
 
@@ -1198,14 +1201,16 @@ function createStringValidator(
 
   validator.email = (): StringValidator => {
     return createStringValidator([...refinements, {
-      check: (s) => EMAIL_PATTERN.test(s),
+      // RFC 5321: max 254 chars - length check prevents ReDoS
+      check: (s) => s.length <= 254 && EMAIL_PATTERN.test(s),
       message: 'Must be a valid email address'
     }]);
   };
 
   validator.url = (): StringValidator => {
     return createStringValidator([...refinements, {
-      check: (s) => URL_PATTERN.test(s),
+      // Practical limit of 2083 chars - length check prevents ReDoS
+      check: (s) => s.length <= 2083 && URL_PATTERN.test(s),
       message: 'Must be a valid URL'
     }]);
   };
@@ -1268,21 +1273,24 @@ function createStringValidator(
 
   validator.ip = (): StringValidator => {
     return createStringValidator([...refinements, {
-      check: (s) => IPV4_PATTERN.test(s) || IPV6_PATTERN.test(s),
+      // Max 45 chars (IPv6) - length check prevents ReDoS
+      check: (s) => s.length <= 45 && (IPV4_PATTERN.test(s) || IPV6_PATTERN.test(s)),
       message: 'Must be a valid IP address (IPv4 or IPv6)'
     }]);
   };
 
   validator.ipv4 = (): StringValidator => {
     return createStringValidator([...refinements, {
-      check: (s) => IPV4_PATTERN.test(s),
+      // Max 15 chars (xxx.xxx.xxx.xxx) - length check prevents ReDoS
+      check: (s) => s.length <= 15 && IPV4_PATTERN.test(s),
       message: 'Must be a valid IPv4 address'
     }]);
   };
 
   validator.ipv6 = (): StringValidator => {
     return createStringValidator([...refinements, {
-      check: (s) => IPV6_PATTERN.test(s),
+      // Max 45 chars - length check prevents ReDoS
+      check: (s) => s.length <= 45 && IPV6_PATTERN.test(s),
       message: 'Must be a valid IPv6 address'
     }]);
   };
@@ -2914,13 +2922,13 @@ function parseArgs(args: string[]): CliOptions {
     } else if (arg === '--api') {
       showApi = true;
     } else if (arg === '--version' || arg === '-V') {
-      console.log('property-validator v0.9.1');
+      console.log(`property-validator v${VERSION}`);
       console.log('Runtime type validation with TypeScript inference');
       process.exit(0);
     } else if (arg === '--help' || arg === '-h') {
       console.log(`Usage: propval [options] <json-data>
 
-Property Validator v0.9.1 - Runtime type validation with TypeScript inference.
+Property Validator v${VERSION} - Runtime type validation with TypeScript inference.
 
 Options:
   -v, --verbose  Enable verbose output
@@ -2966,7 +2974,7 @@ Library Usage:
 
 function showApi(): void {
   console.log(`
-Property Validator v0.9.1 - API Reference
+Property Validator v${VERSION} - API Reference
 
 ═══════════════════════════════════════════════════════════════════
  Validation Functions
@@ -2983,13 +2991,34 @@ Property Validator v0.9.1 - API Reference
     .max(n)                  Maximum length
     .length(n)               Exact length
     .nonempty()              Non-empty string
-    .email()                 Valid email format
-    .url()                   Valid URL (http/https)
-    .uuid()                  Valid UUID (v1-v5)
     .pattern(regex, msg?)    Custom regex pattern
     .startsWith(prefix)      String prefix
     .endsWith(suffix)        String suffix
     .includes(substring)     Contains substring
+
+  Format validators:
+    .email()                 Valid email (RFC 5321)
+    .url()                   Valid URL (http/https)
+    .uuid()                  Valid UUID (v1-v5)
+    .datetime()              ISO 8601 datetime
+    .date()                  ISO 8601 date (YYYY-MM-DD)
+    .time()                  ISO 8601 time (HH:MM:SS)
+
+  Network validators:
+    .ip()                    IPv4 or IPv6 address
+    .ipv4()                  IPv4 address only
+    .ipv6()                  IPv6 address only
+
+  ID format validators (v0.9.5):
+    .cuid()                  CUID format
+    .cuid2()                 CUID2 format
+    .ulid()                  ULID format (26 chars)
+    .nanoid()                NanoID format (21 chars)
+
+  Encoding validators (v0.9.5):
+    .base64()                Base64 encoded string
+    .hex()                   Hexadecimal string
+    .jwt()                   JWT format (header.payload.sig)
 
 ═══════════════════════════════════════════════════════════════════
  Number Validators
@@ -3005,26 +3034,44 @@ Property Validator v0.9.1 - API Reference
     .range(min, max)         Between min and max
     .finite()                Not Infinity or NaN
     .safeInt()               Safe integer range
+    .multipleOf(n)           Must be multiple of n
+
+  Extended validators (v0.9.5):
+    .port()                  Valid port (0-65535)
+    .latitude()              Latitude (-90 to 90)
+    .longitude()             Longitude (-180 to 180)
+    .percentage()            Percentage (0-100)
 
 ═══════════════════════════════════════════════════════════════════
  Other Validators
 ═══════════════════════════════════════════════════════════════════
   v.boolean()                Boolean type
   v.array(itemValidator)     Array with item validation
+  v.tuple([...])             Fixed-length tuple
   v.object({...})            Object with property schemas
   v.union([...])             One of multiple types
   v.literal(value)           Exact value match
   v.optional(validator)      Optional field
   v.nullable(validator)      Nullable field
+  v.nullish(validator)       Optional + nullable
+  v.any()                    Accept any value
+  v.unknown()                Accept any (type-safe)
+  v.never()                  Always fails
+  v.lazy(() => schema)       Recursive schemas
 
 ═══════════════════════════════════════════════════════════════════
  Example
 ═══════════════════════════════════════════════════════════════════
   const UserSchema = v.object({
+    id: v.string().ulid(),
     name: v.string().min(1).max(100),
     email: v.string().email(),
     age: v.number().int().positive().max(150),
-    website: v.optional(v.string().url())
+    website: v.optional(v.string().url()),
+    location: v.optional(v.object({
+      lat: v.number().latitude(),
+      lng: v.number().longitude()
+    }))
   });
 
   const result = validate(UserSchema, userData);

@@ -98,7 +98,8 @@ export function nonempty(): StringRefinement {
 export function email(): StringRefinement {
   return {
     _kind: 'string-refinement',
-    check: (s) => EMAIL_PATTERN.test(s),
+    // RFC 5321: max 254 chars - length check prevents ReDoS
+    check: (s) => s.length <= 254 && EMAIL_PATTERN.test(s),
     message: 'Must be a valid email address',
   };
 }
@@ -110,7 +111,8 @@ export function email(): StringRefinement {
 export function url(): StringRefinement {
   return {
     _kind: 'string-refinement',
-    check: (s) => URL_PATTERN.test(s),
+    // Practical limit of 2083 chars - length check prevents ReDoS
+    check: (s) => s.length <= 2083 && URL_PATTERN.test(s),
     message: 'Must be a valid URL',
   };
 }
@@ -230,7 +232,8 @@ export function time(): StringRefinement {
 export function ip(): StringRefinement {
   return {
     _kind: 'string-refinement',
-    check: (s) => IPV4_PATTERN.test(s) || IPV6_PATTERN.test(s),
+    // Max 45 chars (IPv6) - length check prevents ReDoS
+    check: (s) => s.length <= 45 && (IPV4_PATTERN.test(s) || IPV6_PATTERN.test(s)),
     message: 'Must be a valid IP address (IPv4 or IPv6)',
   };
 }
@@ -242,7 +245,8 @@ export function ip(): StringRefinement {
 export function ipv4(): StringRefinement {
   return {
     _kind: 'string-refinement',
-    check: (s) => IPV4_PATTERN.test(s),
+    // Max 15 chars (xxx.xxx.xxx.xxx) - length check prevents ReDoS
+    check: (s) => s.length <= 15 && IPV4_PATTERN.test(s),
     message: 'Must be a valid IPv4 address',
   };
 }
@@ -254,7 +258,8 @@ export function ipv4(): StringRefinement {
 export function ipv6(): StringRefinement {
   return {
     _kind: 'string-refinement',
-    check: (s) => IPV6_PATTERN.test(s),
+    // Max 45 chars - length check prevents ReDoS
+    check: (s) => s.length <= 45 && IPV6_PATTERN.test(s),
     message: 'Must be a valid IPv6 address',
   };
 }
