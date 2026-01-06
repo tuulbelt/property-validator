@@ -1483,6 +1483,9 @@ export const v = {
         }
       }
 
+      // Expose item validator for JSON Schema introspection
+      (validator as any)._itemValidator = itemValidator;
+
       return validator;
     };
 
@@ -1609,6 +1612,9 @@ export const v = {
       // All elements valid
       return { ok: true, value: data as TupleType<T> };
     };
+
+    // Expose tuple validators for JSON Schema introspection
+    (validator as any)._tupleValidators = validators;
 
     return validator;
   },
@@ -1903,6 +1909,9 @@ export const v = {
       validator._compiled = compiledValidate;
     }
 
+    // Expose validators for JSON Schema introspection
+    (validator as any)._validators = validators;
+
     return validator;
   },
 
@@ -1936,10 +1945,15 @@ export const v = {
     const literals = values.map((value) => v.literal(value));
     const unionValidator = v.union(literals as any);
 
-    return createValidator(
+    const validator = createValidator(
       (data): data is T[number] => unionValidator.validate(data),
       (data) => `Expected one of ${JSON.stringify(values)}, got ${JSON.stringify(data)}`
     );
+
+    // Expose enum values for JSON Schema introspection
+    (validator as any)._enumValues = values;
+
+    return validator;
   },
 
   /**
@@ -2665,6 +2679,9 @@ export function array<T>(itemValidator: Validator<T>): ArrayValidator<T> {
       }
     }
 
+    // Expose item validator for JSON Schema introspection
+    (validator as any)._itemValidator = itemValidator;
+
     return validator;
   };
 
@@ -2771,6 +2788,9 @@ export function tuple<T extends readonly Validator<any>[]>(
 
     return { ok: true, value: data as TupleType<T> };
   };
+
+  // Expose tuple validators for JSON Schema introspection
+  (validator as any)._tupleValidators = validators;
 
   return validator;
 }
@@ -3238,6 +3258,9 @@ export function union<T extends readonly Validator<any>[]>(
     validator._compiled = compiledValidate;
   }
 
+  // Expose validators for JSON Schema introspection
+  (validator as any)._validators = validators;
+
   return validator;
 }
 
@@ -3486,6 +3509,10 @@ export function discriminatedUnion<
     return validateWithPath(variant, data, path, seen, depth, options) as Result<UnionType<T>>;
   };
 
+  // Expose discriminator and variant map for JSON Schema introspection
+  (validator as any)._discriminator = discriminator;
+  (validator as any)._variantMap = variantMap;
+
   return validator;
 }
 
@@ -3558,10 +3585,15 @@ export function enum_<T extends readonly string[]>(
   const literals = values.map((value) => literal(value));
   const unionValidator = union(literals as any);
 
-  return createValidator(
+  const validator = createValidator(
     (data): data is T[number] => unionValidator.validate(data),
     (data) => `Expected one of ${JSON.stringify(values)}, got ${JSON.stringify(data)}`
   );
+
+  // Expose enum values for JSON Schema introspection
+  (validator as any)._enumValues = values;
+
+  return validator;
 }
 
 // ============================================================================
