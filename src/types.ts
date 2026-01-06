@@ -256,6 +256,10 @@ export interface Validator<T> {
   _hasRefinements?: boolean;  // Internal: whether validator has refinements
   _validateWithPath?: (data: unknown, path: readonly PathSegment[] | PathSegment[], seen: WeakSet<object>, depth: number, options: ValidationOptions) => Result<T>;  // Internal: path-aware validation
   _compiled?: (data: unknown) => boolean;  // Internal: JIT-compiled validator for fast path (v0.8.0)
+  _refinements?: readonly (StringRefinement | NumberRefinement | ArrayRefinement)[];  // Internal: refinements for JSON Schema introspection (v0.10.0)
+  _isOptional?: boolean;  // Internal: marks optional() wrapper for JSON Schema introspection
+  _isNullable?: boolean;  // Internal: marks nullable() wrapper for JSON Schema introspection
+  _innerValidator?: Validator<unknown>;  // Internal: wrapped validator for optional/nullable introspection
 }
 
 /**
@@ -424,6 +428,15 @@ export type CompiledCheck = (data: unknown) => boolean;
 // ============================================================================
 
 /**
+ * JSON Schema representation for a refinement constraint
+ */
+export interface RefinementJsonSchema {
+  readonly type?: 'minLength' | 'maxLength' | 'pattern' | 'format' | 'minimum' | 'maximum' | 'exclusiveMinimum' | 'exclusiveMaximum' | 'multipleOf';
+  readonly value?: string | number | boolean;
+  readonly format?: string;
+}
+
+/**
  * String refinement - a constraint that can be applied to string validators
  * Each refinement is a separate export, enabling tree-shaking
  */
@@ -431,6 +444,8 @@ export interface StringRefinement {
   readonly _kind: 'string-refinement';
   readonly check: (value: string) => boolean;
   readonly message: string;
+  /** JSON Schema representation for this refinement (optional, for introspection) */
+  readonly jsonSchema?: RefinementJsonSchema;
 }
 
 /**
@@ -441,6 +456,8 @@ export interface NumberRefinement {
   readonly _kind: 'number-refinement';
   readonly check: (value: number) => boolean;
   readonly message: string;
+  /** JSON Schema representation for this refinement (optional, for introspection) */
+  readonly jsonSchema?: RefinementJsonSchema;
 }
 
 /**

@@ -48,6 +48,7 @@ export function minLength(n: number): StringRefinement {
     _kind: 'string-refinement',
     check: (s) => s.length >= n,
     message: `String must be at least ${n} character(s)`,
+    jsonSchema: { type: 'minLength', value: n },
   };
 }
 
@@ -60,6 +61,7 @@ export function maxLength(n: number): StringRefinement {
     _kind: 'string-refinement',
     check: (s) => s.length <= n,
     message: `String must be at most ${n} character(s)`,
+    jsonSchema: { type: 'maxLength', value: n },
   };
 }
 
@@ -72,6 +74,8 @@ export function length(n: number): StringRefinement {
     _kind: 'string-refinement',
     check: (s) => s.length === n,
     message: `String must be exactly ${n} character(s)`,
+    // JSON Schema doesn't have exact length, use both min and max
+    jsonSchema: { type: 'minLength', value: n },
   };
 }
 
@@ -84,6 +88,7 @@ export function nonempty(): StringRefinement {
     _kind: 'string-refinement',
     check: (s) => s.length > 0,
     message: 'String cannot be empty',
+    jsonSchema: { type: 'minLength', value: 1 },
   };
 }
 
@@ -101,6 +106,7 @@ export function email(): StringRefinement {
     // RFC 5321: max 254 chars - length check prevents ReDoS
     check: (s) => s.length <= 254 && EMAIL_PATTERN.test(s),
     message: 'Must be a valid email address',
+    jsonSchema: { type: 'format', format: 'email' },
   };
 }
 
@@ -114,6 +120,7 @@ export function url(): StringRefinement {
     // Practical limit of 2083 chars - length check prevents ReDoS
     check: (s) => s.length <= 2083 && URL_PATTERN.test(s),
     message: 'Must be a valid URL',
+    jsonSchema: { type: 'format', format: 'uri' },
   };
 }
 
@@ -126,6 +133,7 @@ export function uuid(): StringRefinement {
     _kind: 'string-refinement',
     check: (s) => UUID_PATTERN.test(s),
     message: 'Must be a valid UUID',
+    jsonSchema: { type: 'format', format: 'uuid' },
   };
 }
 
@@ -138,6 +146,7 @@ export function pattern(regex: RegExp, name?: string): StringRefinement {
     _kind: 'string-refinement',
     check: (s) => regex.test(s),
     message: name ? `Must be a valid ${name}` : `String must match pattern ${regex}`,
+    jsonSchema: { type: 'pattern', value: regex.source },
   };
 }
 
@@ -194,6 +203,7 @@ export function datetime(): StringRefinement {
     _kind: 'string-refinement',
     check: (s) => DATETIME_PATTERN.test(s),
     message: 'Must be a valid ISO 8601 datetime (YYYY-MM-DDTHH:MM:SS)',
+    jsonSchema: { type: 'format', format: 'date-time' },
   };
 }
 
@@ -206,6 +216,7 @@ export function date(): StringRefinement {
     _kind: 'string-refinement',
     check: (s) => DATE_PATTERN.test(s),
     message: 'Must be a valid ISO 8601 date (YYYY-MM-DD)',
+    jsonSchema: { type: 'format', format: 'date' },
   };
 }
 
@@ -218,6 +229,7 @@ export function time(): StringRefinement {
     _kind: 'string-refinement',
     check: (s) => TIME_PATTERN.test(s),
     message: 'Must be a valid ISO 8601 time (HH:MM:SS)',
+    jsonSchema: { type: 'format', format: 'time' },
   };
 }
 
@@ -235,6 +247,8 @@ export function ip(): StringRefinement {
     // Max 45 chars (IPv6) - length check prevents ReDoS
     check: (s) => s.length <= 45 && (IPV4_PATTERN.test(s) || IPV6_PATTERN.test(s)),
     message: 'Must be a valid IP address (IPv4 or IPv6)',
+    // No standard JSON Schema format for generic IP, use custom
+    jsonSchema: { type: 'format', format: 'ip' },
   };
 }
 
@@ -248,6 +262,7 @@ export function ipv4(): StringRefinement {
     // Max 15 chars (xxx.xxx.xxx.xxx) - length check prevents ReDoS
     check: (s) => s.length <= 15 && IPV4_PATTERN.test(s),
     message: 'Must be a valid IPv4 address',
+    jsonSchema: { type: 'format', format: 'ipv4' },
   };
 }
 
@@ -261,6 +276,7 @@ export function ipv6(): StringRefinement {
     // Max 45 chars - length check prevents ReDoS
     check: (s) => s.length <= 45 && IPV6_PATTERN.test(s),
     message: 'Must be a valid IPv6 address',
+    jsonSchema: { type: 'format', format: 'ipv6' },
   };
 }
 
@@ -278,6 +294,7 @@ export function cuid(): StringRefinement {
     _kind: 'string-refinement',
     check: (s) => CUID_PATTERN.test(s),
     message: 'Must be a valid CUID',
+    jsonSchema: { type: 'format', format: 'cuid' },
   };
 }
 
@@ -291,6 +308,7 @@ export function cuid2(): StringRefinement {
     _kind: 'string-refinement',
     check: (s) => s.length > 0 && CUID2_PATTERN.test(s),
     message: 'Must be a valid CUID2',
+    jsonSchema: { type: 'format', format: 'cuid2' },
   };
 }
 
@@ -304,6 +322,7 @@ export function ulid(): StringRefinement {
     _kind: 'string-refinement',
     check: (s) => ULID_PATTERN.test(s),
     message: 'Must be a valid ULID',
+    jsonSchema: { type: 'format', format: 'ulid' },
   };
 }
 
@@ -317,6 +336,7 @@ export function nanoid(): StringRefinement {
     _kind: 'string-refinement',
     check: (s) => NANOID_PATTERN.test(s),
     message: 'Must be a valid NanoID',
+    jsonSchema: { type: 'format', format: 'nanoid' },
   };
 }
 
@@ -333,6 +353,7 @@ export function base64(): StringRefinement {
     _kind: 'string-refinement',
     check: (s) => s.length === 0 || BASE64_PATTERN.test(s),
     message: 'Must be a valid Base64 string',
+    jsonSchema: { type: 'format', format: 'base64' },
   };
 }
 
@@ -345,6 +366,7 @@ export function hex(): StringRefinement {
     _kind: 'string-refinement',
     check: (s) => s.length > 0 && HEX_PATTERN.test(s),
     message: 'Must be a valid hexadecimal string',
+    jsonSchema: { type: 'format', format: 'hex' },
   };
 }
 
@@ -358,5 +380,6 @@ export function jwt(): StringRefinement {
     _kind: 'string-refinement',
     check: (s) => JWT_PATTERN.test(s),
     message: 'Must be a valid JWT',
+    jsonSchema: { type: 'format', format: 'jwt' },
   };
 }

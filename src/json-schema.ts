@@ -4,9 +4,14 @@
  * Converts property-validator schemas to JSON Schema Draft 7.
  * Enables OpenAPI ecosystem compatibility.
  *
- * Note: Refinement constraints (min, max, email, etc.) are not exported to
- * JSON Schema because they're stored internally and not accessible for
- * introspection. Only structural types are converted.
+ * Supported with Functional API (full introspection):
+ *   - Refinements: `string(email(), minLength(5))` → format: 'email', minLength: 5
+ *   - Optional: `optional(string())` → property not in required array
+ *   - Nullable: `nullable(string())` → type: ['string', 'null']
+ *
+ * Chainable API Limitation:
+ *   - `v.string().email().min(5)` - refinements NOT exported (no introspection)
+ *   - `.optional()` / `.nullable()` methods on chainable validators also not introspectable
  *
  * @example
  * ```typescript
@@ -34,7 +39,7 @@
  * @since v0.13.0
  */
 
-import type { Validator } from './types.js';
+import type { Validator, StringRefinement, NumberRefinement, RefinementJsonSchema } from './types.js';
 
 // ============================================================================
 // JSON Schema Types (Draft 7)
@@ -212,9 +217,28 @@ function convertValidator(
   const valueValidator = (validator as any)._valueValidator as Validator<unknown> | undefined;
   const discriminator = (validator as any)._discriminator as string | undefined;
   const variantMap = (validator as any)._variantMap as Map<unknown, Validator<unknown>> | undefined;
+  const isNullable = (validator as any)._isNullable as boolean | undefined;
+  const innerValidator = (validator as any)._innerValidator as Validator<unknown> | undefined;
 
-  // Note: optional/nullable/nullish wrappers don't expose internal metadata,
-  // so they cannot be detected and handled specially.
+  // Handle nullable() wrapper - add null to type
+  // Note: _isOptional is handled at the object level (not adding to required)
+  if (isNullable && innerValidator) {
+    const innerSchema = convertValidator(innerValidator, options);
+    // Add null to the type
+    if (innerSchema.type) {
+      if (Array.isArray(innerSchema.type)) {
+        innerSchema.type = [...innerSchema.type, 'null'];
+      } else {
+        innerSchema.type = [innerSchema.type, 'null'];
+      }
+    } else {
+      // For schemas without type (anyOf, oneOf, etc.), use anyOf with null
+      return {
+        anyOf: [innerSchema, { type: 'null' }],
+      };
+    }
+    return innerSchema;
+  }
 
   // Discriminated union
   if (discriminator && variantMap) {
@@ -256,13 +280,23 @@ function convertValidator(
     return convertUnion(validators, options);
   }
 
-  // Primitives - note: refinements not exported since they're internal
+  // Primitives - extract refinements if available
+  const refinements = (validator as any)._refinements as readonly (StringRefinement | NumberRefinement)[] | undefined;
+
   if (validatorType === 'string') {
-    return { type: 'string' };
+    const schema: JsonSchema = { type: 'string' };
+    if (refinements) {
+      applyRefinementsToSchema(schema, refinements);
+    }
+    return schema;
   }
 
   if (validatorType === 'number') {
-    return { type: 'number' };
+    const schema: JsonSchema = { type: 'number' };
+    if (refinements) {
+      applyRefinementsToSchema(schema, refinements);
+    }
+    return schema;
   }
 
   if (validatorType === 'boolean') {
@@ -299,11 +333,25 @@ function convertObject(
   };
 
   for (const [key, propValidator] of Object.entries(shape)) {
-    // Convert the property validator
-    schema.properties![key] = convertValidator(propValidator, options);
+    // Check for optional wrapper - property should not be required
+    const isOptional = (propValidator as any)._isOptional as boolean | undefined;
+    const innerValidator = (propValidator as any)._innerValidator as Validator<unknown> | undefined;
 
-    // All properties are required (optional/nullable wrappers can't be detected)
-    schema.required!.push(key);
+    if (isOptional && innerValidator) {
+      // Convert the inner validator, not the optional wrapper
+      schema.properties![key] = convertValidator(innerValidator, options);
+      // Don't add to required - property is optional
+    } else {
+      // Convert the property validator normally
+      schema.properties![key] = convertValidator(propValidator, options);
+      // Add to required
+      schema.required!.push(key);
+    }
+  }
+
+  // Remove empty required array for cleaner output
+  if (schema.required!.length === 0) {
+    delete schema.required;
   }
 
   return schema;
@@ -406,6 +454,54 @@ function convertRecord(
   }
 
   return schema;
+}
+
+/**
+ * Apply refinements to a JSON Schema
+ * Extracts jsonSchema metadata from refinements and adds to schema
+ */
+function applyRefinementsToSchema(
+  schema: JsonSchema,
+  refinements: readonly (StringRefinement | NumberRefinement)[]
+): void {
+  for (const refinement of refinements) {
+    if (!refinement.jsonSchema) continue;
+
+    const { type, value, format } = refinement.jsonSchema;
+
+    switch (type) {
+      // String constraints
+      case 'minLength':
+        schema.minLength = value as number;
+        break;
+      case 'maxLength':
+        schema.maxLength = value as number;
+        break;
+      case 'pattern':
+        schema.pattern = value as string;
+        break;
+      case 'format':
+        schema.format = format;
+        break;
+
+      // Number constraints
+      case 'minimum':
+        schema.minimum = value as number;
+        break;
+      case 'maximum':
+        schema.maximum = value as number;
+        break;
+      case 'exclusiveMinimum':
+        schema.exclusiveMinimum = value as number;
+        break;
+      case 'exclusiveMaximum':
+        schema.exclusiveMaximum = value as number;
+        break;
+      case 'multipleOf':
+        schema.multipleOf = value as number;
+        break;
+    }
+  }
 }
 
 // ============================================================================

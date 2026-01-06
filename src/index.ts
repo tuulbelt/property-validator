@@ -2193,6 +2193,11 @@ export function string(...refinements: StringRefinement[]): StringValidator | Va
 
   validator._type = 'string';
 
+  // Expose refinements for JSON Schema introspection
+  if (refinements.length > 0) {
+    validator._refinements = refinements;
+  }
+
   // Enable JIT bypass for fast path
   if (internalRefinements.length === 0) {
     validator._compiled = (data: unknown) => typeof data === 'string';
@@ -2299,6 +2304,11 @@ export function number(...refinements: NumberRefinement[]): NumberValidator | Va
   };
 
   validator._type = 'number';
+
+  // Expose refinements for JSON Schema introspection
+  if (refinements.length > 0) {
+    validator._refinements = refinements;
+  }
 
   // Enable JIT bypass for fast path
   if (internalRefinements.length === 0) {
@@ -3181,20 +3191,28 @@ export function record<K extends string, V>(
  * Optional validator - standalone implementation for tree-shaking
  */
 export function optional<T>(validator: Validator<T>): Validator<T | undefined> {
-  return createValidator(
+  const optionalValidator = createValidator(
     (data): data is T | undefined => data === undefined || validator.validate(data),
     (data) => validator.error(data)
   );
+  // Expose metadata for JSON Schema introspection
+  optionalValidator._isOptional = true;
+  optionalValidator._innerValidator = validator as Validator<unknown>;
+  return optionalValidator;
 }
 
 /**
  * Nullable validator - standalone implementation for tree-shaking
  */
 export function nullable<T>(validator: Validator<T>): Validator<T | null> {
-  return createValidator(
+  const nullableValidator = createValidator(
     (data): data is T | null => data === null || validator.validate(data),
     (data) => validator.error(data)
   );
+  // Expose metadata for JSON Schema introspection
+  nullableValidator._isNullable = true;
+  nullableValidator._innerValidator = validator as Validator<unknown>;
+  return nullableValidator;
 }
 
 /**

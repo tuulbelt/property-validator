@@ -3,16 +3,25 @@
  *
  * Tests for converting property-validator schemas to JSON Schema Draft 7.
  *
- * Note: Refinement constraints (min, max, email, etc.) are NOT tested here
- * because they're stored internally in closures and not accessible for
- * introspection. Only structural types are converted.
+ * Functional API (full introspection support):
+ *   - `string(email(), minLength(5))` - refinements ARE exported
+ *   - `optional(string())` - property not in required array
+ *   - `nullable(string())` - type: ['string', 'null']
+ *
+ * Chainable API (limited introspection):
+ *   - `v.string().email().min(5)` - refinements NOT exported (closure-based)
+ *   - `.optional()` / `.nullable()` methods also not introspectable
  */
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { v, discriminatedUnion } from '../src/index.js';
+import { v, discriminatedUnion, string, number, optional, nullable, object } from '../src/index.js';
 import { toJsonSchema } from '../src/json-schema.js';
 import type { JsonSchema } from '../src/json-schema.js';
+
+// Import refinements for functional API tests
+import { email, minLength, maxLength, pattern, uuid, datetime, date, time, ipv4, ipv6 } from '../src/refinements/string.js';
+import { int, positive, negative, min, max, multipleOf, nonnegative } from '../src/refinements/number.js';
 
 // ============================================================================
 // Primitive Types
@@ -49,21 +58,208 @@ test('JSON Schema: primitives', async (t) => {
     assert.strictEqual(jsonSchema.type, 'string');
   });
 
-  await t.test('string with refinements still converts to basic string type', () => {
-    // Refinements are internal and not exported
+  await t.test('chainable string refinements NOT exported (closure-based)', () => {
+    // Chainable methods create closures, not introspectable refinements
     const schema = v.string().min(5).max(100).email();
     const jsonSchema = toJsonSchema(schema);
 
     assert.strictEqual(jsonSchema.type, 'string');
-    // Note: minLength, maxLength, format are NOT included since refinements are internal
+    // Note: minLength, maxLength, format are NOT included for chainable API
+    assert.strictEqual(jsonSchema.minLength, undefined);
+    assert.strictEqual(jsonSchema.maxLength, undefined);
+    assert.strictEqual(jsonSchema.format, undefined);
   });
 
-  await t.test('number with refinements still converts to basic number type', () => {
+  await t.test('chainable number refinements NOT exported (closure-based)', () => {
+    // Chainable methods create closures, not introspectable refinements
     const schema = v.number().int().positive().min(0).max(100);
     const jsonSchema = toJsonSchema(schema);
 
     assert.strictEqual(jsonSchema.type, 'number');
-    // Note: integer type, minimum, maximum are NOT included since refinements are internal
+    // Note: minimum, maximum are NOT included for chainable API
+    assert.strictEqual(jsonSchema.minimum, undefined);
+    assert.strictEqual(jsonSchema.maximum, undefined);
+  });
+});
+
+// ============================================================================
+// Refinement Extraction (Functional API)
+// ============================================================================
+
+test('JSON Schema: string refinements (functional API)', async (t) => {
+  await t.test('exports minLength constraint', () => {
+    const schema = string(minLength(5));
+    const jsonSchema = toJsonSchema(schema);
+
+    assert.strictEqual(jsonSchema.type, 'string');
+    assert.strictEqual(jsonSchema.minLength, 5);
+  });
+
+  await t.test('exports maxLength constraint', () => {
+    const schema = string(maxLength(100));
+    const jsonSchema = toJsonSchema(schema);
+
+    assert.strictEqual(jsonSchema.type, 'string');
+    assert.strictEqual(jsonSchema.maxLength, 100);
+  });
+
+  await t.test('exports both minLength and maxLength', () => {
+    const schema = string(minLength(5), maxLength(100));
+    const jsonSchema = toJsonSchema(schema);
+
+    assert.strictEqual(jsonSchema.type, 'string');
+    assert.strictEqual(jsonSchema.minLength, 5);
+    assert.strictEqual(jsonSchema.maxLength, 100);
+  });
+
+  await t.test('exports email format', () => {
+    const schema = string(email());
+    const jsonSchema = toJsonSchema(schema);
+
+    assert.strictEqual(jsonSchema.type, 'string');
+    assert.strictEqual(jsonSchema.format, 'email');
+  });
+
+  await t.test('exports pattern constraint', () => {
+    const schema = string(pattern(/^[A-Z]{3}$/));
+    const jsonSchema = toJsonSchema(schema);
+
+    assert.strictEqual(jsonSchema.type, 'string');
+    assert.strictEqual(jsonSchema.pattern, '^[A-Z]{3}$');
+  });
+
+  await t.test('exports uuid format', () => {
+    const schema = string(uuid());
+    const jsonSchema = toJsonSchema(schema);
+
+    assert.strictEqual(jsonSchema.type, 'string');
+    assert.strictEqual(jsonSchema.format, 'uuid');
+  });
+
+  await t.test('exports datetime format', () => {
+    const schema = string(datetime());
+    const jsonSchema = toJsonSchema(schema);
+
+    assert.strictEqual(jsonSchema.type, 'string');
+    assert.strictEqual(jsonSchema.format, 'date-time');
+  });
+
+  await t.test('exports date format', () => {
+    const schema = string(date());
+    const jsonSchema = toJsonSchema(schema);
+
+    assert.strictEqual(jsonSchema.type, 'string');
+    assert.strictEqual(jsonSchema.format, 'date');
+  });
+
+  await t.test('exports time format', () => {
+    const schema = string(time());
+    const jsonSchema = toJsonSchema(schema);
+
+    assert.strictEqual(jsonSchema.type, 'string');
+    assert.strictEqual(jsonSchema.format, 'time');
+  });
+
+  await t.test('exports ipv4 format', () => {
+    const schema = string(ipv4());
+    const jsonSchema = toJsonSchema(schema);
+
+    assert.strictEqual(jsonSchema.type, 'string');
+    assert.strictEqual(jsonSchema.format, 'ipv4');
+  });
+
+  await t.test('exports ipv6 format', () => {
+    const schema = string(ipv6());
+    const jsonSchema = toJsonSchema(schema);
+
+    assert.strictEqual(jsonSchema.type, 'string');
+    assert.strictEqual(jsonSchema.format, 'ipv6');
+  });
+
+  await t.test('exports combined email and minLength', () => {
+    const schema = string(email(), minLength(5));
+    const jsonSchema = toJsonSchema(schema);
+
+    assert.strictEqual(jsonSchema.type, 'string');
+    assert.strictEqual(jsonSchema.format, 'email');
+    assert.strictEqual(jsonSchema.minLength, 5);
+  });
+});
+
+test('JSON Schema: number refinements (functional API)', async (t) => {
+  await t.test('exports minimum constraint', () => {
+    const schema = number(min(0));
+    const jsonSchema = toJsonSchema(schema);
+
+    assert.strictEqual(jsonSchema.type, 'number');
+    assert.strictEqual(jsonSchema.minimum, 0);
+  });
+
+  await t.test('exports maximum constraint', () => {
+    const schema = number(max(100));
+    const jsonSchema = toJsonSchema(schema);
+
+    assert.strictEqual(jsonSchema.type, 'number');
+    assert.strictEqual(jsonSchema.maximum, 100);
+  });
+
+  await t.test('exports both minimum and maximum', () => {
+    const schema = number(min(0), max(100));
+    const jsonSchema = toJsonSchema(schema);
+
+    assert.strictEqual(jsonSchema.type, 'number');
+    assert.strictEqual(jsonSchema.minimum, 0);
+    assert.strictEqual(jsonSchema.maximum, 100);
+  });
+
+  await t.test('exports exclusiveMinimum (positive)', () => {
+    const schema = number(positive());
+    const jsonSchema = toJsonSchema(schema);
+
+    assert.strictEqual(jsonSchema.type, 'number');
+    assert.strictEqual(jsonSchema.exclusiveMinimum, 0);
+  });
+
+  await t.test('exports exclusiveMaximum (negative)', () => {
+    const schema = number(negative());
+    const jsonSchema = toJsonSchema(schema);
+
+    assert.strictEqual(jsonSchema.type, 'number');
+    assert.strictEqual(jsonSchema.exclusiveMaximum, 0);
+  });
+
+  await t.test('exports multipleOf constraint', () => {
+    const schema = number(multipleOf(0.01));
+    const jsonSchema = toJsonSchema(schema);
+
+    assert.strictEqual(jsonSchema.type, 'number');
+    assert.strictEqual(jsonSchema.multipleOf, 0.01);
+  });
+
+  await t.test('exports int format', () => {
+    const schema = number(int());
+    const jsonSchema = toJsonSchema(schema);
+
+    assert.strictEqual(jsonSchema.type, 'number');
+    assert.strictEqual(jsonSchema.format, 'int32');
+  });
+
+  await t.test('exports nonnegative minimum', () => {
+    const schema = number(nonnegative());
+    const jsonSchema = toJsonSchema(schema);
+
+    assert.strictEqual(jsonSchema.type, 'number');
+    assert.strictEqual(jsonSchema.minimum, 0);
+  });
+
+  await t.test('exports combined int and range', () => {
+    const schema = number(int(), min(1), max(10));
+    const jsonSchema = toJsonSchema(schema);
+
+    assert.strictEqual(jsonSchema.type, 'number');
+    assert.strictEqual(jsonSchema.format, 'int32');
+    assert.strictEqual(jsonSchema.minimum, 1);
+    assert.strictEqual(jsonSchema.maximum, 10);
   });
 });
 
@@ -462,5 +658,95 @@ test('JSON Schema: options', async (t) => {
     const jsonSchema = toJsonSchema(customValidator as any, { includeSchema: false });
 
     assert.deepStrictEqual(jsonSchema, {});
+  });
+});
+
+// ============================================================================
+// Optional/Nullable (Functional API)
+// ============================================================================
+
+test('JSON Schema: optional/nullable (functional API)', async (t) => {
+  await t.test('optional property is not in required array', () => {
+    const schema = object({
+      name: string(),
+      email: optional(string()),
+    });
+    const jsonSchema = toJsonSchema(schema, { includeSchema: false });
+
+    assert.strictEqual(jsonSchema.type, 'object');
+    assert.deepStrictEqual(jsonSchema.required, ['name']);
+    assert.deepStrictEqual(jsonSchema.properties?.name, { type: 'string' });
+    assert.deepStrictEqual(jsonSchema.properties?.email, { type: 'string' });
+  });
+
+  await t.test('nullable property has null in type array', () => {
+    const schema = nullable(string());
+    const jsonSchema = toJsonSchema(schema, { includeSchema: false });
+
+    assert.deepStrictEqual(jsonSchema.type, ['string', 'null']);
+  });
+
+  await t.test('nullable number has null in type array', () => {
+    const schema = nullable(number());
+    const jsonSchema = toJsonSchema(schema, { includeSchema: false });
+
+    assert.deepStrictEqual(jsonSchema.type, ['number', 'null']);
+  });
+
+  await t.test('object with all optional properties has no required array', () => {
+    const schema = object({
+      name: optional(string()),
+      age: optional(number()),
+    });
+    const jsonSchema = toJsonSchema(schema, { includeSchema: false });
+
+    assert.strictEqual(jsonSchema.type, 'object');
+    assert.strictEqual(jsonSchema.required, undefined);
+    assert.deepStrictEqual(jsonSchema.properties?.name, { type: 'string' });
+    assert.deepStrictEqual(jsonSchema.properties?.age, { type: 'number' });
+  });
+
+  await t.test('mixed required and optional properties', () => {
+    const schema = object({
+      id: string(),
+      name: string(),
+      email: optional(string()),
+      age: optional(number()),
+    });
+    const jsonSchema = toJsonSchema(schema, { includeSchema: false });
+
+    assert.strictEqual(jsonSchema.type, 'object');
+    assert.deepStrictEqual(jsonSchema.required, ['id', 'name']);
+    assert.strictEqual(Object.keys(jsonSchema.properties!).length, 4);
+  });
+
+  await t.test('nullable with refinements preserves type array', () => {
+    const schema = nullable(string(minLength(1)));
+    const jsonSchema = toJsonSchema(schema, { includeSchema: false });
+
+    assert.deepStrictEqual(jsonSchema.type, ['string', 'null']);
+    assert.strictEqual(jsonSchema.minLength, 1);
+  });
+
+  await t.test('optional with refinements preserves constraints', () => {
+    const schema = object({
+      email: optional(string(email())),
+    });
+    const jsonSchema = toJsonSchema(schema, { includeSchema: false });
+
+    assert.strictEqual(jsonSchema.required, undefined);
+    assert.strictEqual(jsonSchema.properties?.email?.type, 'string');
+    assert.strictEqual(jsonSchema.properties?.email?.format, 'email');
+  });
+
+  await t.test('nullable object adds null to type array', () => {
+    const innerSchema = object({ name: string() });
+    const schema = nullable(innerSchema);
+    const jsonSchema = toJsonSchema(schema, { includeSchema: false });
+
+    // Objects with type property can use type array
+    assert.deepStrictEqual(jsonSchema.type, ['object', 'null']);
+    assert.ok(jsonSchema.properties);
+    assert.deepStrictEqual(jsonSchema.required, ['name']);
   });
 });
