@@ -147,3 +147,10 @@ export { validateWithPath } from './internal/core.js';
 
 // Export createValidator for building custom validators
 export { createValidator } from './internal/core.js';
+
+// ============================================================================
+// JSON Schema Export (v0.13.0)
+// ============================================================================
+
+export { toJsonSchema } from './json-schema.js';
+export type { JsonSchema, JsonSchemaType, ToJsonSchemaOptions } from './json-schema.js';

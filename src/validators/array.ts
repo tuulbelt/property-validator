@@ -433,17 +433,17 @@ export function array<T>(itemValidator: Validator<T>): ArrayValidator<T> {
     }
 
     // Store item validator for JSON Schema introspection
-    validator._itemValidator = itemValidator;
+    (validator as any)._itemValidator = itemValidator;
 
     // Store constraints for JSON Schema introspection
     if (minLength !== undefined) {
-      validator._minLength = minLength;
+      (validator as any)._minLength = minLength;
     }
     if (maxLength !== undefined) {
-      validator._maxLength = maxLength;
+      (validator as any)._maxLength = maxLength;
     }
     if (exactLength !== undefined) {
-      validator._exactLength = exactLength;
+      (validator as any)._exactLength = exactLength;
     }
 
     validator._type = 'array';
