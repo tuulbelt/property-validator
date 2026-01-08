@@ -256,6 +256,37 @@ export interface Validator<T> {
   _hasRefinements?: boolean;  // Internal: whether validator has refinements
   _validateWithPath?: (data: unknown, path: readonly PathSegment[] | PathSegment[], seen: WeakSet<object>, depth: number, options: ValidationOptions) => Result<T>;  // Internal: path-aware validation
   _compiled?: (data: unknown) => boolean;  // Internal: JIT-compiled validator for fast path (v0.8.0)
+  _refinements?: readonly (StringRefinement | NumberRefinement | ArrayRefinement)[];  // Internal: refinements for JSON Schema introspection (v0.10.0)
+  _isOptional?: boolean;  // Internal: marks optional() wrapper for JSON Schema introspection
+  _isNullable?: boolean;  // Internal: marks nullable() wrapper for JSON Schema introspection
+  _innerValidator?: Validator<unknown>;  // Internal: wrapped validator for optional/nullable introspection
+}
+
+/**
+ * Object validator with strict/passthrough modes (v0.11.0)
+ */
+export interface ObjectValidator<T> extends Validator<T> {
+  /**
+   * Reject objects with unknown properties not in the schema.
+   * By default, extra properties are silently ignored.
+   *
+   * @example
+   * const User = v.object({ name: v.string() }).strict();
+   * User.validate({ name: 'Alice' }) // true
+   * User.validate({ name: 'Alice', extra: true }) // false - unknown key 'extra'
+   */
+  strict(): ObjectValidator<T>;
+
+  /**
+   * Allow unknown properties and pass them through to the output.
+   * By default, extra properties are silently ignored.
+   *
+   * @example
+   * const User = v.object({ name: v.string() }).passthrough();
+   * User.validate({ name: 'Alice', extra: true }) // true
+   * // Output preserves: { name: 'Alice', extra: true }
+   */
+  passthrough(): ObjectValidator<T>;
 }
 
 /**
@@ -307,6 +338,22 @@ export interface StringValidator extends Validator<string> {
   ipv4(): StringValidator;
   /** Must be valid IPv6 address */
   ipv6(): StringValidator;
+  // v0.9.5: ID format validators
+  /** Must be valid CUID (Collision-resistant Unique ID) */
+  cuid(): StringValidator;
+  /** Must be valid CUID2 (Collision-resistant Unique ID v2) */
+  cuid2(): StringValidator;
+  /** Must be valid ULID (Universally Unique Lexicographically Sortable ID) */
+  ulid(): StringValidator;
+  /** Must be valid NanoID (URL-friendly unique ID, 21 chars) */
+  nanoid(): StringValidator;
+  // v0.9.5: Encoding validators
+  /** Must be valid Base64 encoded string */
+  base64(): StringValidator;
+  /** Must be valid hexadecimal string */
+  hex(): StringValidator;
+  /** Must be valid JWT (JSON Web Token) */
+  jwt(): StringValidator;
 }
 
 /**
@@ -335,6 +382,16 @@ export interface NumberValidator extends Validator<number> {
   safeInt(): NumberValidator;
   /** Must be a multiple of n (useful for currency, steps) */
   multipleOf(n: number): NumberValidator;
+
+  // v0.9.5: Extended number validators
+  /** Must be a valid network port number (0-65535) */
+  port(): NumberValidator;
+  /** Must be a valid latitude (-90 to 90) */
+  latitude(): NumberValidator;
+  /** Must be a valid longitude (-180 to 180) */
+  longitude(): NumberValidator;
+  /** Must be a percentage value (0 to 100) */
+  percentage(): NumberValidator;
 }
 
 /**
@@ -371,6 +428,15 @@ export type CompiledCheck = (data: unknown) => boolean;
 // ============================================================================
 
 /**
+ * JSON Schema representation for a refinement constraint
+ */
+export interface RefinementJsonSchema {
+  readonly type?: 'minLength' | 'maxLength' | 'pattern' | 'format' | 'minimum' | 'maximum' | 'exclusiveMinimum' | 'exclusiveMaximum' | 'multipleOf';
+  readonly value?: string | number | boolean;
+  readonly format?: string;
+}
+
+/**
  * String refinement - a constraint that can be applied to string validators
  * Each refinement is a separate export, enabling tree-shaking
  */
@@ -378,6 +444,8 @@ export interface StringRefinement {
   readonly _kind: 'string-refinement';
   readonly check: (value: string) => boolean;
   readonly message: string;
+  /** JSON Schema representation for this refinement (optional, for introspection) */
+  readonly jsonSchema?: RefinementJsonSchema;
 }
 
 /**
@@ -388,6 +456,8 @@ export interface NumberRefinement {
   readonly _kind: 'number-refinement';
   readonly check: (value: number) => boolean;
   readonly message: string;
+  /** JSON Schema representation for this refinement (optional, for introspection) */
+  readonly jsonSchema?: RefinementJsonSchema;
 }
 
 /**

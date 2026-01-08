@@ -24,6 +24,17 @@ const TIME_PATTERN = /^\d{2}:\d{2}:\d{2}(?:\.\d+)?$/;
 const IPV4_PATTERN = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
 const IPV6_PATTERN = /^(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$|^(?:[0-9a-fA-F]{1,4}:){1,7}:$|^(?:[0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}$|^(?:[0-9a-fA-F]{1,4}:){1,5}(?::[0-9a-fA-F]{1,4}){1,2}$|^(?:[0-9a-fA-F]{1,4}:){1,4}(?::[0-9a-fA-F]{1,4}){1,3}$|^(?:[0-9a-fA-F]{1,4}:){1,3}(?::[0-9a-fA-F]{1,4}){1,4}$|^(?:[0-9a-fA-F]{1,4}:){1,2}(?::[0-9a-fA-F]{1,4}){1,5}$|^[0-9a-fA-F]{1,4}:(?::[0-9a-fA-F]{1,4}){1,6}$|^:(?::[0-9a-fA-F]{1,4}){1,7}$|^::$/;
 
+// ID Format Patterns (v0.9.5)
+const CUID_PATTERN = /^c[^\s-]{8,}$/;
+const CUID2_PATTERN = /^[0-9a-z]+$/;
+const ULID_PATTERN = /^[0-9A-HJKMNP-TV-Za-hjkmnp-tv-z]{26}$/;
+const NANOID_PATTERN = /^[A-Za-z0-9_-]{21}$/;
+
+// Encoding Patterns (v0.9.5)
+const BASE64_PATTERN = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
+const HEX_PATTERN = /^[0-9a-fA-F]+$/;
+const JWT_PATTERN = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
+
 // ============================================================================
 // Length Refinements
 // ============================================================================
@@ -37,6 +48,7 @@ export function minLength(n: number): StringRefinement {
     _kind: 'string-refinement',
     check: (s) => s.length >= n,
     message: `String must be at least ${n} character(s)`,
+    jsonSchema: { type: 'minLength', value: n },
   };
 }
 
@@ -49,6 +61,7 @@ export function maxLength(n: number): StringRefinement {
     _kind: 'string-refinement',
     check: (s) => s.length <= n,
     message: `String must be at most ${n} character(s)`,
+    jsonSchema: { type: 'maxLength', value: n },
   };
 }
 
@@ -61,6 +74,8 @@ export function length(n: number): StringRefinement {
     _kind: 'string-refinement',
     check: (s) => s.length === n,
     message: `String must be exactly ${n} character(s)`,
+    // JSON Schema doesn't have exact length, use both min and max
+    jsonSchema: { type: 'minLength', value: n },
   };
 }
 
@@ -73,6 +88,7 @@ export function nonempty(): StringRefinement {
     _kind: 'string-refinement',
     check: (s) => s.length > 0,
     message: 'String cannot be empty',
+    jsonSchema: { type: 'minLength', value: 1 },
   };
 }
 
@@ -87,8 +103,10 @@ export function nonempty(): StringRefinement {
 export function email(): StringRefinement {
   return {
     _kind: 'string-refinement',
-    check: (s) => EMAIL_PATTERN.test(s),
+    // RFC 5321: max 254 chars - length check prevents ReDoS
+    check: (s) => s.length <= 254 && EMAIL_PATTERN.test(s),
     message: 'Must be a valid email address',
+    jsonSchema: { type: 'format', format: 'email' },
   };
 }
 
@@ -99,8 +117,10 @@ export function email(): StringRefinement {
 export function url(): StringRefinement {
   return {
     _kind: 'string-refinement',
-    check: (s) => URL_PATTERN.test(s),
+    // Practical limit of 2083 chars - length check prevents ReDoS
+    check: (s) => s.length <= 2083 && URL_PATTERN.test(s),
     message: 'Must be a valid URL',
+    jsonSchema: { type: 'format', format: 'uri' },
   };
 }
 
@@ -113,6 +133,7 @@ export function uuid(): StringRefinement {
     _kind: 'string-refinement',
     check: (s) => UUID_PATTERN.test(s),
     message: 'Must be a valid UUID',
+    jsonSchema: { type: 'format', format: 'uuid' },
   };
 }
 
@@ -125,6 +146,7 @@ export function pattern(regex: RegExp, name?: string): StringRefinement {
     _kind: 'string-refinement',
     check: (s) => regex.test(s),
     message: name ? `Must be a valid ${name}` : `String must match pattern ${regex}`,
+    jsonSchema: { type: 'pattern', value: regex.source },
   };
 }
 
@@ -181,6 +203,7 @@ export function datetime(): StringRefinement {
     _kind: 'string-refinement',
     check: (s) => DATETIME_PATTERN.test(s),
     message: 'Must be a valid ISO 8601 datetime (YYYY-MM-DDTHH:MM:SS)',
+    jsonSchema: { type: 'format', format: 'date-time' },
   };
 }
 
@@ -193,6 +216,7 @@ export function date(): StringRefinement {
     _kind: 'string-refinement',
     check: (s) => DATE_PATTERN.test(s),
     message: 'Must be a valid ISO 8601 date (YYYY-MM-DD)',
+    jsonSchema: { type: 'format', format: 'date' },
   };
 }
 
@@ -205,6 +229,7 @@ export function time(): StringRefinement {
     _kind: 'string-refinement',
     check: (s) => TIME_PATTERN.test(s),
     message: 'Must be a valid ISO 8601 time (HH:MM:SS)',
+    jsonSchema: { type: 'format', format: 'time' },
   };
 }
 
@@ -219,8 +244,11 @@ export function time(): StringRefinement {
 export function ip(): StringRefinement {
   return {
     _kind: 'string-refinement',
-    check: (s) => IPV4_PATTERN.test(s) || IPV6_PATTERN.test(s),
+    // Max 45 chars (IPv6) - length check prevents ReDoS
+    check: (s) => s.length <= 45 && (IPV4_PATTERN.test(s) || IPV6_PATTERN.test(s)),
     message: 'Must be a valid IP address (IPv4 or IPv6)',
+    // No standard JSON Schema format for generic IP, use custom
+    jsonSchema: { type: 'format', format: 'ip' },
   };
 }
 
@@ -231,8 +259,10 @@ export function ip(): StringRefinement {
 export function ipv4(): StringRefinement {
   return {
     _kind: 'string-refinement',
-    check: (s) => IPV4_PATTERN.test(s),
+    // Max 15 chars (xxx.xxx.xxx.xxx) - length check prevents ReDoS
+    check: (s) => s.length <= 15 && IPV4_PATTERN.test(s),
     message: 'Must be a valid IPv4 address',
+    jsonSchema: { type: 'format', format: 'ipv4' },
   };
 }
 
@@ -243,7 +273,113 @@ export function ipv4(): StringRefinement {
 export function ipv6(): StringRefinement {
   return {
     _kind: 'string-refinement',
-    check: (s) => IPV6_PATTERN.test(s),
+    // Max 45 chars - length check prevents ReDoS
+    check: (s) => s.length <= 45 && IPV6_PATTERN.test(s),
     message: 'Must be a valid IPv6 address',
+    jsonSchema: { type: 'format', format: 'ipv6' },
+  };
+}
+
+// ============================================================================
+// ID Format Refinements (v0.9.5)
+// ============================================================================
+
+/**
+ * Valid CUID (Collision-resistant Unique ID)
+ * @example string(cuid())
+ * @see https://github.com/paralleldrive/cuid
+ */
+export function cuid(): StringRefinement {
+  return {
+    _kind: 'string-refinement',
+    check: (s) => CUID_PATTERN.test(s),
+    message: 'Must be a valid CUID',
+    jsonSchema: { type: 'format', format: 'cuid' },
+  };
+}
+
+/**
+ * Valid CUID2 (Collision-resistant Unique ID v2)
+ * @example string(cuid2())
+ * @see https://github.com/paralleldrive/cuid2
+ */
+export function cuid2(): StringRefinement {
+  return {
+    _kind: 'string-refinement',
+    check: (s) => s.length > 0 && CUID2_PATTERN.test(s),
+    message: 'Must be a valid CUID2',
+    jsonSchema: { type: 'format', format: 'cuid2' },
+  };
+}
+
+/**
+ * Valid ULID (Universally Unique Lexicographically Sortable Identifier)
+ * @example string(ulid())
+ * @see https://github.com/ulid/spec
+ */
+export function ulid(): StringRefinement {
+  return {
+    _kind: 'string-refinement',
+    check: (s) => ULID_PATTERN.test(s),
+    message: 'Must be a valid ULID',
+    jsonSchema: { type: 'format', format: 'ulid' },
+  };
+}
+
+/**
+ * Valid NanoID (URL-friendly unique ID, default 21 characters)
+ * @example string(nanoid())
+ * @see https://github.com/ai/nanoid
+ */
+export function nanoid(): StringRefinement {
+  return {
+    _kind: 'string-refinement',
+    check: (s) => NANOID_PATTERN.test(s),
+    message: 'Must be a valid NanoID',
+    jsonSchema: { type: 'format', format: 'nanoid' },
+  };
+}
+
+// ============================================================================
+// Encoding Refinements (v0.9.5)
+// ============================================================================
+
+/**
+ * Valid Base64 encoded string
+ * @example string(base64())
+ */
+export function base64(): StringRefinement {
+  return {
+    _kind: 'string-refinement',
+    check: (s) => s.length === 0 || BASE64_PATTERN.test(s),
+    message: 'Must be a valid Base64 string',
+    jsonSchema: { type: 'format', format: 'base64' },
+  };
+}
+
+/**
+ * Valid hexadecimal string
+ * @example string(hex())
+ */
+export function hex(): StringRefinement {
+  return {
+    _kind: 'string-refinement',
+    check: (s) => s.length > 0 && HEX_PATTERN.test(s),
+    message: 'Must be a valid hexadecimal string',
+    jsonSchema: { type: 'format', format: 'hex' },
+  };
+}
+
+/**
+ * Valid JWT (JSON Web Token)
+ * @example string(jwt())
+ * @see https://jwt.io
+ */
+export function jwt(): StringRefinement {
+  return {
+    _kind: 'string-refinement',
+    check: (s) => JWT_PATTERN.test(s),
+    message: 'Must be a valid JWT',
+    jsonSchema: { type: 'format', format: 'jwt' },
   };
 }

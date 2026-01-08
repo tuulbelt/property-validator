@@ -33,7 +33,7 @@ demo_cleanup() {
 }
 
 demo_commands() {
-  echo "# Property Validator Demo"
+  echo "# Property Validator v0.10.0 Demo"
   sleep 1
 
   echo ""
@@ -67,15 +67,24 @@ demo_commands() {
   sleep 2
 
   echo ""
-  echo "# 4. Validate API response data"
+  echo "# 4. Fast check mode (boolean output)"
   sleep 0.5
-  echo '$ echo '"'"'{"name":"Charlie","age":25,"email":"charlie@example.com"}'"'"' | propval'
+  echo '$ propval --check '"'"'{"name":"Alice","age":30,"email":"alice@example.com"}'"'"' && echo "Valid!"'
   sleep 0.5
-  echo '{"name":"Charlie","age":25,"email":"charlie@example.com"}' | propval
+  propval --check '{"name":"Alice","age":30,"email":"alice@example.com"}' && echo "Valid!"
+  sleep 2
+
+  echo ""
+  echo "# 5. View available API"
+  sleep 0.5
+  echo "$ propval --api | head -20"
+  sleep 0.5
+  propval --api | head -20
   sleep 2
 
   echo ""
   echo "# Runtime type validation for JavaScript/TypeScript"
+  echo "# New in v0.10.0: record(), discriminatedUnion(), toJsonSchema()"
   sleep 1
 }
 

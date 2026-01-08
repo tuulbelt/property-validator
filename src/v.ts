@@ -1,5 +1,5 @@
 /**
- * Property Validator - v namespace entry point (v0.9.2)
+ * Property Validator - v namespace entry point (v0.10.0)
  *
  * Import the full v namespace object for fluent API usage:
  *
@@ -21,7 +21,10 @@
  * ```
  */
 
-// Import named validators to build v namespace
+// Import core functions from modular structure
+import { validate, check, compile, compileCheck } from './core/index.js';
+
+// Import validators from modular structure
 import {
   string,
   number,
@@ -35,11 +38,7 @@ import {
   literal,
   lazy,
   enum_,
-  validate,
-  check,
-  compile,
-  compileCheck,
-} from './index.js';
+} from './validators/index.js';
 
 // Import types
 import type {

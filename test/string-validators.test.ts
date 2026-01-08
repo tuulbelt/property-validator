@@ -568,3 +568,397 @@ describe('string validators: ip() (IPv4 or IPv6)', () => {
     assert.strictEqual(validate(ipValidator, '').ok, false);
   });
 });
+
+// ============================================================================
+// v0.9.5: Extended String Validators - ID Formats
+// ============================================================================
+
+describe('string validators: cuid()', () => {
+  test('accepts valid CUIDs', () => {
+    const validator = v.string().cuid();
+    const validCuids = [
+      'cjld2cjxh0000qzrmn831i7rn',
+      'cjld2cyuq0000t3rmniod1foy',
+      'ck3n2g6r60000qzrm3q5i5j9r',
+      'clh1234560000abcdefghijkl',
+    ];
+
+    for (const cuid of validCuids) {
+      const result = validate(validator, cuid);
+      assert.strictEqual(result.ok, true, `Expected "${cuid}" to be valid`);
+    }
+  });
+
+  test('rejects invalid CUIDs', () => {
+    const validator = v.string().cuid();
+    const invalidCuids = [
+      'not-a-cuid',        // Doesn't start with 'c'
+      'a1234567890',       // Starts with wrong letter
+      'c',                 // Too short
+      'c12345',            // Too short (less than 8 chars after c)
+      '',
+    ];
+
+    for (const cuid of invalidCuids) {
+      const result = validate(validator, cuid);
+      assert.strictEqual(result.ok, false, `Expected "${cuid}" to be invalid`);
+    }
+  });
+
+  test('provides clear error message', () => {
+    const validator = v.string().cuid();
+    const result = validate(validator, 'invalid');
+    assert.strictEqual(result.ok, false);
+    if (!result.ok) {
+      assert.match(result.error, /CUID/);
+    }
+  });
+});
+
+describe('string validators: cuid2()', () => {
+  test('accepts valid CUID2s', () => {
+    const validator = v.string().cuid2();
+    const validCuid2s = [
+      'tz4a98xxat96iws9zmbrgj3a',
+      'kf7m1x3nobw9jz8t4yhzl9jq',
+      'abc123',
+      'a',  // Single lowercase character is valid
+    ];
+
+    for (const cuid2 of validCuid2s) {
+      const result = validate(validator, cuid2);
+      assert.strictEqual(result.ok, true, `Expected "${cuid2}" to be valid`);
+    }
+  });
+
+  test('rejects invalid CUID2s', () => {
+    const validator = v.string().cuid2();
+    const invalidCuid2s = [
+      'ABC123',            // Uppercase not allowed
+      'abc-123',           // Dashes not allowed
+      'abc_123',           // Underscores not allowed
+      'abc 123',           // Spaces not allowed
+      '',                  // Empty string
+    ];
+
+    for (const cuid2 of invalidCuid2s) {
+      const result = validate(validator, cuid2);
+      assert.strictEqual(result.ok, false, `Expected "${cuid2}" to be invalid`);
+    }
+  });
+
+  test('provides clear error message', () => {
+    const validator = v.string().cuid2();
+    const result = validate(validator, 'INVALID');
+    assert.strictEqual(result.ok, false);
+    if (!result.ok) {
+      assert.match(result.error, /CUID2/);
+    }
+  });
+});
+
+describe('string validators: ulid()', () => {
+  test('accepts valid ULIDs', () => {
+    const validator = v.string().ulid();
+    const validUlids = [
+      '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+      '01BX5ZZKBKACTAV9WEVGEMMVRZ',
+      '01FWRHZR0XZJ6GG8K8ZQM3V7NW',
+      '7ZZZZZZZZZZZZZZZZZZZZZZZZZ', // Max value
+      '00000000000000000000000000', // Min value
+    ];
+
+    for (const ulid of validUlids) {
+      const result = validate(validator, ulid);
+      assert.strictEqual(result.ok, true, `Expected "${ulid}" to be valid`);
+    }
+  });
+
+  test('rejects invalid ULIDs', () => {
+    const validator = v.string().ulid();
+    const invalidUlids = [
+      '01ARZ3NDEKTSV4RRFFQ69G5FA',  // Too short (25 chars)
+      '01ARZ3NDEKTSV4RRFFQ69G5FAVX', // Too long (27 chars)
+      '01ARZ3NDEKTSV4RRFFQ69G5FAI', // Contains 'I' (not in Crockford Base32)
+      '01ARZ3NDEKTSV4RRFFQ69G5FAO', // Contains 'O' (not in Crockford Base32)
+      '01ARZ3NDEKTSV4RRFFQ69G5FAL', // Contains 'L' (not in Crockford Base32)
+      '01ARZ3NDEKTSV4RRFFQ69G5FAU', // Contains 'U' (not in Crockford Base32)
+      'not-a-ulid',
+      '',
+    ];
+
+    for (const ulid of invalidUlids) {
+      const result = validate(validator, ulid);
+      assert.strictEqual(result.ok, false, `Expected "${ulid}" to be invalid`);
+    }
+  });
+
+  test('accepts lowercase ULIDs', () => {
+    const validator = v.string().ulid();
+    assert.strictEqual(validate(validator, '01arz3ndektsv4rrffq69g5fav').ok, true);
+  });
+
+  test('provides clear error message', () => {
+    const validator = v.string().ulid();
+    const result = validate(validator, 'invalid');
+    assert.strictEqual(result.ok, false);
+    if (!result.ok) {
+      assert.match(result.error, /ULID/);
+    }
+  });
+});
+
+describe('string validators: nanoid()', () => {
+  test('accepts valid NanoIDs (default 21 chars)', () => {
+    const validator = v.string().nanoid();
+    const validNanoids = [
+      'V1StGXR8_Z5jdHi6B-myT',
+      'FwZoNxPig4H9TLn-NxqJP',
+      'Uakgb_J5m9g-0JDMbcJqL',  // Exactly 21 chars
+      'AAAAAAAAAAAAAAAAAAAA1',  // 21 chars with only valid chars
+      '---------------------',  // 21 dashes is valid
+    ];
+
+    for (const nanoid of validNanoids) {
+      const result = validate(validator, nanoid);
+      assert.strictEqual(result.ok, true, `Expected "${nanoid}" to be valid`);
+    }
+  });
+
+  test('rejects invalid NanoIDs', () => {
+    const validator = v.string().nanoid();
+    const invalidNanoids = [
+      'V1StGXR8_Z5jdHi6B-my',   // Too short (20 chars)
+      'V1StGXR8_Z5jdHi6B-myTX', // Too long (22 chars)
+      'V1StGXR8_Z5jdHi6B-my!',  // Invalid character '!'
+      'V1StGXR8_Z5jdHi6B-my@',  // Invalid character '@'
+      'V1StGXR8 Z5jdHi6B-myT',  // Contains space
+      '',
+    ];
+
+    for (const nanoid of invalidNanoids) {
+      const result = validate(validator, nanoid);
+      assert.strictEqual(result.ok, false, `Expected "${nanoid}" to be invalid`);
+    }
+  });
+
+  test('provides clear error message', () => {
+    const validator = v.string().nanoid();
+    const result = validate(validator, 'invalid');
+    assert.strictEqual(result.ok, false);
+    if (!result.ok) {
+      assert.match(result.error, /NanoID/);
+    }
+  });
+});
+
+// ============================================================================
+// v0.9.5: Extended String Validators - Encoding Formats
+// ============================================================================
+
+describe('string validators: base64()', () => {
+  test('accepts valid Base64 strings', () => {
+    const validator = v.string().base64();
+    const validBase64 = [
+      'SGVsbG8gV29ybGQ=',     // "Hello World"
+      'YWJj',                 // "abc"
+      'YWJjZA==',             // "abcd"
+      'YWJjZGU=',             // "abcde"
+      'dGVzdA==',             // "test"
+      '',                     // Empty string is valid Base64
+    ];
+
+    for (const b64 of validBase64) {
+      const result = validate(validator, b64);
+      assert.strictEqual(result.ok, true, `Expected "${b64}" to be valid`);
+    }
+  });
+
+  test('rejects invalid Base64 strings', () => {
+    const validator = v.string().base64();
+    const invalidBase64 = [
+      'SGVsbG8gV29ybGQ',      // Missing padding (15 chars, not divisible by 4)
+      'SGVsbG8!V29ybGQ=',     // Invalid character '!'
+      'SGVsbG8 V29ybGQ=',     // Contains space
+      '====',                 // Only padding, no data
+      'ab',                   // Too short (not padded correctly)
+    ];
+
+    for (const b64 of invalidBase64) {
+      const result = validate(validator, b64);
+      assert.strictEqual(result.ok, false, `Expected "${b64}" to be invalid`);
+    }
+  });
+
+  test('provides clear error message', () => {
+    const validator = v.string().base64();
+    const result = validate(validator, 'not-base64!');
+    assert.strictEqual(result.ok, false);
+    if (!result.ok) {
+      assert.match(result.error, /Base64/);
+    }
+  });
+});
+
+describe('string validators: hex()', () => {
+  test('accepts valid hexadecimal strings', () => {
+    const validator = v.string().hex();
+    const validHex = [
+      '0123456789abcdef',
+      'ABCDEF',
+      'DeadBeef',
+      'ff',
+      '0',
+      'a1b2c3d4e5f6',
+    ];
+
+    for (const h of validHex) {
+      const result = validate(validator, h);
+      assert.strictEqual(result.ok, true, `Expected "${h}" to be valid`);
+    }
+  });
+
+  test('rejects invalid hexadecimal strings', () => {
+    const validator = v.string().hex();
+    const invalidHex = [
+      'ghijkl',             // Invalid hex chars
+      '0x123',              // Prefix not allowed
+      '12 34',              // Contains space
+      '12-34',              // Contains dash
+      '',                   // Empty string
+    ];
+
+    for (const h of invalidHex) {
+      const result = validate(validator, h);
+      assert.strictEqual(result.ok, false, `Expected "${h}" to be invalid`);
+    }
+  });
+
+  test('provides clear error message', () => {
+    const validator = v.string().hex();
+    const result = validate(validator, 'xyz');
+    assert.strictEqual(result.ok, false);
+    if (!result.ok) {
+      assert.match(result.error, /hexadecimal/);
+    }
+  });
+});
+
+describe('string validators: jwt()', () => {
+  test('accepts valid JWTs', () => {
+    const validator = v.string().jwt();
+    const validJwts = [
+      // Standard JWT structure: header.payload.signature (all parts non-empty)
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U',
+      'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJpc3MiOiJqb2UiLCJleHAiOjEzMDA4MTkzODB9.signature',
+      'aaa.bbb.ccc',         // Minimal valid structure
+    ];
+
+    for (const jwt of validJwts) {
+      const result = validate(validator, jwt);
+      assert.strictEqual(result.ok, true, `Expected "${jwt}" to be valid`);
+    }
+  });
+
+  test('rejects invalid JWTs', () => {
+    const validator = v.string().jwt();
+    const invalidJwts = [
+      'not-a-jwt',            // No dots
+      'only.one',             // Only one dot
+      'too.many.dots.here',   // Too many dots
+      '.empty.header',        // Empty header
+      'empty..payload',       // Empty middle section
+      'header.payload.',      // Empty signature not allowed
+      '',
+    ];
+
+    for (const jwt of invalidJwts) {
+      const result = validate(validator, jwt);
+      assert.strictEqual(result.ok, false, `Expected "${jwt}" to be invalid`);
+    }
+  });
+
+  test('provides clear error message', () => {
+    const validator = v.string().jwt();
+    const result = validate(validator, 'invalid');
+    assert.strictEqual(result.ok, false);
+    if (!result.ok) {
+      assert.match(result.error, /JWT/);
+    }
+  });
+});
+
+// ============================================================================
+// v0.9.5: Functional API tests (tree-shakeable imports)
+// ============================================================================
+
+import { string, cuid, cuid2, ulid, nanoid, base64, hex, jwt, length, nonempty } from '../src/index.js';
+
+describe('v0.9.5 functional API: ID validators', () => {
+  test('cuid() as functional refinement', () => {
+    const validator = string(cuid());
+    assert.strictEqual(validate(validator, 'cjld2cjxh0000qzrmn831i7rn').ok, true);
+    assert.strictEqual(validate(validator, 'invalid').ok, false);
+  });
+
+  test('cuid2() as functional refinement', () => {
+    const validator = string(cuid2());
+    assert.strictEqual(validate(validator, 'tz4a98xxat96iws9zmbrgj3a').ok, true);
+    assert.strictEqual(validate(validator, 'INVALID').ok, false);
+  });
+
+  test('ulid() as functional refinement', () => {
+    const validator = string(ulid());
+    assert.strictEqual(validate(validator, '01ARZ3NDEKTSV4RRFFQ69G5FAV').ok, true);
+    assert.strictEqual(validate(validator, 'invalid').ok, false);
+  });
+
+  test('nanoid() as functional refinement', () => {
+    const validator = string(nanoid());
+    assert.strictEqual(validate(validator, 'V1StGXR8_Z5jdHi6B-myT').ok, true);
+    assert.strictEqual(validate(validator, 'too-short').ok, false);
+  });
+});
+
+describe('v0.9.5 functional API: encoding validators', () => {
+  test('base64() as functional refinement', () => {
+    const validator = string(base64());
+    assert.strictEqual(validate(validator, 'SGVsbG8gV29ybGQ=').ok, true);
+    assert.strictEqual(validate(validator, 'invalid!').ok, false);
+  });
+
+  test('hex() as functional refinement', () => {
+    const validator = string(hex());
+    assert.strictEqual(validate(validator, 'deadbeef').ok, true);
+    assert.strictEqual(validate(validator, 'xyz').ok, false);
+  });
+
+  test('jwt() as functional refinement', () => {
+    const validator = string(jwt());
+    assert.strictEqual(validate(validator, 'aaa.bbb.ccc').ok, true);
+    assert.strictEqual(validate(validator, 'invalid').ok, false);
+  });
+});
+
+describe('v0.9.5: chaining new validators with existing ones', () => {
+  test('cuid with length constraints (fluent API)', () => {
+    const validator = v.string().cuid().min(20);
+    assert.strictEqual(validate(validator, 'cjld2cjxh0000qzrmn831i7rn').ok, true);
+    assert.strictEqual(validate(validator, 'c12345678').ok, false); // Valid cuid but too short
+  });
+
+  test('hex with exact length (SHA-256) - functional API', () => {
+    // Functional API: combine refinements in single call
+    const sha256Validator = string(hex(), length(64));
+    const validSha256 = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
+    assert.strictEqual(validate(sha256Validator, validSha256).ok, true);
+    assert.strictEqual(validate(sha256Validator, 'deadbeef').ok, false); // Too short
+  });
+
+  test('base64 with nonempty - functional API', () => {
+    // Functional API: combine refinements in single call
+    const validator = string(base64(), nonempty());
+    assert.strictEqual(validate(validator, 'SGVsbG8=').ok, true);
+    assert.strictEqual(validate(validator, '').ok, false); // Empty string now rejected
+  });
+});
