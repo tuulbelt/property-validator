@@ -1,10 +1,10 @@
 # Property Validator / `propval`
 
 [![Tests](https://github.com/tuulbelt/property-validator/actions/workflows/test.yml/badge.svg)](https://github.com/tuulbelt/property-validator/actions/workflows/test.yml)
-![Version](https://img.shields.io/badge/version-0.9.2-blue)
+![Version](https://img.shields.io/badge/version-0.10.0-blue)
 ![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)
 ![Dogfooded](https://img.shields.io/badge/dogfooded-🐕-purple)
-![Tests](https://img.shields.io/badge/tests-680%20passing-success)
+![Tests](https://img.shields.io/badge/tests-898%20passing-success)
 ![Zero Dependencies](https://img.shields.io/badge/dependencies-0-success)
 ![Performance](https://img.shields.io/badge/performance-high-brightgreen)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -141,8 +141,8 @@ const result = validate(userValidator, data);
 ```
 
 **Available named exports (main entry):**
-- Validators: `string`, `number`, `boolean`, `array`, `tuple`, `object`, `optional`, `nullable`, `union`, `literal`, `lazy`, `enum_`
-- Functions: `validate`, `check`, `compile`, `compileCheck`
+- Validators: `string`, `number`, `boolean`, `array`, `tuple`, `object`, `record`, `optional`, `nullable`, `union`, `discriminatedUnion`, `literal`, `lazy`, `enum_`
+- Functions: `validate`, `check`, `compile`, `compileCheck`, `toJsonSchema`
 - Class: `ValidationError`
 
 **Fluent API** (v namespace from main entry):
@@ -394,9 +394,13 @@ for (const user of users) {
 
 **Objects:**
 - `v.object(shape)` — Object validator with shape
+  - `.strict()` — Reject objects with unknown properties (v0.10.0+)
+  - `.passthrough()` — Allow unknown properties in output (v0.10.0+)
+- `v.record(keyValidator, valueValidator)` — Dynamic key-value pairs (v0.10.0+)
 
 **Unions and Literals:**
 - `v.union([validator1, validator2, ...])` — Union validator (OR logic, validates if any schema matches)
+- `v.discriminatedUnion(discriminator, variants)` — Efficient tagged unions (v0.10.0+)
 - `v.literal(value)` — Literal validator (exact value matching using `===`)
 - `v.enum(['a', 'b', 'c'])` — Enum validator (union of string literals)
 
@@ -483,6 +487,53 @@ validate(apiResponse, { type: 'error', message: 'Failed' }); // ✓
 const statusValidator = v.enum(['active', 'inactive', 'pending']);
 validate(statusValidator, 'active'); // ✓
 validate(statusValidator, 'archived'); // ✗
+```
+
+### Discriminated Union Examples (v0.10.0+)
+
+```typescript
+// Efficient tagged unions with discriminator field
+const apiResponse = v.discriminatedUnion('type', {
+  success: v.object({ type: v.literal('success'), data: v.string() }),
+  error: v.object({ type: v.literal('error'), code: v.number(), message: v.string() }),
+  pending: v.object({ type: v.literal('pending'), retryAfter: v.number() })
+});
+
+// O(1) lookup by discriminator value (faster than v.union() for many variants)
+validate(apiResponse, { type: 'success', data: 'OK' }); // ✓
+validate(apiResponse, { type: 'error', code: 404, message: 'Not found' }); // ✓
+validate(apiResponse, { type: 'unknown' }); // ✗ "Unknown discriminator value: unknown"
+```
+
+### Record Examples (v0.10.0+)
+
+```typescript
+// Dynamic key-value pairs
+const scores = v.record(v.string(), v.number());
+validate(scores, { alice: 100, bob: 85 }); // ✓
+validate(scores, { alice: 'A' }); // ✗
+
+// Record with key constraints
+const uuidMap = v.record(v.string().uuid(), v.object({ name: v.string() }));
+validate(uuidMap, { '550e8400-e29b-41d4-a716-446655440000': { name: 'Item' } }); // ✓
+```
+
+### Strict and Passthrough Examples (v0.10.0+)
+
+```typescript
+// Default: unknown properties are silently ignored
+const user = v.object({ name: v.string() });
+validate(user, { name: 'Alice', extra: true }); // ✓ (extra ignored)
+
+// Strict: reject unknown properties
+const strictUser = v.object({ name: v.string() }).strict();
+validate(strictUser, { name: 'Alice' }); // ✓
+validate(strictUser, { name: 'Alice', extra: true }); // ✗ "Unknown key: extra"
+
+// Passthrough: preserve unknown properties in output
+const passthroughUser = v.object({ name: v.string() }).passthrough();
+const result = validate(passthroughUser, { name: 'Alice', extra: true });
+// result.value = { name: 'Alice', extra: true } (extra preserved)
 ```
 
 ### Built-in Validator Examples
@@ -725,25 +776,75 @@ For comprehensive benchmarks including comparisons with other libraries, see [`b
 
 Benchmarks use [tatami-ng](https://github.com/poolifier/tatami-ng) with criterion-equivalent statistical rigor (~1% variance).
 
+## JSON Schema Export (v0.10.0+)
+
+Convert property-validator schemas to JSON Schema Draft 7 for OpenAPI compatibility:
+
+```typescript
+import { v, toJsonSchema } from '@tuulbelt/property-validator';
+
+const UserSchema = v.object({
+  name: v.string().min(1),
+  age: v.number().int().positive(),
+  email: v.optional(v.string().email()),
+  role: v.union([v.literal('admin'), v.literal('user')])
+});
+
+const jsonSchema = toJsonSchema(UserSchema);
+// {
+//   "$schema": "http://json-schema.org/draft-07/schema#",
+//   "type": "object",
+//   "properties": {
+//     "name": { "type": "string", "minLength": 1 },
+//     "age": { "type": "number" },
+//     "email": { "type": "string", "format": "email" },
+//     "role": { "enum": ["admin", "user"] }
+//   },
+//   "required": ["name", "age", "role"]
+// }
+```
+
+**Options:**
+
+```typescript
+toJsonSchema(schema, {
+  includeSchema: true,     // Include $schema declaration (default: true)
+  draft: 'http://json-schema.org/draft-07/schema#',  // JSON Schema draft
+  unknownTypeHandling: 'any',  // 'any' | 'throw' | 'empty'
+  includeMetadata: false   // Include title/description if available
+});
+```
+
+**Use Cases:**
+- **OpenAPI/Swagger** — Generate API documentation from your validators
+- **Form Generation** — Auto-generate forms from schemas
+- **Interoperability** — Share schemas with other tools/languages
+- **Documentation** — Self-documenting schemas
+
 ## Migration from Other Libraries
 
 If you're migrating from another validation library, see [MIGRATION.md](./MIGRATION.md) for a complete guide with side-by-side examples and API comparisons.
 
 ## Roadmap
 
-### Next Up (v0.9.5)
-- **Extended String Validators**: `cuid()`, `cuid2()`, `ulid()`, `nanoid()`, `base64()`, `hex()`, `jwt()`
-- **Extended Number Validators**: `port()`, `latitude()`, `longitude()`, `percentage()`
-- **JIT Phase 2**: Inlined primitive JIT for TypeBox-level performance
-
-### Future (v1.0.0+)
+### Next Up (v1.0.0)
 - Schema generation from existing TypeScript types
 - Async validators for database/API checks
-- Record/Map validators for dynamic keys
 - Intersection types
 - Streaming validation for large files
 
 ### Recently Completed
+
+**v0.10.0:**
+- ✅ **JSON Schema Export** — `toJsonSchema()` converts schemas to JSON Schema Draft 7
+- ✅ **Full Modularization** — Validators extracted to individual modules (index.ts: 3744→149 lines)
+- ✅ **`record()` validator** — Dynamic keys with `v.record(keyValidator, valueValidator)`
+- ✅ **`discriminatedUnion()`** — Efficient tagged unions with discriminator field
+- ✅ **`strict()` / `passthrough()`** — Control unknown property handling
+- ✅ **Extended String Validators** — `cuid()`, `cuid2()`, `ulid()`, `nanoid()`, `base64()`, `hex()`, `jwt()`
+- ✅ **Extended Number Validators** — `port()`, `latitude()`, `longitude()`, `percentage()`
+- ✅ **Array JIT for Objects** — Optimized array-of-object validation
+- ✅ **898 tests** — Comprehensive test coverage
 
 **v0.9.1:**
 - ✅ **Functional refinement API** — `string(email(), minLength(5))` pattern
