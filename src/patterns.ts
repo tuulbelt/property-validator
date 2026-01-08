@@ -84,4 +84,12 @@ export const FORMAT_LIMITS = {
   IPV4_MAX_LENGTH: 15,
   /** IPv6: max length including :: notation */
   IPV6_MAX_LENGTH: 45,
+  /** CUID: typically 25-30 chars */
+  CUID_MAX_LENGTH: 30,
+  /** CUID2: variable length, typically up to 32 chars */
+  CUID2_MAX_LENGTH: 32,
+  /** Base64: reasonable limit for inline validation (1.5MB) */
+  BASE64_MAX_LENGTH: 1_500_000,
+  /** JWT: practical limit for tokens */
+  JWT_MAX_LENGTH: 8_000,
 } as const;
